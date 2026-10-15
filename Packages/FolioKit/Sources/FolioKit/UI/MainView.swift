@@ -235,6 +235,9 @@ struct DetailColumn: View {
                 if workspace.note != nil {
                     NoteEditorView(editor: workspace.editor)
                         .ignoresSafeArea(.container, edges: .top)
+                } else if FileKind(url: url, isDirectory: false) == .pdf {
+                    PDFFileView(url: url)
+                        .id(url)
                 } else {
                     QuickLookView(url: url)
                         .id(url)
