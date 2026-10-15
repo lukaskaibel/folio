@@ -2,8 +2,8 @@
 import numpy as np
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
-# Folio's colours: glows in the ink blue of its accent (Folio/Assets.xcassets/AccentColor), and a little of the
-# notebook's oxblood leather in one corner.
+# Notebook's colours: glows in the ink blue of its accent (Notebook/Assets.xcassets/AccentColor), and a little of
+# the icon's oxblood leather in one corner.
 THEMES = {
     # Glows: colour, strength, centre (fractions of width and height), radius (fraction of width).
     "dark": dict(

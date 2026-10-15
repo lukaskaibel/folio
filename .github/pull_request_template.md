@@ -6,6 +6,6 @@
 
 <!-- Tests run, what you clicked through, before/after screenshots for visual changes. -->
 
-- [ ] `swift test` passes in `Packages/FolioKit`
+- [ ] `swift test` passes in `Packages/NotebookKit`
 - [ ] Looks right in both light and dark appearance (for UI changes)
 - [ ] Typing and scrolling in a long note are still smooth (for editor changes)

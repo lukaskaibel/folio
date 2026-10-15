@@ -4,7 +4,7 @@
 MARKETING_VERSION = 0.1.0
 CURRENT_PROJECT_VERSION = 1
 
-PRODUCT_BUNDLE_IDENTIFIER = com.lukaskbl.Folio
+PRODUCT_BUNDLE_IDENTIFIER = com.lukaskbl.Notebook
 
 // Without a team the Mac app is signed to run on this Mac only, which is all a local build needs.
 DEVELOPMENT_TEAM =
@@ -12,8 +12,8 @@ CODE_SIGN_IDENTITY = -
 
 // Debug and Release run without the sandbox, so tests can point the app at any folder. The App Store build is
 // sandboxed and reaches folders through the bookmarks of the locations you add.
-FOLIO_MAC_ENTITLEMENTS =
-FOLIO_MAC_ENTITLEMENTS[config=AppStore] = Config/Folio-macOS.entitlements
-CODE_SIGN_ENTITLEMENTS[sdk=macosx*] = $(FOLIO_MAC_ENTITLEMENTS)
+NOTEBOOK_MAC_ENTITLEMENTS =
+NOTEBOOK_MAC_ENTITLEMENTS[config=AppStore] = Config/Notebook-macOS.entitlements
+CODE_SIGN_ENTITLEMENTS[sdk=macosx*] = $(NOTEBOOK_MAC_ENTITLEMENTS)
 
 #include? "Local.xcconfig"

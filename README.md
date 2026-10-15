@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="Design/icon.png" width="128" height="128" alt="Folio app icon">
+  <img src="Design/icon.png" width="128" height="128" alt="Notebook app icon">
 </p>
 
-<h1 align="center">Folio</h1>
+<h1 align="center">Notebook</h1>
 
 <p align="center">
   <b>Markdown notes for the Mac that write like Apple Notes</b>, kept as plain files in your own folders.<br>
@@ -29,7 +29,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/hero-dark.webp">
-  <img alt="Folio showing the note Kyoto trip: links to Budget and Flight tickets.pdf, a picture of a torii gate and a packing checklist; the folders of iCloud Drive in the sidebar and the note's outline on the right" src="Design/screenshots/hero-light.webp">
+  <img alt="Notebook showing the note Kyoto trip: links to Budget and Flight tickets.pdf, a picture of a torii gate and a packing checklist; the folders of iCloud Drive in the sidebar and the note's outline on the right" src="Design/screenshots/hero-light.webp">
 </picture>
 
 > **Status: early.** Version 0.1.0 is a Mac app you build from source (five minutes, see below). It already covers
@@ -39,17 +39,17 @@
 ## Why
 
 Apple Notes is a pleasure to write in, but it keeps your notes in its own database. Markdown apps keep them as files,
-but most of them feel like a code editor or ask you to move everything into a vault. Folio does both: it shows the
+but most of them feel like a code editor or ask you to move everything into a vault. Notebook does both: it shows the
 folders you already have, iCloud Drive first, and turns the Markdown files in them into notes that write like Notes.
 Pictures, PDFs and every other file sit right next to them and open in the window: PDFs and pictures as in Preview,
-videos as in QuickTime Player, the rest in Quick Look. What Folio saves is ordinary Markdown that GitHub, Obsidian or
+videos as in QuickTime Player, the rest in Quick Look. What Notebook saves is ordinary Markdown that GitHub, Obsidian or
 iA Writer read just the same.
 
 ## A quick tour
 
 ### Markdown that gets out of the way
 
-You write Markdown, and Folio shows the result as you type. The marks show faintly next to the caret, only for the
+You write Markdown, and Notebook shows the result as you type. The marks show faintly next to the caret, only for the
 bit you're on, and fold away when you move on. Headings hide their `#` once you type the space after them; while the caret is on
 one, its level sits in the margin, and a click there turns it into a title, heading, subheading or body text. Lists continue on Return,
 Tab nests them, and checkboxes tick with a click.
@@ -87,7 +87,7 @@ GitHub's and Obsidian's `> [!note]` style get their colour and symbol.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/blocks-dark.webp">
-  <img alt="The note Folio roadmap with a Mermaid diagram from Files to Markdown, Editor, Index and Search, a table of milestones and a Swift code block with highlighting" src="Design/screenshots/blocks-light.webp">
+  <img alt="The note Notebook roadmap with a Mermaid diagram from Files to Markdown, Editor, Index and Search, a table of milestones and a Swift code block with highlighting" src="Design/screenshots/blocks-light.webp">
 </picture>
 
 <picture>
@@ -108,7 +108,7 @@ With an empty field, it lists what you opened last.
 
 ### PDFs, pictures and every other file
 
-Folio is a browser for your folders, not only for notes. A PDF opens right in the window the way Preview shows it, its
+Notebook is a browser for your folders, not only for notes. A PDF opens right in the window the way Preview shows it, its
 pages one under the other: there at once, and back where you left it when you return. A picture fits the window on the
 same grey, never larger than it is; pinch or double-click to zoom in on a spot. A video plays with the system's
 controls, as in QuickTime Player. A spreadsheet or any other file opens in Quick Look. The inspector shows a file's
@@ -126,7 +126,7 @@ share menu, an inspector, Settings, alerts, PDFKit, AVKit and Quick Look. It fol
 appearance. The inspector shows a note's outline, with the section you're reading marked and a word count; a click on
 a heading scrolls there. In Settings › Text you pick the typeface (San Francisco, New York, Rounded or Monospaced),
 the size, the line spacing and the line width. The icon is a leather notebook, and Settings › App Icon makes it yours:
-pick the leather, the elastic band, the ribbon and the background, and the Dock shows your notebook while Folio is
+pick the leather, the elastic band, the ribbon and the background, and the Dock shows your notebook while the app is
 open. Links, the caret and folders are in ink blue to go with it, or in the accent colour you chose in System Settings.
 
 ## What it does
@@ -152,10 +152,10 @@ open. Links, the caret and folders are in ink blue to go with it, or in the acce
 
 ## How notes are stored
 
-Everything is plain Markdown, so other apps keep reading your notes. Folio adds no files of its own besides the
+Everything is plain Markdown, so other apps keep reading your notes. Notebook adds no files of its own besides the
 `.assets` folders for pictures and files you add to notes.
 
-| What | In the file | In Folio |
+| What | In the file | In Notebook |
 | --- | --- | --- |
 | Title | The file name, `Weekend.md` | A large title above the text; editing it renames the file |
 | Picture | `![](.assets/Weekend%202026-10-14%20at%2015.32.10.png)` | The picture, fitted to the width |
@@ -170,14 +170,14 @@ Everything is plain Markdown, so other apps keep reading your notes. Folio adds 
 | Front matter | `---` YAML `---` at the start | A small pill; click to see the YAML |
 
 `[[Name]]` finds the note by its name, ignoring case and accents: one in the same folder first, then the one with the
-shortest path. `[[Folder/Name]]` says exactly which. Remote pictures (`![](https://…)`) are not downloaded; Folio
+shortest path. `[[Folder/Name]]` says exactly which. Remote pictures (`![](https://…)`) are not downloaded; Notebook
 shows their address instead.
 
 ## When a note changes somewhere else
 
-Notes are often open on more than one Mac, or in more than one app. Folio watches the open note and the folders in the
+Notes are often open on more than one Mac, or in more than one app. Notebook watches the open note and the folders in the
 sidebar. If a note changes elsewhere while you haven't typed, it reloads quietly, and your caret and scroll position
-stay where they were. If both sides changed, Folio merges the two line by line, before every save as well, so it never
+stay where they were. If both sides changed, Notebook merges the two line by line, before every save as well, so it never
 writes over a change it hasn't seen. Only when both changed the same lines does it ask: keep this version, use the
 other one, or keep both as two files. Conflicts that iCloud Drive reports are handled the same way.
 
@@ -194,25 +194,25 @@ iCloud show a cloud in the sidebar and download when you open them.
 ### Build and run
 
 ```bash
-git clone https://github.com/lukaskaibel/folio.git
+git clone https://github.com/lukaskaibel/notebook.git
 ```
 
 ```bash
-open folio/Folio.xcodeproj
+open notebook/Notebook.xcodeproj
 ```
 
-Choose the **Folio** scheme and press ⌘R. A local build needs no Apple developer account: without a team, Xcode signs
+Choose the **Notebook** scheme and press ⌘R. A local build needs no Apple developer account: without a team, Xcode signs
 it to run on your Mac. To sign with your own team, create `Config/Local.xcconfig` with `DEVELOPMENT_TEAM = <your
 team ID>`; it isn't checked in.
 
 ### Adding your notes
 
-On first launch, Folio asks for a folder: **Open iCloud Drive**, or **Choose another folder…**. Add more later with
-File › Open… (⌘O), File › Add Location…, Settings › General, or by dropping a folder on Folio in the Dock. Folio works
+On first launch, Notebook asks for a folder: **Open iCloud Drive**, or **Choose another folder…**. Add more later with
+File › Open… (⌘O), File › Add Location…, Settings › General, or by dropping a folder on Notebook in the Dock. Notebook works
 on the files in place; nothing is copied or imported.
 
-To look around without your own notes, run a Debug build with the arguments `-FolioLibrary /tmp/FolioSample
--FolioDemo YES` (Product › Scheme › Edit Scheme › Arguments). It writes a few sample notes, pictures and PDFs to that
+To look around without your own notes, run a Debug build with the arguments `-NotebookLibrary /tmp/NotebookSample
+-NotebookDemo YES` (Product › Scheme › Edit Scheme › Arguments). It writes a few sample notes, pictures and PDFs to that
 folder and shows only them, for that run.
 
 ## Using it
@@ -257,7 +257,7 @@ folder for everything else, including Copy Link, which copies a `[[link]]` to it
 
 ## Not there yet
 
-Folio is a Mac app today. Planned, and not built yet:
+Notebook is a Mac app today. Planned, and not built yet:
 
 - **iPhone and iPad**, from the same project, with a writing bar above the keyboard, the camera and the document
   scanner.
@@ -275,11 +275,11 @@ The full plan, with what is deliberately left out (tags, backlinks, a database, 
 ## For contributors
 
 ```
-Folio/                       The app target: the entry point and the icon
-Packages/FolioKit/
-  Sources/FolioKit/
+Notebook/                    The app target: the entry point and the icon
+Packages/NotebookKit/
+  Sources/NotebookKit/
     Editor/                  The live-preview editor on TextKit 1: styling, hidden marks, objects, typing, export
-    Markdown/                Folio's Markdown parser, which keeps every character's position in the file
+    Markdown/                Notebook's Markdown parser, which keeps every character's position in the file
     Render/                  Tables, maths, diagrams and code highlighting
     Files/                   Locations, the file tree, file operations, saving, watching and the three-way merge
     Index/                   Search over names, note text and PDF text, and how [[links]] resolve
@@ -296,17 +296,17 @@ PLAN.md                      The plan: decisions, file format, architecture and 
 The editor is the heart of the app. The text view holds the file's Markdown exactly, character for character, and
 everything you see is styling on top: marks are hidden as zero-width glyphs and objects are drawn in place of a
 character, so undo, dictation and spell checking behave as everywhere else on the Mac. Start reading at
-`Editor/EditorController.swift` and `Editor/FolioLayoutManager.swift`.
+`Editor/EditorController.swift` and `Editor/NotebookLayoutManager.swift`.
 
 Run the tests (they use off-screen windows and temporary folders, and touch none of your files):
 
 ```bash
-cd Packages/FolioKit && swift test
+cd Packages/NotebookKit && swift test
 ```
 
 The pictures in this README are made by a script. It builds the app, runs it in the background on the sample notes,
 takes the scenes in light and dark, and lays them out together with `Design/social-preview.png`. It doesn't take over
-your Mac (only the search suggestions show on screen for a moment) and leaves your own Folio's settings alone. Run it
+your Mac (only the search suggestions show on screen for a moment) and leaves your own Notebook's settings alone. Run it
 again when a change shows in one of them:
 
 ```bash
@@ -314,7 +314,7 @@ Tools/readme-images.sh
 ```
 
 The app icon is drawn by `Tools/AppIcon/notebook.py`. After changing it, run the script below: it writes
-`Folio/AppIcon.icon` and renders, with Icon Composer's `ictool`, the grey passes that Settings › App Icon colours in
+`Notebook/AppIcon.icon` and renders, with Icon Composer's `ictool`, the grey passes that Settings › App Icon colours in
 any leather (it needs Python 3 with NumPy and Pillow, and `brew install librsvg`):
 
 ```bash
@@ -338,7 +338,7 @@ Built with [BeautifulMermaid](https://github.com/lukilabs/beautiful-mermaid-swif
 [elk-swift](https://github.com/lukilabs/elk-swift) (Eclipse Public License 2.0; its source is at that link), and
 [SwiftMath](https://github.com/mgriebling/SwiftMath). The way notes write is inspired by Apple Notes.
 
-Folio is an independent project and is not affiliated with, endorsed by, or sponsored by Apple.
+Notebook is an independent project and is not affiliated with, endorsed by, or sponsored by Apple.
 
 ## License
 

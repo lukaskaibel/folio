@@ -1,11 +1,11 @@
-# Folio: Plan
+# Notebook: Plan
 
-Folio ist eine native App für Mac, iPhone und iPad. Sie zeigt deine echten Ordner (iCloud Drive und weitere Orte) und
+Notebook ist eine native App für Mac, iPhone und iPad. Sie zeigt deine echten Ordner (iCloud Drive und weitere Orte) und
 macht Markdown-Dateien darin zu Notizen, die sich so selbstverständlich schreiben wie in Apple Notes. Alle anderen Dateien
 zeigt sie mit Quick Look. Die Notizen sind normale `.md`-Dateien neben deinen anderen Dokumenten, ohne Export, ohne eigene
 Datenbank und ohne eigenen Sync.
 
-Arbeitstitel: **Folio**. Stand: Planungssitzung vom 14.10.2026.
+Name: **Notebook** (bis zum 16.10.2026 hieß die App Folio). Stand: Planungssitzung vom 14.10.2026.
 
 ---
 
@@ -13,7 +13,7 @@ Arbeitstitel: **Folio**. Stand: Planungssitzung vom 14.10.2026.
 
 - **Minimal.** Jede Funktion muss die Frage bestehen: *Brauche ich das, um Apple Notes im Alltag zu ersetzen?* Was das
   System schon kann (Quick Look, iCloud Drive, Spotlight, Teilen-Menü, Papierkorb), wird benutzt, nicht nachgebaut.
-- **Die Datei ist die Wahrheit.** Der Editor bearbeitet den Markdown-Text der Datei direkt. Was Folio speichert, liest
+- **Die Datei ist die Wahrheit.** Der Editor bearbeitet den Markdown-Text der Datei direkt. Was Notebook speichert, liest
   jedes andere Markdown-Programm (Obsidian, GitHub, iA Writer) genauso.
 - **Markdown ist ein Speicherformat, kein UI-Thema.** Bilder, Einbettungen und Links sind Objekte wie in Notes. Markdown-Zeichen
   sieht man nur kurz in der Zeile, in der man gerade schreibt.
@@ -43,7 +43,7 @@ Arbeitstitel: **Folio**. Stand: Planungssitzung vom 14.10.2026.
 | Fenster | Ein Dokument mit Vor/Zurück. Mehr Fenster und macOS-Fenstertabs gibt es vom System. Keine eigenen Tabs. |
 | Schnell notieren | Widget, Kontrollzentrum, Sperrbildschirm und Action-Taste (alle über einen App Intent), dazu das Teilen-Menü |
 | Neue Notizen | Landen im aktuellen Ordner. Von außen (Widget, Teilen-Menü) landen sie im Ordner „Inbox“. |
-| Anhänge | `.assets/` in jedem Ordner, unsichtbar in Folio, im Finder und in der Dateien-App. Wer ein Bild in der Notiz löscht, löscht auch die Datei. |
+| Anhänge | `.assets/` in jedem Ordner, unsichtbar in Notebook, im Finder und in der Dateien-App. Wer ein Bild in der Notiz löscht, löscht auch die Datei. |
 | Andere Dateien | Quick Look für alles, was nicht Markdown ist, auch für PDF, Bild und Video |
 | Offline | Markdown-Dateien bleiben auf jedem Gerät geladen. PDFs und Bilder werden durchsucht, sobald sie lokal sind, bis dahin zeigt der Baum ein Wolken-Symbol. |
 | Symbol und Farbe | Ein Notizbuch aus Ochsenblut-Leder als App-Symbol, in den Einstellungen selbst einzufärben. Akzentfarbe ist Tintenblau (`#34508F` hell, `#93ABE3` dunkel), wenn in den Systemeinstellungen „Mehrfarbig“ gewählt ist. |
@@ -106,7 +106,7 @@ Ist das Feld leer, zeigt die Leiste die zuletzt geöffneten Dateien. ↵ öffnet
 
 Alles bleibt normales Markdown, damit andere Programme die Dateien weiter lesen können.
 
-| Element | Syntax in der Datei | In Folio |
+| Element | Syntax in der Datei | In Notebook |
 | --- | --- | --- |
 | Titel | Dateiname `Wochenende.md` | Große Titelzeile über dem Text, Umbenennen beim Bearbeiten |
 | Bild | `![](.assets/Wochenende%202026-10-14%2015.32.10.jpg)` | Objekt, Größe an Breite angepasst, nie als Text sichtbar |
@@ -119,8 +119,8 @@ Alles bleibt normales Markdown, damit andere Programme die Dateien weiter lesen 
 | Frontmatter | `---` YAML `---` am Anfang | Dezente eingeklappte Zeile, Klick zeigt den YAML-Text |
 
 **Links auflösen:** `[[Name]]` sucht zuerst im selben Ordner, dann im selben Ort und nimmt bei mehreren Treffern den
-kürzesten Pfad (wie Obsidian). `[[Ordner/Name]]` entscheidet eindeutig. Benennt oder verschiebt man in Folio,
-werden alle Links nachgezogen. Benennt man im Finder um, bricht der Link sichtbar, und Folio bietet „Erstellen“ an.
+kürzesten Pfad (wie Obsidian). `[[Ordner/Name]]` entscheidet eindeutig. Benennt oder verschiebt man in Notebook,
+werden alle Links nachgezogen. Benennt man im Finder um, bricht der Link sichtbar, und Notebook bietet „Erstellen“ an.
 
 **Neue Notiz:** Der Cursor steht im Titel. Tippen und ↵ legt `Titel.md` an, dann geht es im Text weiter. Bleibt der
 Titel leer, heißt die Datei „Unbenannt“, „Unbenannt 2“ usw. Zeichen, die in Dateinamen nicht erlaubt sind (`/`, `:`),
@@ -132,7 +132,7 @@ werden ersetzt.
   macht sie durchsuchbar.
 - Wird ein Bild aus der Notiz gelöscht, kommt die Datei in den Papierkorb, sobald die Notiz geschlossen wird und keine
   andere Notiz im Ordner sie benutzt. Bis dahin funktioniert ⌘Z.
-- Verschiebt man eine Notiz in Folio in einen anderen Ordner, wandern ihre Bilder in dessen `.assets` mit, und die
+- Verschiebt man eine Notiz in Notebook in einen anderen Ordner, wandern ihre Bilder in dessen `.assets` mit, und die
   Pfade werden angepasst. Kopiert man ein Bild in eine Notiz in einem anderen Ordner, wird die Datei kopiert.
 
 ## 5. Architektur
@@ -140,13 +140,13 @@ werden ersetzt.
 Aufbau wie bei Issues: eine schlanke App und ein lokales Swift-Paket, das die eigentliche Arbeit macht.
 
 ```
-Folio.xcodeproj
-├── Folio/                     App (Mac, iPhone, iPad): App-Einstieg, Szenen, Einstellungen
-├── FolioWidgets/              Widget, Control-Center-Control, Sperrbildschirm (WidgetKit + App Intents)
-├── FolioShare/                Share Extension (iOS und Mac)
-└── Packages/FolioKit/Sources/FolioKit/
+Notebook.xcodeproj
+├── Notebook/                  App (Mac, iPhone, iPad): App-Einstieg, Szenen, Einstellungen
+├── NotebookWidgets/           Widget, Control-Center-Control, Sperrbildschirm (WidgetKit + App Intents)
+├── NotebookShare/             Share Extension (iOS und Mac)
+└── Packages/NotebookKit/Sources/NotebookKit/
     ├── Files/                 Orte, Bookmarks, Baum, Datei-Operationen, Koordination, iCloud-Status
-    ├── Markdown/              Parser (cmark-gfm) + Folio-Erweiterungen, Link-Auflösung
+    ├── Markdown/              Parser (cmark-gfm) + Notebook-Erweiterungen, Link-Auflösung
     ├── Editor/                TextKit-2-Editor: Styling, Ausblenden, Objekte, Blöcke, Eingabehilfen
     ├── Render/                Mermaid, Mathe, Code-Hervorhebung, Quick-Look-Vorschaubilder
     ├── Index/                 SQLite FTS5 (GRDB), PDF-Text, OCR, Spotlight, Favoriten, Zuletzt
@@ -171,7 +171,7 @@ Folio.xcodeproj
 
 - **Parser:** cmark-gfm über `swift-cmark` (wie in Issues) mit Tabellen, Task-Listen, Durchstreichen, Autolinks und
   Fußnoten. Wichtig sind die **Quellpositionen** jedes Knotens: Der Editor stylt damit genau die Zeichen im Text.
-- **Folio-Erweiterungen** als eigener Durchlauf über den Baum: `[[…]]` und `![[…]]` in Text-Knoten, `$…$`, `$$…$$`,
+- **Notebook-Erweiterungen** als eigener Durchlauf über den Baum: `[[…]]` und `![[…]]` in Text-Knoten, `$…$`, `$$…$$`,
   Callouts (Blockquote mit `[!typ]`), Frontmatter am Dateianfang.
 - Bei jeder Änderung wird neu geparst (kurz verzögert). cmark ist für Notizgrößen schnell genug, und neu gestylt werden
   nur die betroffenen Absätze.
@@ -210,14 +210,14 @@ Objekte und Blöcke, ist geteilt.
   Seite), Links (von, Ziel-Name) für das Nachziehen beim Umbenennen.
 - **Hintergrundarbeit mit niedriger Priorität**, gemerkt pro Pfad, Datum und Größe: Markdown-Text, PDF-Text über PDFKit
   (pro Seite), OCR über Vision für Bilder in den Orten und in `.assets`.
-- **Spotlight:** Notizen gehen über `CSSearchableIndex` hinein, ein Tipp öffnet die Notiz in Folio.
+- **Spotlight:** Notizen gehen über `CSSearchableIndex` hinein, ein Tipp öffnet die Notiz in Notebook.
 - **Favoriten und Zuletzt** werden als Pfade relativ zum Ort im iCloud-Key-Value-Store gespeichert, so sind sie auf allen
   Geräten gleich.
 
 ### Schnell notieren
 
 - **Ein App Intent „Neue Notiz“** steckt hinter dem Widget, dem Control im Kontrollzentrum und auf dem Sperrbildschirm
-  sowie der Action-Taste. Er öffnet Folio mit einer neuen Notiz in der Inbox, der Cursor steht im Titel.
+  sowie der Action-Taste. Er öffnet Notebook mit einer neuen Notiz in der Inbox, der Cursor steht im Titel.
   (Kurzbefehle bekommen ihn nebenbei mit. Eigene Siri- und Kurzbefehle-Aktionen sind bewusst nicht geplant.)
 - **Share Extension:** Text, Links, Bilder und PDFs werden zu einer neuen Notiz in der Inbox (oder per Auswahl zu
   „An zuletzt geöffnete Notiz anhängen“). Kommt die Extension nicht direkt an den Ort, legt sie den Inhalt in der App
@@ -253,14 +253,14 @@ Zwei Wegwerf-Prototypen, bevor die eigentliche App entsteht:
 
 ### M1: Gerüst, Finder-Ersatz
 
-- Multiplatform-Projekt, `FolioKit`, Theme aus Issues übernommen
+- Multiplatform-Projekt, `NotebookKit`, Theme aus Issues übernommen
 - Orte hinzufügen und entfernen, Baum auf Mac und iPad, Drill-down auf dem iPhone, Favoriten, Zuletzt
 - Datei-Operationen: neue Notiz und neuer Ordner, Umbenennen, Verschieben per Drag and Drop, Papierkorb
 - Quick Look für alles, was nicht Markdown ist
 - Editor in der ersten Stufe: Markdown gestylt, Zeichen sichtbar, aber blass (die Stufe vor Live-Preview), Titel =
   Dateiname, automatisches Speichern, Neuladen bei Änderungen von außen
 
-*Ergebnis:* Folio zeigt alles in iCloud Drive an, und man kann darin schon Notizen schreiben.
+*Ergebnis:* Notebook zeigt alles in iCloud Drive an, und man kann darin schon Notizen schreiben.
 
 ### M2: Live-Preview, Notizen schreiben sich gut
 
@@ -271,7 +271,7 @@ Zwei Wegwerf-Prototypen, bevor die eigentliche App entsteht:
 - `![[Einbettungen]]` für Notizen und Dateien
 - Konflikt-Banner
 
-*Ergebnis:* Am Mac ersetzt Folio Notes zum Schreiben.
+*Ergebnis:* Am Mac ersetzt Notebook Notes zum Schreiben.
 
 ### M3: Finden
 
@@ -293,7 +293,7 @@ Zwei Wegwerf-Prototypen, bevor die eigentliche App entsteht:
 
 ### M5: Alltag
 
-Ein paar Wochen nur Folio benutzen, Reibung sammeln und abbauen. Danach entscheiden, ob und wann es in den App Store
+Ein paar Wochen nur Notebook benutzen, Reibung sammeln und abbauen. Danach entscheiden, ob und wann es in den App Store
 geht (Übersetzungen, Onboarding, Website, Screenshots wie bei Issues).
 
 ## 7. Bewusst nicht drin
