@@ -30,6 +30,13 @@ final class PageSwiper {
 
     init() {
         anchor.onWindowChange = { [weak self] in self?.windowChanged() }
+        // A PDF or a picture zoomed: picture it again.
+        NotificationCenter.default.addObserver(forName: NSScrollView.didEndLiveMagnifyNotification, object: nil, queue: .main) { [weak self] notification in
+            MainActor.assumeIsolated {
+                guard let self, (notification.object as? NSView)?.window === self.anchor.window else { return }
+                self.captureQuickLook(after: 0.3)
+            }
+        }
     }
 
     private func windowChanged() {
@@ -99,9 +106,8 @@ final class PageSwiper {
             configuration.showsCursor = false
             guard let image = try? await SCScreenshotManager.captureImage(contentFilter: SCContentFilter(desktopIndependentWindow: shown), configuration: configuration),
                   !Task.isCancelled, self.quickLookURL == url else { return }
-            // A PDF lies on the grey behind its pages, which reaches up under the toolbar.
-            let background: NSColor = FileKind(url: url, isDirectory: false) == .pdf ? .underPageBackgroundColor : Theme.panel
-            self.keep(PageSnapshot(image: image, frame: area, in: self.anchor, background: background), for: url)
+            // A PDF or a picture lies on the grey behind it, which reaches up under the toolbar.
+            self.keep(PageSnapshot(image: image, frame: area, in: self.anchor, background: FileKind(url: url, isDirectory: false).pageBackground), for: url)
         }
     }
 

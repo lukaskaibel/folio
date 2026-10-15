@@ -240,12 +240,14 @@ struct DetailColumn: View {
                 if workspace.note != nil {
                     NoteEditorView(editor: workspace.editor)
                         .ignoresSafeArea(.container, edges: .top)
-                } else if FileKind(url: url, isDirectory: false) == .pdf {
-                    PDFFileView(url: url)
-                        .id(url)
                 } else {
-                    QuickLookView(url: url)
-                        .id(url)
+                    // What Preview and QuickTime Player open, Folio draws itself; everything else is Quick Look's.
+                    switch FileKind(url: url, isDirectory: false) {
+                    case .pdf: PDFFileView(url: url).id(url)
+                    case .image: PictureFileView(url: url).id(url)
+                    case .video: VideoFileView(url: url).id(url)
+                    default: QuickLookView(url: url).id(url)
+                    }
                 }
             } else {
                 EmptyState()
@@ -383,7 +385,9 @@ private struct FileInfoPanel: View {
             if let source = CGImageSourceCreateWithURL(url as CFURL, nil),
                let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
                let width = properties[kCGImagePropertyPixelWidth] as? Int, let height = properties[kCGImagePropertyPixelHeight] as? Int {
-                return ("Dimensions", "\(width) × \(height)")
+                // As the picture shows: orientations 5 to 8 turn it a quarter.
+                let turned = (properties[kCGImagePropertyOrientation] as? UInt32 ?? 1) >= 5
+                return ("Dimensions", turned ? "\(height) × \(width)" : "\(width) × \(height)")
             }
             return nil
         }.value
