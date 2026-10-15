@@ -2,7 +2,7 @@ import AppKit
 
 /// A Markdown file opened on its own (from the Finder, File › Open, or dropped on the Dock icon): just the note in a
 /// plain window, no sidebar, no toolbar, the way Lettera opens a single file. Windows of this kind join the system's
-/// window tabs.
+/// window tabs. Folders opened the same ways go to the main window's sidebar.
 @MainActor
 public final class FileWindows {
     public static let shared = FileWindows()
@@ -20,13 +20,33 @@ public final class FileWindows {
         controller.showWindow(nil)
     }
 
-    /// File › Open: any Markdown file, anywhere.
+    /// File › Open: any Markdown file, anywhere, or a folder such as iCloud Drive to show in the sidebar.
     public func choose() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.init(filenameExtension: "md")!, .init(filenameExtension: "markdown")!, .plainText]
+        panel.allowedContentTypes = [.init(filenameExtension: "md")!, .init(filenameExtension: "markdown")!, .plainText, .folder]
+        panel.canChooseDirectories = true
         panel.allowsMultipleSelection = true
         guard panel.runModal() == .OK else { return }
-        panel.urls.forEach(open)
+        for url in panel.urls {
+            if Self.isFolder(url) { Workspace.shared.openFolder(url) } else { open(url) }
+        }
+    }
+
+    /// Folders and notes from the Finder or the Dock icon.
+    public func open(_ urls: [URL]) {
+        for url in urls {
+            if Self.isFolder(url) {
+                Workspace.shared.openFolder(url)
+            } else if FileKind(url: url, isDirectory: false) == .note {
+                open(url)
+            }
+        }
+    }
+
+    /// A folder, not a package such as an app or a .textbundle.
+    static func isFolder(_ url: URL) -> Bool {
+        let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])
+        return values?.isDirectory == true && values?.isPackage != true
     }
 
     var windows: [NSWindow] { controllers.values.compactMap(\.window) }
@@ -179,11 +199,11 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
     }
 }
 
-/// Files opened from the Finder or dropped on the Dock icon open in windows of their own.
+/// Files opened from the Finder or dropped on the Dock icon open in windows of their own, folders in the sidebar.
 public final class FolioAppDelegate: NSObject, NSApplicationDelegate {
     public func application(_ application: NSApplication, open urls: [URL]) {
         MainActor.assumeIsolated {
-            for url in urls where FileKind(url: url, isDirectory: false) == .note { FileWindows.shared.open(url) }
+            FileWindows.shared.open(urls)
         }
     }
 }

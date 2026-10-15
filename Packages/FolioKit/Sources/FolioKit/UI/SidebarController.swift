@@ -103,7 +103,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         var children = node.loadedChildren()
         if settings.showsOnlyNotes { children = children.filter { $0.isFolder || $0.kind == .note } }
         if !settings.foldersFirst {
-            children.sort { $0.url.lastPathComponent.localizedStandardCompare($1.url.lastPathComponent) == .orderedAscending }
+            children.sort { $0.sortName.localizedStandardCompare($1.sortName) == .orderedAscending }
         }
         visible[ObjectIdentifier(node)] = children
         return children
@@ -210,23 +210,33 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         UserDefaults.standard.set(Array(expandedPaths()), forKey: "expandedFolders")
     }
 
-    /// Opens the folders down to a file and scrolls it into view.
+    /// Opens the folders down to a file and scrolls it into view. For a location itself, its section.
     func reveal(_ url: URL, select: Bool) {
-        guard let location = workspace.location(containing: url), let root = workspace.root(for: location) else { return }
-        if let section = section(for: location), !outline.isItemExpanded(section) {
-            collapsedSections.remove(section.sectionKey ?? "")
-            outline.expandItem(section)
+        guard let found = workspace.nodes(to: url) else { return }
+        let header = section(for: found.location)
+        if let header, !outline.isItemExpanded(header) {
+            collapsedSections.remove(header.sectionKey ?? "")
+            outline.expandItem(header)
         }
-        var node = root
-        let components = url.standardizedFileURL.path.dropFirst(location.url.path.count).split(separator: "/")
-        for (index, component) in components.enumerated() {
-            guard let next = node.child(named: String(component)) else { break }
-            if index < components.count - 1 {
-                if outline.row(forItem: next) >= 0 { outline.expandItem(next) }
-            }
-            node = next
+        // The location's top is the section's header, not a row of its own.
+        let nodes = found.nodes.dropFirst()
+        for node in found.complete ? nodes.dropLast() : nodes where outline.row(forItem: node) >= 0 {
+            outline.expandItem(node)
         }
-        if select { selectRow(for: node) }
+        if let node = nodes.last {
+            if select { selectRow(for: node) }
+        } else if let header {
+            scrollSectionToVisible(header)
+        }
+    }
+
+    /// The header at the top, with as much of the section under it as fits.
+    private func scrollSectionToVisible(_ header: SidebarEntry) {
+        let row = outline.row(forItem: header)
+        guard row >= 0 else { return }
+        let next = topItems.firstIndex { $0 === header }.flatMap { topItems.indices.contains($0 + 1) ? outline.row(forItem: topItems[$0 + 1]) : nil }
+        outline.scrollRowToVisible((next ?? outline.numberOfRows) - 1)
+        outline.scrollRowToVisible(row)
     }
 
     private func selectCurrent() {
@@ -283,7 +293,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             cell.configure(name: node.name, kind: node.kind, inCloud: node.isInCloud, url: node.url, dimmed: dimmed)
         } else if let entry = item as? SidebarEntry, let url = entry.url {
             let kind = FileKind(url: url, isDirectory: (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false)
-            let name = kind == .note ? url.deletingPathExtension().lastPathComponent : url.lastPathComponent
+            let name = kind == .note ? url.deletingPathExtension().lastPathComponent : kind == .folder ? workspace.folderName(url) : url.lastPathComponent
             cell.configure(name: name, kind: kind, inCloud: false, url: url, symbol: { if case .favorite = entry.kind, kind == .folder { return "star" } else { return nil } }())
         }
         return cell
@@ -365,7 +375,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     // MARK: - Renaming in place
 
     func beginRenaming(_ url: URL) {
-        guard let node = workspace.node(for: url) else { return }
+        guard let node = workspace.node(for: url), !node.isLinked else { return }
         let row = outline.row(forItem: node)
         guard row >= 0, let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? SidebarFileCell else { return }
         renaming = url
@@ -430,22 +440,28 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         }
         let isFolder = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
         let folder = isFolder ? url : url.deletingLastPathComponent()
-        add(menu, "New Note in “\(folder.lastPathComponent)”", "square.and.pencil") { [weak self] in self?.workspace.newNote(in: folder) }
+        // A linked folder (iCloud Drive's Desktop) stays where it is, under its own name.
+        let isLinked = workspace.isLinkedFolder(url)
+        add(menu, "New Note in “\(workspace.folderName(folder))”", "square.and.pencil") { [weak self] in self?.workspace.newNote(in: folder) }
         add(menu, "New Folder", "folder.badge.plus") { [weak self] in self?.workspace.newFolder(in: folder) }
         menu.addItem(.separator())
         if !isFolder, FileKind(url: url, isDirectory: false) != .note {
             add(menu, "Quick Look", "eye") { [weak self] in self?.workspace.quickLook(url) }
         }
-        add(menu, "Rename", "pencil") { [weak self] in self?.beginRenaming(url) }
-        menu.addItem(moveToItem(for: url))
-        add(menu, "Duplicate", "plus.square.on.square") { [weak self] in self?.workspace.duplicate(url) }
+        if !isLinked {
+            add(menu, "Rename", "pencil") { [weak self] in self?.beginRenaming(url) }
+            menu.addItem(moveToItem(for: url))
+            add(menu, "Duplicate", "plus.square.on.square") { [weak self] in self?.workspace.duplicate(url) }
+        }
         let favorite = workspace.isFavorite(url)
         add(menu, favorite ? "Remove from Favorites" : "Add to Favorites", favorite ? "star.slash" : "star") { [weak self] in self?.workspace.toggleFavorite(url) }
         menu.addItem(.separator())
         if !isFolder { add(menu, "Copy Link", "link") { [weak self] in self?.workspace.copyLink(url) } }
         add(menu, "Show in Finder", "folder") { [weak self] in self?.workspace.revealInFinder(url) }
-        menu.addItem(.separator())
-        add(menu, "Move to Trash", "trash") { [weak self] in self?.workspace.trash(url) }
+        if !isLinked {
+            menu.addItem(.separator())
+            add(menu, "Move to Trash", "trash") { [weak self] in self?.workspace.trash(url) }
+        }
     }
 
     /// Move To, with every folder indented under its location, as in Notes.
@@ -477,8 +493,8 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     // MARK: - Drag and drop
 
     func outlineView(_ outlineView: NSOutlineView, pasteboardWriterForItem item: Any) -> NSPasteboardWriting? {
-        if let node = item as? FileNode { return node.url as NSURL }
-        if let entry = item as? SidebarEntry, let url = entry.url { return url as NSURL }
+        if let node = item as? FileNode { return node.isLinked ? nil : node.url as NSURL }
+        if let entry = item as? SidebarEntry, let url = entry.url, !workspace.isLinkedFolder(url) { return url as NSURL }
         return nil
     }
 

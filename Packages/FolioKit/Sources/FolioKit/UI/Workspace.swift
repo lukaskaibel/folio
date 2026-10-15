@@ -44,6 +44,9 @@ public final class Workspace: NSObject {
     var selectedFolder: URL?
     /// Locations given on the command line for this run only (tests, the demo library).
     @ObservationIgnored private var temporaryLocations = false
+    @ObservationIgnored private var isStarted = false
+    /// Brings the main window up (set by the window, which SwiftUI opens).
+    @ObservationIgnored var showWindow: (() -> Void)?
 
     @ObservationIgnored weak var sidebar: SidebarController?
     @ObservationIgnored private var watcher: FileWatcher?
@@ -60,7 +63,10 @@ public final class Workspace: NSObject {
 
     // MARK: - Starting
 
+    /// Reads the locations, once: when the window first appears, or before that when a folder is opened from the Dock.
     public func start() {
+        guard !isStarted else { return }
+        isStarted = true
         #if DEBUG
         // The welcome screen, for screenshots, without touching the locations you added.
         if UserDefaults.standard.bool(forKey: "FolioWelcome") {
@@ -90,12 +96,18 @@ public final class Workspace: NSObject {
     }
 
     private func locationsChanged() {
+        for index in locations.indices { locations[index].findLinkedFolders() }
         var fresh: [UUID: FileNode] = [:]
         for location in locations {
-            fresh[location.id] = roots[location.id] ?? FileNode(url: location.url, kind: .folder, parent: nil)
+            let root = roots[location.id] ?? FileNode(url: location.url, kind: .folder, parent: nil)
+            if root.linked != location.linked {
+                root.linked = location.linked
+                root.reload()
+            }
+            fresh[location.id] = root
         }
         roots = fresh
-        watcher = FileWatcher(paths: locations.map(\.path)) { [weak self] paths in
+        watcher = FileWatcher(paths: locations.flatMap { $0.folders.map(\.url.path) }) { [weak self] paths in
             MainActor.assumeIsolated { self?.filesChanged(paths) }
         }
         index.rebuild(locations)
@@ -103,6 +115,7 @@ public final class Workspace: NSObject {
     }
 
     public func addLocation(_ url: URL) {
+        let url = url.standardizedFileURL
         guard !locations.contains(where: { $0.path == url.path }) else { return }
         locations.append(LocationStore.make(for: url))
         if !temporaryLocations { LocationStore.save(locations) }
@@ -122,22 +135,62 @@ public final class Workspace: NSObject {
         addLocation(url)
     }
 
+    /// A folder from File › Open or the Dock icon: shown where it is in the sidebar, or added as a location of its own
+    /// (iCloud Drive, say) when no location has it yet.
+    public func openFolder(_ url: URL) {
+        start()
+        let url = url.standardizedFileURL
+        if location(containing: url) == nil { addLocation(url) }
+        showWindow?()
+        isSidebarVisible = true
+        open(url)
+    }
+
     func root(for location: Location) -> FileNode? { roots[location.id] }
 
     func location(containing url: URL) -> Location? {
+        locations.first { $0.contains(url) }
+    }
+
+    /// iCloud Drive's Desktop and the like: shown in a location, but not to be renamed, moved or thrown away from it.
+    func isLinkedFolder(_ url: URL) -> Bool {
+        locations.contains { $0.isLinkedFolder(url) }
+    }
+
+    /// A folder's name as the sidebar shows it: a location's, a linked folder's, or the folder's own.
+    func folderName(_ url: URL) -> String {
         let path = url.standardizedFileURL.path
-        return locations.first { path == $0.url.path || path.hasPrefix($0.url.path + "/") }
+        if let location = locations.first(where: { $0.url.path == path }) { return location.name }
+        if let linked = locations.lazy.flatMap(\.linked).first(where: { $0.url.path == path }) { return linked.name }
+        return url.lastPathComponent
+    }
+
+    /// The nodes from a location's top down to a file, as far as they go: reading folders on the way, or with
+    /// `reading` false only through folders already read. `complete` says whether they reach the file.
+    func nodes(to url: URL, reading: Bool = true) -> (location: Location, nodes: [FileNode], complete: Bool)? {
+        let path = url.standardizedFileURL.path
+        guard let location = location(containing: url), let root = roots[location.id], let folder = location.folder(containing: path) else { return nil }
+        var nodes = [root]
+        func children(of node: FileNode) -> [FileNode] {
+            reading || node.hasLoadedChildren ? node.loadedChildren() : []
+        }
+        if let linked = folder.linked {
+            guard let top = children(of: root).first(where: { $0.isLinked && $0.url.path == linked.url.path }) else { return (location, nodes, false) }
+            nodes.append(top)
+        }
+        for component in path.dropFirst(folder.url.path.count).split(separator: "/") {
+            guard let next = children(of: nodes[nodes.count - 1]).first(where: { !$0.isLinked && $0.url.lastPathComponent == component }) else {
+                return (location, nodes, false)
+            }
+            nodes.append(next)
+        }
+        return (location, nodes, true)
     }
 
     /// The node for a file, reading folders on the way to it.
     func node(for url: URL) -> FileNode? {
-        guard let location = location(containing: url), var node = roots[location.id] else { return nil }
-        let relative = url.standardizedFileURL.path.dropFirst(location.url.path.count).split(separator: "/")
-        for component in relative {
-            guard let next = node.child(named: String(component)) else { return nil }
-            node = next
-        }
-        return node
+        guard let found = nodes(to: url), found.complete else { return nil }
+        return found.nodes.last
     }
 
     // MARK: - Files changing
@@ -179,13 +232,8 @@ public final class Workspace: NSObject {
 
     /// A node that is already in the tree, without reading anything.
     private func existingNode(for url: URL) -> FileNode? {
-        guard let location = location(containing: url), var node = roots[location.id] else { return nil }
-        let relative = url.standardizedFileURL.path.dropFirst(location.url.path.count).split(separator: "/")
-        for component in relative {
-            guard node.hasLoadedChildren, let next = node.loadedChildren().first(where: { $0.url.lastPathComponent == component }) else { return nil }
-            node = next
-        }
-        return node
+        guard let found = nodes(to: url, reading: false), found.complete else { return nil }
+        return found.nodes.last
     }
 
     // MARK: - Opening
@@ -412,6 +460,7 @@ public final class Workspace: NSObject {
 
     @discardableResult
     func rename(_ url: URL, to name: String) -> URL? {
+        guard !isLinkedFolder(url) else { NSSound.beep(); return nil }
         let isNote = FileKind(url: url, isDirectory: false) == .note
         let oldName = url.deletingPathExtension().lastPathComponent
         if url == currentURL { note?.saveNow() }
@@ -430,13 +479,16 @@ public final class Workspace: NSObject {
         }
         if isNote, let location = location(containing: renamed) {
             let newName = renamed.deletingPathExtension().lastPathComponent
-            _ = FileOperations.updateLinks(from: oldName, to: newName, under: location.url, skipping: nil)
+            for folder in location.folders {
+                _ = FileOperations.updateLinks(from: oldName, to: newName, under: folder.url, skipping: nil)
+            }
         }
         sidebar?.reveal(renamed, select: renamed == currentURL)
         return renamed
     }
 
     func move(_ url: URL, into folder: URL) {
+        guard !isLinkedFolder(url) else { NSSound.beep(); return }
         let destination = FileOperations.uniqueURL(in: folder, name: url.deletingPathExtension().lastPathComponent, extension: url.pathExtension.isEmpty ? nil : url.pathExtension)
         if url == currentURL { note?.saveNow() }
         // A note takes the pictures it uses along into the new folder's .assets.
@@ -467,13 +519,22 @@ public final class Workspace: NSObject {
     /// Where a file can be moved: every folder of every location, in order, with how deep it is.
     func moveTargets(for url: URL) -> [(location: Location, folders: [(url: URL, name: String, depth: Int)])] {
         let all = index.folders(matching: "", limit: .max)
+        let source = url.standardizedFileURL.path
         return locations.map { location in
-            let base = location.url.standardizedFileURL.path
-            let folders = all.compactMap { entry -> (url: URL, name: String, depth: Int, path: String)? in
-                let path = entry.url.standardizedFileURL.path
-                guard path.hasPrefix(base + "/"), path != url.path, !path.hasPrefix(url.path + "/") else { return nil }
-                let relative = String(path.dropFirst(base.count + 1))
-                return (entry.url, entry.name, relative.split(separator: "/").count - 1, relative)
+            // Linked folders (iCloud Drive's Desktop) sit at the top, under their own names.
+            let folders = location.folders.flatMap { folder -> [(url: URL, name: String, depth: Int, path: String)] in
+                let base = folder.url.path
+                let prefix = folder.linked.map { $0.name + "/" } ?? ""
+                var found = all.compactMap { entry -> (url: URL, name: String, depth: Int, path: String)? in
+                    let path = entry.url.standardizedFileURL.path
+                    guard path.hasPrefix(base + "/"), path != source, !path.hasPrefix(source + "/") else { return nil }
+                    let relative = prefix + String(path.dropFirst(base.count + 1))
+                    return (entry.url, entry.name, relative.split(separator: "/").count - 1, relative)
+                }
+                if let linked = folder.linked, base != source, !base.hasPrefix(source + "/") {
+                    found.append((linked.url, linked.name, 0, linked.name))
+                }
+                return found
             }
             .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
             .map { (url: $0.url, name: $0.name, depth: $0.depth) }
@@ -482,6 +543,7 @@ public final class Workspace: NSObject {
     }
 
     func trash(_ url: URL) {
+        guard !isLinkedFolder(url) else { NSSound.beep(); return }
         let wasCurrent = url == currentURL || (currentURL?.path.hasPrefix(url.path + "/") ?? false)
         if wasCurrent {
             note?.close()
@@ -497,7 +559,7 @@ public final class Workspace: NSObject {
     }
 
     func duplicate(_ url: URL) {
-        guard let copy = FileOperations.duplicate(url) else { return }
+        guard !isLinkedFolder(url), let copy = FileOperations.duplicate(url) else { return }
         refreshNow(url.deletingLastPathComponent())
         sidebar?.reveal(copy, select: false)
     }

@@ -46,7 +46,7 @@ public final class SearchIndex {
         generation += 1
         let generation = generation
         isBuilding = true
-        let roots = locations.map { ($0.url, $0.name, $0.id) }
+        let roots = locations.flatMap { location in location.folders.map { ($0.url, $0.place, location.id) } }
         Task.detached(priority: .utility) {
             var result: [Entry] = []
             for (root, name, id) in roots {
@@ -70,7 +70,7 @@ public final class SearchIndex {
 
     nonisolated static func scan(_ root: URL, locationName: String, locationID: UUID) -> [Entry] {
         var result: [Entry] = []
-        let keys: [URLResourceKey] = [.isDirectoryKey, .isPackageKey, .contentModificationDateKey, .ubiquitousItemDownloadingStatusKey, .fileSizeKey]
+        let keys: [URLResourceKey] = [.isDirectoryKey, .isPackageKey, .isHiddenKey, .contentModificationDateKey, .ubiquitousItemDownloadingStatusKey, .fileSizeKey]
         guard let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: keys, options: [.skipsPackageDescendants]) else { return [] }
         while let found = enumerator.nextObject() as? URL {
             let url = found.standardizedFileURL
@@ -87,6 +87,11 @@ public final class SearchIndex {
             }
             if ["node_modules", "DerivedData", ".build", "Pods"].contains(name) { enumerator.skipDescendants(); continue }
             let values = try? url.resourceValues(forKeys: Set(keys))
+            // Hidden as in the sidebar, like iCloud Drive's links to Desktop and Documents (indexed as folders of their own).
+            if values?.isHidden == true, !inCloud {
+                if values?.isDirectory == true { enumerator.skipDescendants() }
+                continue
+            }
             let isDirectory = (values?.isDirectory ?? false) && !(values?.isPackage ?? false)
             if values?.ubiquitousItemDownloadingStatus == .notDownloaded { inCloud = true }
             if let entry = makeEntry(fileURL, root: root, locationName: locationName, locationID: locationID, isDirectory: isDirectory,
@@ -120,21 +125,24 @@ public final class SearchIndex {
     /// Reads the files in some folders again, after changes there.
     func refresh(folders: [URL], locations: [Location]) {
         let paths = Set(folders.map { $0.standardizedFileURL.path })
-        let jobs: [(URL, Location)] = paths.compactMap { path in
-            guard let location = locations.first(where: { path == $0.url.path || path.hasPrefix($0.url.path + "/") }) else { return nil }
-            return (URL(fileURLWithPath: path), location)
+        let jobs: [(folder: URL, root: URL, place: String, locationID: UUID)] = paths.compactMap { path in
+            for location in locations {
+                if let base = location.folder(containing: path) { return (URL(fileURLWithPath: path), base.url, base.place, location.id) }
+            }
+            return nil
         }
         guard !jobs.isEmpty else { return }
         Task.detached(priority: .utility) {
             var updates: [(String, [Entry])] = []
-            for (folder, location) in jobs {
+            for (folder, root, place, locationID) in jobs {
                 var found: [Entry] = []
-                let keys: [URLResourceKey] = [.isDirectoryKey, .isPackageKey, .contentModificationDateKey, .ubiquitousItemDownloadingStatusKey, .fileSizeKey]
+                let keys: [URLResourceKey] = [.isDirectoryKey, .isPackageKey, .isHiddenKey, .contentModificationDateKey, .ubiquitousItemDownloadingStatusKey, .fileSizeKey]
                 let contents = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: keys)) ?? []
                 for url in contents where !url.lastPathComponent.hasPrefix(".") {
                     let values = try? url.resourceValues(forKeys: Set(keys))
+                    if values?.isHidden == true { continue }
                     let isDirectory = (values?.isDirectory ?? false) && !(values?.isPackage ?? false)
-                    if let entry = Self.makeEntry(url, root: location.url, locationName: location.name, locationID: location.id, isDirectory: isDirectory,
+                    if let entry = Self.makeEntry(url, root: root, locationName: place, locationID: locationID, isDirectory: isDirectory,
                                                   modified: values?.contentModificationDate, inCloud: values?.ubiquitousItemDownloadingStatus == .notDownloaded, size: values?.fileSize) {
                         found.append(entry)
                     }
