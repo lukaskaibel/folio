@@ -245,6 +245,11 @@ struct DetailColumn: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.theme(Theme.panel).ignoresSafeArea())
+        .overlay {
+            SwipeAnchor(swiper: workspace.pages)
+                .ignoresSafeArea(.container, edges: .top)
+                .allowsHitTesting(false)
+        }
     }
 }
 

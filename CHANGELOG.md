@@ -18,6 +18,7 @@ The first version: a Mac app for Markdown notes in your own folders.
 - Pictures, `[[links]]` and `![[embeds]]` as objects; pictures and files pasted or dropped in go to `.assets`.
 - The title is the file name; renaming a note updates the links to it.
 - Search with ⌘F across file names, note text and PDF text.
+- Back and forward with ⌘[ and ⌘], or with a swipe as in Safari.
 - Quick Look for every other file, with its details in the inspector.
 - The outline of a note in the inspector, with a word count.
 - Saving as you type, with a three-way merge when a note changed somewhere else, and a choice when both changed the
