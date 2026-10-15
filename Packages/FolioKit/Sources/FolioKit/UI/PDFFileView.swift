@@ -2,77 +2,22 @@ import PDFKit
 import SwiftUI
 
 /// A PDF, drawn by PDFKit right in the window as Preview draws it: the pages one under the other on the grey behind
-/// them, scrolling under the toolbar. The file is read in the background and the pages fade in once it is; until then
-/// there is only the grey, and a spinner if that takes long enough to notice. A file still in iCloud says it is
-/// downloading. A PDF that PDFKit can't show (damaged, or locked with a password) goes to Quick Look instead.
+/// them, scrolling under the toolbar. The pages fade in once the file is read (see `FileLoadingView`). A PDF that
+/// PDFKit can't show (damaged, or locked with a password) goes to Quick Look instead.
 struct PDFFileView: View {
     let url: URL
-    @State private var document: PDFDocument?
-    @State private var waiting: Waiting?
-    @State private var failed = false
-
-    private enum Waiting { case reading, downloading }
 
     var body: some View {
-        if failed {
-            QuickLookView(url: url)
-        } else {
-            ZStack {
-                PDFKitView(url: url, document: document)
-                    .opacity(document == nil ? 0 : 1)
-                    .ignoresSafeArea(.container, edges: .top)
-                if document == nil, let waiting {
-                    Group {
-                        if waiting == .downloading {
-                            ProgressView("Downloading from iCloud…")
-                        } else {
-                            ProgressView()
-                        }
-                    }
-                    .foregroundStyle(.secondary)
-                    .transition(.opacity)
-                }
+        FileLoadingView(url: url, background: FileKind.pdf.pageBackground) { url in
+            FileLoading.read(url) { url -> PDFDocument? in
+                guard let document = PDFDocument(url: url), !document.isLocked, document.pageCount > 0 else { return nil }
+                return document
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(nsColor: .underPageBackgroundColor).ignoresSafeArea())
-            .animation(.easeOut(duration: 0.2), value: document != nil)
-            .animation(.easeOut(duration: 0.2), value: waiting != nil)
-            .task { await load() }
+        } content: { document in
+            PDFKitView(url: url, document: document)
+                .ignoresSafeArea(.container, edges: .top)
         }
     }
-
-    private func load() async {
-        let inCloud = (try? url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]).ubiquitousItemDownloadingStatus) == .notDownloaded
-        // As everywhere on the Mac, nothing spins for a wait too short to notice.
-        let indicator = Task {
-            try? await Task.sleep(for: .seconds(inCloud ? 0.2 : 0.6))
-            if !Task.isCancelled { waiting = inCloud ? .downloading : .reading }
-        }
-        defer { indicator.cancel() }
-        let url = url
-        let loaded = await Task.detached(priority: .userInitiated) { () -> PDFDocument? in
-            #if DEBUG
-            if let delay = Self.debugDelay { try? await Task.sleep(for: .seconds(delay)) }
-            #endif
-            // A coordinated read waits for iCloud to bring the file down, and for anyone still writing it.
-            var document: PDFDocument?
-            NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: nil) { url in
-                document = PDFDocument(url: url)
-            }
-            return document
-        }.value
-        guard !Task.isCancelled else { return }
-        if let loaded, !loaded.isLocked, loaded.pageCount > 0 {
-            document = loaded
-        } else {
-            failed = true
-        }
-    }
-
-    #if DEBUG
-    /// For the debug remote: makes reading every PDF take this long, to see the wait.
-    nonisolated(unsafe) static var debugDelay: TimeInterval?
-    #endif
 }
 
 /// PDFKit's view, set up like Preview's continuous scroll: the pages fit the width, with page breaks and shadows.
