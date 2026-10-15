@@ -248,6 +248,20 @@ enum DebugRemote {
             usesFileWindow = argument == "file"
         case "openfile":
             FileWindows.shared.open(URL(fileURLWithPath: argument))
+        case "openurls":
+            // openurls <path>: what File › Open and the Dock icon do with a file or folder.
+            FileWindows.shared.open([URL(fileURLWithPath: argument)])
+        case "rows":
+            // rows: the sidebar as shown, indented, with the selected row marked and the visible rows' range.
+            if let outline = workspace?.sidebar?.outline {
+                let lines = (0..<outline.numberOfRows).map { row -> String in
+                    let item = outline.item(atRow: row)
+                    let name = (item as? FileNode)?.name ?? (outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView)?.textField?.stringValue ?? "?"
+                    return String(repeating: "  ", count: outline.level(forRow: row)) + name + (outline.selectedRow == row ? " *" : "")
+                }
+                let visible = outline.rows(in: outline.visibleRect)
+                log("rows (visible \(visible.location)..<\(visible.location + visible.length)):\n" + lines.joined(separator: "\n"))
+            }
         case "exportto":
             // exportto <pdf|png> <path>: writes the open note without asking where.
             let bits = argument.split(separator: " ", maxSplits: 1).map(String.init)

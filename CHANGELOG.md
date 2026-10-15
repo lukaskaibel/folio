@@ -12,6 +12,7 @@ The first version: a Mac app for Markdown notes in your own folders.
 ### Added
 
 - Locations: iCloud Drive or any folder in the sidebar, with favourites, read in place and watched for changes.
+- iCloud Drive as the Finder shows it, with Desktop, Documents and the folders of apps such as Pages or Obsidian.
 - A live-preview editor: Markdown marks show only next to the caret, and heading levels in the margin.
 - Headings, bold, italic, strikethrough, highlights, inline code, links, checklists, lists, quotes, callouts, tables,
   code with highlighting, LaTeX maths, Mermaid diagrams, footnotes and folded front matter.
@@ -26,5 +27,6 @@ The first version: a Mac app for Markdown notes in your own folders.
 - Saving as you type, with a three-way merge when a note changed somewhere else, and a choice when both changed the
   same lines.
 - Export as PDF or PNG, and printing.
-- Markdown files opened from the Finder in windows of their own.
+- Markdown files opened from the Finder or with ⌘O in windows of their own; folders opened either way go to the
+  sidebar.
 - Settings for the typeface, size, line spacing and line width, and for what the sidebar shows.

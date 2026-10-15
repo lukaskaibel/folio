@@ -50,17 +50,25 @@ public final class FileNode: NSObject {
     public private(set) var modified: Date?
     weak var parent: FileNode?
     private(set) var children: [FileNode]?
+    /// A folder from somewhere else shown in a location (iCloud Drive's Desktop), which can't be renamed or moved.
+    public let isLinked: Bool
+    /// For a location's top: the folders from elsewhere it shows next to its own files.
+    var linked: [LinkedFolder] = []
 
-    init(url: URL, kind: FileKind, isInCloud: Bool = false, modified: Date? = nil, parent: FileNode?) {
+    init(url: URL, kind: FileKind, isInCloud: Bool = false, modified: Date? = nil, parent: FileNode?, linkedAs name: String? = nil) {
         self.url = url
         self.kind = kind
         self.isInCloud = isInCloud
         self.modified = modified
         self.parent = parent
-        self.name = kind == .note ? url.deletingPathExtension().lastPathComponent : url.lastPathComponent
+        self.isLinked = name != nil
+        self.name = name ?? (kind == .note ? url.deletingPathExtension().lastPathComponent : url.lastPathComponent)
     }
 
     public var isFolder: Bool { kind == .folder }
+
+    /// What the sidebar sorts by: the file's name with its extension, a linked folder's own name.
+    var sortName: String { isLinked ? name : url.lastPathComponent }
 
     /// The folder's contents, read from disk the first time they are asked for.
     func loadedChildren() -> [FileNode] {
@@ -81,7 +89,7 @@ public final class FileNode: NSObject {
         for node in old { byPath[node.url.path] = node }
         var changed = fresh.count != old.count
         let merged = fresh.map { node -> FileNode in
-            if let existing = byPath[node.url.path], existing.kind == node.kind {
+            if let existing = byPath[node.url.path], existing.kind == node.kind, existing.name == node.name {
                 if existing.isInCloud != node.isInCloud || existing.modified != node.modified { changed = true }
                 existing.isInCloud = node.isInCloud
                 existing.modified = node.modified
@@ -96,7 +104,7 @@ public final class FileNode: NSObject {
     }
 
     func child(named name: String) -> FileNode? {
-        loadedChildren().first { $0.url.lastPathComponent == name }
+        loadedChildren().first { !$0.isLinked && $0.url.lastPathComponent == name }
     }
 
     static let keys: [URLResourceKey] = [.isDirectoryKey, .isPackageKey, .isHiddenKey, .ubiquitousItemDownloadingStatusKey, .contentModificationDateKey]
@@ -122,9 +130,12 @@ public final class FileNode: NSObject {
             if let status = values?.ubiquitousItemDownloadingStatus, status == .notDownloaded { inCloud = true }
             nodes.append(FileNode(url: url, kind: FileKind(url: url, isDirectory: isDirectory), isInCloud: inCloud, modified: values?.contentModificationDate, parent: parent))
         }
+        for folder in parent?.linked ?? [] {
+            nodes.append(FileNode(url: folder.url, kind: .folder, parent: parent, linkedAs: folder.name))
+        }
         nodes.sort { a, b in
             if a.isFolder != b.isFolder { return a.isFolder }
-            return a.url.lastPathComponent.localizedStandardCompare(b.url.lastPathComponent) == .orderedAscending
+            return a.sortName.localizedStandardCompare(b.sortName) == .orderedAscending
         }
         return nodes
     }

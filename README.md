@@ -128,9 +128,11 @@ the line spacing and the line width.
 
 - **Notes are files.** The title is the file name: rename a note by editing its title, and links to it in other notes
   follow. New notes go into the folder you're in.
-- **Folders as they are.** Add iCloud Drive or any folder as a location in the sidebar. Create, rename, duplicate and
-  move notes and folders, by drag and drop or with Move To; Option-drag copies. Deleting moves to the Trash, never
-  further. Favourites sit at the top of the sidebar.
+- **Folders as they are.** Add iCloud Drive or any folder as a location in the sidebar, with ⌘O or File › Add
+  Location. iCloud Drive shows what the Finder shows in it: Desktop and Documents when they are kept in iCloud, and the
+  folders of apps such as Pages or Obsidian. Create, rename, duplicate and move notes and folders, by drag and drop or
+  with Move To; Option-drag copies. Deleting moves to the Trash, never further. Favourites sit at the top of the
+  sidebar.
 - **Live preview editor.** Headings, bold, italic, strikethrough, `==highlight==`, inline code, links, checklists,
   bulleted and numbered lists, quotes, callouts, tables, code blocks, maths, Mermaid, footnotes and front matter, which
   folds into a small "properties" pill.
@@ -200,7 +202,8 @@ team ID>`; it isn't checked in.
 ### Adding your notes
 
 On first launch, Folio asks for a folder: **Open iCloud Drive**, or **Choose another folder…**. Add more later with
-File › Add Location… or in Settings › General. Folio works on the files in place; nothing is copied or imported.
+File › Open… (⌘O), File › Add Location…, Settings › General, or by dropping a folder on Folio in the Dock. Folio works
+on the files in place; nothing is copied or imported.
 
 To look around without your own notes, run a Debug build with the arguments `-FolioLibrary /tmp/FolioSample
 -FolioDemo YES` (Product › Scheme › Edit Scheme › Arguments). It writes a few sample notes, pictures and PDFs to that
@@ -214,7 +217,7 @@ folder and shows only them, for that run.
 | ⇧⌘N | New folder |
 | ⌘F | Search |
 | ⌘[ and ⌘], or swipe between pages | Back and forward; the swipe follows System Settings, as in Safari |
-| ⌘O | Open a Markdown file in a window of its own |
+| ⌘O | Open a Markdown file in a window of its own, or a folder in the sidebar |
 | ⌃⌘S | Show or hide the sidebar |
 | ⌃⌘I | Show or hide the outline |
 | ⌘+, ⌘− and ⌘0 | Bigger, smaller and actual text size |

@@ -5,6 +5,7 @@ import SwiftUI
 /// The window: the welcome screen until there is a location, then the sidebar, the open file and its outline.
 public struct RootView: View {
     @State private var workspace = Workspace.shared
+    @Environment(\.openWindow) private var openWindow
 
     public init() {}
 
@@ -17,6 +18,10 @@ public struct RootView: View {
             }
         }
         .frame(minWidth: 760, minHeight: 480)
+        .onAppear {
+            // Opening a folder from a file window, or with this one closed, brings this window back.
+            workspace.showWindow = { [openWindow] in openWindow(id: "main") }
+        }
     }
 }
 
