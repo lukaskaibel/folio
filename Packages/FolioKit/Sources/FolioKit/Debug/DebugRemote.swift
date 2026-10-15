@@ -147,6 +147,15 @@ enum DebugRemote {
                 editor.scrollView.contentView.scroll(to: NSPoint(x: 0, y: y))
                 editor.scrollView.reflectScrolledClipView(editor.scrollView.contentView)
             }
+        case "hover":
+            // hover <character index>: as if the pointer rested on that character (the real one stays put).
+            if let editor, let index = numbers.first, let window, let content = window.contentView,
+               let point = windowPoint(ofCharacter: Int(index), fraction: 0.5, in: editor) {
+                editor.updateCopyButton(at: editor.textView.convert(NSPoint(x: point.x, y: content.bounds.height - point.y), from: nil))
+                let button = editor.textView.copyButton
+                let frame = editor.textView.convert(button.frame, to: nil)
+                log(button.isHidden ? "hover \(Int(index)): no copy button" : "hover \(Int(index)): copy button at \(Int(frame.midX)) \(Int(content.bounds.height - frame.midY))")
+            }
         case "snapshot":
             snapshot(to: argument)
         case "dump":
@@ -418,6 +427,13 @@ enum DebugRemote {
         func event(_ type: NSEvent.EventType, _ at: CGPoint, clicks: Int) -> NSEvent? {
             NSEvent.mouseEvent(with: type, location: at, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
                                windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: clicks, pressure: type == .leftMouseUp ? 0 : 1)
+        }
+        // A button over the note (a code block's copy button) tracks clicks with a gesture recognizer, which only sees
+        // events the window delivers to a key window: press it the way accessibility does.
+        if let button = target as? NSButton, button.superview is NSTextView, end == nil, !right {
+            button.performClick(nil)
+            log("press \(Int(point.x)),\(Int(point.y)) on \(type(of: button))")
+            return
         }
         // SwiftUI controls track clicks through the window, so they get the events the way the window would send them.
         let isAppKitView = sequence(first: target, next: { $0.superview }).contains { $0 is NSTextView || $0 is NSTableView }

@@ -15,6 +15,7 @@ The first version: a Mac app for Markdown notes in your own folders.
 - A live-preview editor: Markdown marks show only next to the caret, and heading levels in the margin.
 - Headings, bold, italic, strikethrough, highlights, inline code, links, checklists, lists, quotes, callouts, tables,
   code with highlighting, LaTeX maths, Mermaid diagrams, footnotes and folded front matter.
+- A copy button in the corner of the code block under the pointer, and Copy Code when you right-click one.
 - Pictures, `[[links]]` and `![[embeds]]` as objects; pictures and files pasted or dropped in go to `.assets`.
 - The title is the file name; renaming a note updates the links to it.
 - Search with ⌘F across file names, note text and PDF text.

@@ -12,6 +12,7 @@ final class MarkdownTextView: NSTextView {
 
     let titleField = TitleField()
     let metaLabel = NSTextField(labelWithString: "")
+    let copyButton = CodeCopyButton()
 
     static let titleTop: CGFloat = 44
     static let titleHeight: CGFloat = 40
@@ -41,6 +42,9 @@ final class MarkdownTextView: NSTextView {
         metaLabel.font = .systemFont(ofSize: 12.5)
         metaLabel.textColor = Theme.textTertiary
         addSubview(metaLabel)
+        copyButton.target = self
+        copyButton.action = #selector(copyCodeBlock(_:))
+        addSubview(copyButton)
         applyTypography()
     }
 
@@ -93,14 +97,20 @@ final class MarkdownTextView: NSTextView {
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         if let hoverArea { removeTrackingArea(hoverArea) }
-        let area = NSTrackingArea(rect: .zero, options: [.mouseMoved, .activeInKeyWindow, .inVisibleRect], owner: self, userInfo: nil)
+        let area = NSTrackingArea(rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self, userInfo: nil)
         addTrackingArea(area)
         hoverArea = area
     }
 
     override func mouseMoved(with event: NSEvent) {
         super.mouseMoved(with: event)
+        controller?.updateCopyButton(at: convert(event.locationInWindow, from: nil))
         controller?.updateCursor(for: event)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        controller?.updateCopyButton(at: nil)
     }
 
     // AppKit puts the I-beam back on every cursor update; links and checkboxes keep the hand.
@@ -111,6 +121,19 @@ final class MarkdownTextView: NSTextView {
 
     override func menu(for event: NSEvent) -> NSMenu? {
         controller?.contextMenu(for: event, base: super.menu(for: event)) ?? super.menu(for: event)
+    }
+
+    // The pointer isn't tracked in a window in the background, so nothing would hide the copy button there.
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        NotificationCenter.default.removeObserver(self, name: NSWindow.didResignKeyNotification, object: nil)
+        if let window {
+            NotificationCenter.default.addObserver(self, selector: #selector(windowResignedKey), name: NSWindow.didResignKeyNotification, object: window)
+        }
+    }
+
+    @objc private func windowResignedKey() {
+        controller?.updateCopyButton(at: nil)
     }
 
     #if DEBUG

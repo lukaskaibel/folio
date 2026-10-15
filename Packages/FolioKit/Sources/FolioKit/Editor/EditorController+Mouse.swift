@@ -118,6 +118,7 @@ extension EditorController {
 
     func updateCursor(for event: NSEvent) {
         let point = textView.convert(event.locationInWindow, from: nil)
+        if !textView.copyButton.isHidden, textView.copyButton.frame.contains(point) { return NSCursor.arrow.set() }
         switch hitTest(point) {
         case .checkbox, .link, .editLink, .headingLevel: NSCursor.pointingHand.set()
         case .picture, .block: NSCursor.arrow.set()
@@ -161,6 +162,7 @@ extension EditorController {
             menu.addItem(NSMenuItem(title: "Delete", action: #selector(NSText.delete(_:)), keyEquivalent: ""))
             return menu
         }
+        if let base { addCopyCode(to: base, at: point) }
         return base
     }
 }

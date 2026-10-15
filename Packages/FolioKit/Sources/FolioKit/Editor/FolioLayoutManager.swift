@@ -23,6 +23,8 @@ final class FolioLayoutManager: NSLayoutManager, @preconcurrency NSLayoutManager
     var selectedRanges: [NSRange] = []
     /// For a copy that is printed or exported: controls for editing (a link's pencil) take no room and aren't drawn.
     var hidesEditingControls = false
+    /// Where the code block with the copy button over it starts: its language label makes way for the button.
+    var copyButtonBlock: Int?
 
     override init() {
         super.init()
@@ -596,7 +598,7 @@ final class FolioLayoutManager: NSLayoutManager, @preconcurrency NSLayoutManager
     private func drawDecoration(_ decoration: Decoration, range decorationRange: NSRange, container: NSTextContainer, origin: NSPoint) {
         guard let storage = textStorage, decorationRange.upperBound <= storage.length else { return }
         switch decoration.kind {
-        case .codeBlock(let language, _):
+        case .codeBlock(let language, _, let preview):
             guard let box = blockRect(decorationRange, container: container, origin: origin) else { return }
             let path = NSBezierPath(roundedRect: box, xRadius: 8, yRadius: 8)
             Theme.code.setFill()
@@ -605,11 +607,12 @@ final class FolioLayoutManager: NSLayoutManager, @preconcurrency NSLayoutManager
             path.lineWidth = 1
             NSBezierPath(roundedRect: box.insetBy(dx: 0.5, dy: 0.5), xRadius: 7.5, yRadius: 7.5).stroke()
             // The language in the corner while the fences are hidden.
-            if !language.isEmpty, !(source?.isRevealed(decorationRange.location) ?? false) {
+            if !language.isEmpty, !(source?.isRevealed(decorationRange.location) ?? false), copyButtonBlock != decorationRange.location {
                 let label = NSAttributedString(string: language, attributes: [.font: NSFont.systemFont(ofSize: 11, weight: .medium), .foregroundColor: Theme.textTertiary])
                 let size = label.size()
                 label.draw(at: CGPoint(x: box.maxX - size.width - 12, y: box.minY + 5))
             }
+            if let preview { drawPreview(preview, range: decorationRange, under: box) }
         case .callout(let type):
             guard var box = blockRect(decorationRange, container: container, origin: origin) else { return }
             box = NSRect(x: box.minX, y: box.minY - 6, width: box.width, height: box.height + 12)
@@ -647,9 +650,16 @@ final class FolioLayoutManager: NSLayoutManager, @preconcurrency NSLayoutManager
                 Theme.highlight.setFill()
                 NSBezierPath(roundedRect: box, xRadius: 3.5, yRadius: 3.5).fill()
             }
-        case .mermaidPreview, .mathPreview:
-            drawPreview(decoration, range: decorationRange, container: container, origin: origin)
         }
+    }
+
+    /// The box drawn behind the block that this character is in, in the text view's coordinates.
+    func blockBox(at index: Int, origin: NSPoint) -> NSRect? {
+        guard let storage = textStorage, let container = textContainers.first, index < storage.length else { return nil }
+        var run = NSRange()
+        guard let decoration = storage.attribute(.folioDecoration, at: index, effectiveRange: &run) as? Decoration,
+              case .codeBlock = decoration.kind else { return nil }
+        return blockRect(extent(of: decoration, around: run), container: container, origin: origin)
     }
 
     /// From the top of a block's first line to the bottom of its last, without the spacing around it, across the
@@ -669,24 +679,20 @@ final class FolioLayoutManager: NSLayoutManager, @preconcurrency NSLayoutManager
         return NSRect(x: origin.x + x, y: origin.y + top, width: container.size.width - x * 2, height: bottom - top)
     }
 
-    private func drawPreview(_ decoration: Decoration, range decorationRange: NSRange, container: NSTextContainer, origin: NSPoint) {
-        guard let box = blockRect(decorationRange, container: container, origin: origin), let storage = textStorage else { return }
+    /// A diagram or formula being edited, in the room left under its source (the last line's spacing).
+    private func drawPreview(_ preview: Decoration.Preview, range decorationRange: NSRange, under box: NSRect) {
+        guard let storage = textStorage else { return }
         let lastStyle = storage.attribute(.paragraphStyle, at: max(decorationRange.location, decorationRange.upperBound - 1), effectiveRange: nil) as? NSParagraphStyle
         let area = NSRect(x: box.minX, y: box.maxY + 12, width: box.width, height: max(0, (lastStyle?.paragraphSpacing ?? 0) - 22))
-        let text = storage.string as NSString
-        let source = text.substring(with: decorationRange)
-        if decoration.kind == .mermaidPreview {
-            let inner = source.split(separator: "\n", omittingEmptySubsequences: false).dropFirst().filter { !$0.hasPrefix("```") && !$0.hasPrefix("~~~") }.joined(separator: "\n")
-            if case .some(.some(let image)) = DiagramStore.diagram(inner, isDark: self.source?.isDarkAppearance ?? false, ready: { [weak self] in self?.source?.objectNeedsLayout(decorationRange) }) {
+        switch preview {
+        case .diagram(let diagram):
+            if case .some(.some(let image)) = DiagramStore.diagram(diagram, isDark: source?.isDarkAppearance ?? false, ready: { [weak self] in self?.source?.objectNeedsLayout(decorationRange) }) {
                 var size = image.size
                 if size.width > area.width { size = CGSize(width: area.width, height: size.height * area.width / size.width) }
                 image.draw(in: NSRect(x: area.minX, y: area.minY, width: size.width, height: size.height), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
             }
-        } else {
-            var tex = source.trimmingCharacters(in: .whitespacesAndNewlines)
-            if tex.hasPrefix("$$") { tex = String(tex.dropFirst(2)) }
-            if tex.hasSuffix("$$") { tex = String(tex.dropLast(2)) }
-            if let math = MathStore.render(tex.trimmingCharacters(in: .whitespacesAndNewlines), display: true, size: 19, color: Theme.text.resolved(dark: self.source?.isDarkAppearance ?? false)) {
+        case .math(let tex):
+            if let math = MathStore.render(tex, display: true, size: 19, color: Theme.text.resolved(dark: source?.isDarkAppearance ?? false)) {
                 let size = math.image.size
                 math.image.draw(in: NSRect(x: area.minX + max(0, (area.width - size.width) / 2), y: area.minY, width: size.width, height: size.height), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
             }

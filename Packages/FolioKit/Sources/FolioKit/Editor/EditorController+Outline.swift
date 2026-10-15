@@ -75,6 +75,7 @@ extension EditorController {
 
     @objc func scrolled() {
         updatePosition()
+        updateCopyButtonForPointer()
     }
 
     /// The top of what you see, below the toolbar, in the text view's coordinates.

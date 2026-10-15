@@ -256,6 +256,9 @@ public final class EditorController: NSObject, NSTextViewDelegate, @preconcurren
     public func textStorage(_ textStorage: NSTextStorage, didProcessEditing editedMask: NSTextStorageEditActions, range editedRange: NSRange, changeInLength delta: Int) {
         guard editedMask.contains(.editedCharacters), !isApplyingStyle else { return }
         updateLayoutMode(for: textStorage.length)
+        // Like the pointer, the copy button keeps out of the way while you type, and it would be left behind by a
+        // block that moved.
+        updateCopyButton(at: nil)
         if !isLoading { scheduleOutlineUpdate() }
         let oldDocument = document
         let oldSignatures = lineSignatures

@@ -64,7 +64,7 @@ enum MarkdownStyler {
                 return
             case .mermaid:
                 if active {
-                    styleCode(s, text: text, doc: doc, line: line, index: index, block: block, language: "mermaid", preview: env.previewHeight(block), previewKind: .mermaidPreview)
+                    styleCode(s, text: text, doc: doc, line: line, index: index, block: block, language: "mermaid", preview: env.previewHeight(block), previewKind: .diagram(source: diagramSource(text, doc, block)))
                 } else {
                     styleSwapped(s, line: line, index: index, block: block, object: .mermaid(source: blockContent(text, doc, block)))
                 }
@@ -79,7 +79,7 @@ enum MarkdownStyler {
                 return
             case .math:
                 if active {
-                    styleCode(s, text: text, doc: doc, line: line, index: index, block: block, language: "tex", preview: env.previewHeight(block), previewKind: .mathPreview)
+                    styleCode(s, text: text, doc: doc, line: line, index: index, block: block, language: "tex", preview: env.previewHeight(block), previewKind: .math(tex: mathSource(text, doc, block)))
                 } else {
                     styleSwapped(s, line: line, index: index, block: block, object: .mathBlock(tex: mathSource(text, doc, block)))
                 }
@@ -203,7 +203,7 @@ enum MarkdownStyler {
 
     private static func styleCode(
         _ s: NSTextStorage, text: NSString, doc: MarkdownDocument, line: MarkdownLine, index: Int, block: MarkdownBlock,
-        language: String, preview: CGFloat = 0, previewKind: Decoration.Kind? = nil
+        language: String, preview: CGFloat = 0, previewKind: Decoration.Preview? = nil
     ) {
         let full = line.fullRange
         let isFirst = index == block.lines.lowerBound
@@ -220,11 +220,9 @@ enum MarkdownStyler {
             .foregroundColor: Theme.textBody,
             .paragraphStyle: style,
             .baselineOffset: EditorStyle.baselineOffset(for: EditorStyle.mono, lineHeight: EditorStyle.codeLineHeight),
-            .folioDecoration: decoration(for: block, .codeBlock(language: language, active: previewKind != nil || language == "yaml" || language == "tex")),
+            // The preview belongs to the box, so the box goes round the closing fence too and the preview hangs below it.
+            .folioDecoration: decoration(for: block, .codeBlock(language: language, active: previewKind != nil || language == "yaml" || language == "tex", preview: previewKind)),
         ], range: full)
-        if let previewKind, isLast {
-            s.addAttribute(.folioDecoration, value: Decoration(previewKind), range: line.range.length > 0 ? line.range : full)
-        }
         switch line.kind {
         case .fence, .frontmatterDelimiter, .mathDelimiter:
             s.addAttribute(.foregroundColor, value: Theme.faint, range: line.range)
@@ -498,7 +496,8 @@ enum MarkdownStyler {
     static func isImageFile(_ url: URL) -> Bool { imageExtensions.contains(url.pathExtension.lowercased()) }
     static func isImageName(_ name: String) -> Bool { imageExtensions.contains((name as NSString).pathExtension.lowercased()) }
 
-    private static func blockContent(_ text: NSString, _ doc: MarkdownDocument, _ block: MarkdownBlock) -> String {
+    /// The code between a block's fences, as it is copied.
+    static func blockContent(_ text: NSString, _ doc: MarkdownDocument, _ block: MarkdownBlock) -> String {
         let inner = block.lines.dropFirst().filter { doc.lines[$0].kind == .code }
         return inner.map { text.substring(with: doc.lines[$0].range) }.joined(separator: "\n")
     }

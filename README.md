@@ -81,7 +81,8 @@ in the folder still uses it. Move a note to another folder and its pictures move
 
 Tables are drawn as tables, Mermaid diagrams as diagrams (natively, without a web view), code with highlighting for
 about forty languages, and LaTeX maths as typeset formulas. Click into one and its source appears, with a live
-preview for diagrams and formulas. Callouts in GitHub's and Obsidian's `> [!note]` style get their colour and symbol.
+preview for diagrams and formulas. Point at a code block and a button in its corner copies the code. Callouts in
+GitHub's and Obsidian's `> [!note]` style get their colour and symbol.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/blocks-dark.webp">
