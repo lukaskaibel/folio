@@ -125,7 +125,9 @@ The window is built from the system's own pieces: a source-list sidebar, a toolb
 share menu, an inspector, Settings, alerts, PDFKit, AVKit and Quick Look. It follows the system's light or dark
 appearance. The inspector shows a note's outline, with the section you're reading marked and a word count; a click on
 a heading scrolls there. In Settings › Text you pick the typeface (San Francisco, New York, Rounded or Monospaced),
-the size, the line spacing and the line width.
+the size, the line spacing and the line width. The icon is a leather notebook, and Settings › App Icon makes it yours:
+pick the leather, the elastic band, the ribbon and the background, and the Dock shows your notebook while Folio is
+open.
 
 ## What it does
 
@@ -284,10 +286,10 @@ Packages/FolioKit/
     UI/                      The window, sidebar, inspector, search field, Settings, file windows, PDFs, pictures,
                              videos and Quick Look
     Debug/                   The debug remote and the sample notes (Debug builds only)
-  Tests/                     Parser, editor, merge and smoothness tests
+  Tests/                     Parser, editor, merge, smoothness and app icon tests
 Config/                      Build settings, Info.plist and entitlements
 Design/                      The icon, the README pictures and the social preview
-Tools/                       The icon and the README pictures
+Tools/                       The app icon and the README pictures
 PLAN.md                      The plan: decisions, file format, architecture and milestones (in German)
 ```
 
@@ -309,6 +311,14 @@ again when a change shows in one of them:
 
 ```bash
 Tools/readme-images.sh
+```
+
+The app icon is drawn by `Tools/AppIcon/notebook.py`. After changing it, run the script below: it writes
+`Folio/AppIcon.icon` and renders, with Icon Composer's `ictool`, the grey passes that Settings › App Icon colours in
+any leather (it needs Python 3 with NumPy and Pillow, and `brew install librsvg`):
+
+```bash
+Tools/AppIcon/make.sh
 ```
 
 Debug builds can be driven from a file: launch with `-debugCommandFile <path>` and append commands such as

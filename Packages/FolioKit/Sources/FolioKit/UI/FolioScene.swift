@@ -6,13 +6,16 @@ public struct FolioScene: Scene {
     @State private var workspace = Workspace.shared
     @State private var settings = FolioSettings.shared
 
-    public init() {}
+    public init() {
+        AppIconTip.configure()
+    }
 
     public var body: some Scene {
         Window("Folio", id: "main") {
             RootView()
                 .onAppear {
                     workspace.start()
+                    AppIconStore.shared.start()
                     #if DEBUG
                     DebugRemote.startIfRequested(workspace: workspace)
                     #endif
@@ -129,7 +132,7 @@ public struct FolioScene: Scene {
     }
 }
 
-/// Settings, in the system's tabbed window: where notes live, how they are set, what the sidebar shows.
+/// Settings, in the system's tabbed window: where notes live, how they are set, what the sidebar shows, the app icon.
 struct SettingsView: View {
     let workspace: Workspace
     @AppStorage("settingsTab") private var tab = "general"
@@ -139,6 +142,7 @@ struct SettingsView: View {
             Tab("General", systemImage: "gearshape", value: "general") { GeneralSettings(workspace: workspace) }
             Tab("Text", systemImage: "textformat", value: "text") { TextSettings() }
             Tab("Sidebar", systemImage: "sidebar.left", value: "sidebar") { SidebarSettings() }
+            Tab("App Icon", systemImage: "book.closed", value: "icon") { AppIconSettings() }
         }
         .frame(width: 540, height: 460)
     }

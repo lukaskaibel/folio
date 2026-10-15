@@ -21,6 +21,8 @@ let package = Package(
                 .product(name: "BeautifulMermaid", package: "beautiful-mermaid-swift"),
                 .product(name: "SwiftMath", package: "SwiftMath"),
             ],
+            // Passes of the app icon's notebook, made by Tools/AppIcon/make.sh.
+            resources: [.copy("Resources/NotebookIcon")],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(

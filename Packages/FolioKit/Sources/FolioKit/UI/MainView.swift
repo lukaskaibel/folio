@@ -31,8 +31,11 @@ struct MainView: View {
 
     var body: some View {
         NavigationSplitView(columnVisibility: $workspace.columnVisibility) {
-            SidebarOutline(workspace: workspace)
-                .navigationSplitViewColumnWidth(min: 200, ideal: 250, max: 400)
+            VStack(spacing: 0) {
+                SidebarOutline(workspace: workspace)
+                AppIconTipView()
+            }
+            .navigationSplitViewColumnWidth(min: 200, ideal: 250, max: 400)
                 .toolbar {
                     ToolbarItem {
                         Button { workspace.newNote() } label: { Label("New Note", systemImage: "square.and.pencil") }
