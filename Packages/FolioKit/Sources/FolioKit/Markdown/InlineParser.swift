@@ -149,7 +149,7 @@ enum InlineParser {
                     i += 1
                 }
 
-            case 42, 95, 126: // * _ ~
+            case 42, 95, 126, 61: // * _ ~ =
                 let run = runLength(u, i, end, c)
                 let before: UInt16? = i > range.location ? u[i - 1] : nil
                 let after: UInt16? = i + run < end ? u[i + run] : nil
@@ -160,7 +160,8 @@ enum InlineParser {
                     canOpen = flanks.left && (!flanks.right || isPunctuation(before))
                     canClose = flanks.right && (!flanks.left || isPunctuation(after))
                 }
-                if c != 126 || run == 2 {
+                // ~~strike~~ and ==highlight== take exactly two.
+                if (c != 126 && c != 61) || run == 2 {
                     delimiters.append(Delimiter(character: c, start: i, length: run, originalLength: run, canOpen: canOpen, canClose: canClose))
                 }
                 i += run
@@ -188,7 +189,7 @@ enum InlineParser {
             while openerIndex >= 0 {
                 let opener = delimiters[openerIndex]
                 if opener.character == closer.character, opener.canOpen, opener.length > 0 {
-                    if closer.character == 126 {
+                    if closer.character == 126 || closer.character == 61 {
                         if opener.length == closer.length { found = openerIndex; break }
                     } else {
                         let ruleOfThree = (opener.canClose || closer.canOpen)
@@ -203,9 +204,9 @@ enum InlineParser {
 
             let use: Int
             let kind: InlineSpan.Kind
-            if closer.character == 126 {
+            if closer.character == 126 || closer.character == 61 {
                 use = closer.length
-                kind = .strikethrough
+                kind = closer.character == 126 ? .strikethrough : .highlight
             } else {
                 use = delimiters[opener].length >= 2 && closer.length >= 2 ? 2 : 1
                 kind = use == 2 ? .strong : .emphasis

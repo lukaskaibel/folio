@@ -28,12 +28,21 @@ public protocol EditorControllerDelegate: AnyObject {
     func editor(_ editor: EditorController, resolve target: String) -> URL?
     /// The note's name, used to name pictures pasted into it.
     func editorNoteName(_ editor: EditorController) -> String
+    /// The headings or the word count changed.
+    func editorOutlineDidChange(_ editor: EditorController)
+    /// You scrolled: into another section, or the title out of view.
+    func editorPositionDidChange(_ editor: EditorController)
+}
+
+public extension EditorControllerDelegate {
+    func editorOutlineDidChange(_ editor: EditorController) {}
+    func editorPositionDidChange(_ editor: EditorController) {}
 }
 
 /// Folio's editor: a TextKit 1 text view whose storage holds the note's Markdown exactly, styled so that it reads as
 /// a finished document. Markdown punctuation shows only right next to a resting caret; while you select, nothing moves.
 @MainActor
-public final class EditorController: NSObject, @preconcurrency NSTextViewDelegate, @preconcurrency NSTextStorageDelegate, @preconcurrency NSTextFieldDelegate, EditorLayoutSource {
+public final class EditorController: NSObject, NSTextViewDelegate, @preconcurrency NSTextStorageDelegate, NSTextFieldDelegate, EditorLayoutSource {
     public weak var delegate: EditorControllerDelegate?
 
     let storage = NSTextStorage()
@@ -56,6 +65,19 @@ public final class EditorController: NSObject, @preconcurrency NSTextViewDelegat
     public private(set) var folder: URL?
 
     let suggestions = LinkSuggestionPanel()
+
+    /// The note's headings, for the outline next to it.
+    public internal(set) var outline: [OutlineHeading] = []
+    public internal(set) var stats = NoteStats()
+    /// The heading whose section is at the top of the window, as an index into `outline`.
+    public internal(set) var currentHeading: Int?
+    /// True once the title has scrolled up under the toolbar.
+    public internal(set) var isTitleScrolledAway = false
+    var outlineUpdate: DispatchWorkItem?
+    /// The heading picked in the outline and where that scrolled to: it stays the current one until you scroll away,
+    /// even when the note ends too soon to bring it to the top.
+    var jump: (heading: Int?, y: CGFloat)?
+    var isJumping = false
     /// Where the `[[` the popup completes starts (just after the brackets). While it is set, that link is drawn as
     /// the text being typed rather than as a finished link.
     var suggestionAnchor: Int? {
@@ -67,6 +89,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextViewDelegat
     }
 
     public override init() {
+        _ = FolioSettings.shared
         textView = MarkdownTextView(frame: NSRect(x: 0, y: 0, width: 800, height: 600), textContainer: nil)
         super.init()
         storage.addLayoutManager(layoutManager)
@@ -87,8 +110,11 @@ public final class EditorController: NSObject, @preconcurrency NSTextViewDelegat
         scrollView.drawsBackground = false
         scrollView.borderType = .noBorder
         scrollView.scrollerStyle = .overlay
-        scrollView.automaticallyAdjustsContentInsets = false
+        // Room for the toolbar, which the note scrolls under.
+        scrollView.automaticallyAdjustsContentInsets = true
         scrollView.contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(self, selector: #selector(scrolled), name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
+        NotificationCenter.default.addObserver(self, selector: #selector(typographyChanged), name: .folioTypographyChanged, object: nil)
         suggestions.onPick = { [weak self] suggestion in self?.acceptSuggestion(suggestion) }
     }
 
@@ -115,10 +141,8 @@ public final class EditorController: NSObject, @preconcurrency NSTextViewDelegat
         view.minSize = NSSize(width: 0, height: 0)
         view.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         view.insertionPointColor = Theme.accent
-        view.selectedTextAttributes = [.backgroundColor: NSColor(name: nil) { appearance in
-            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            return isDark ? NSColor(hex: 0x8F96F2, alpha: 0.30) : NSColor(hex: 0x5B63D3, alpha: 0.20)
-        }]
+        // The system's selection colour, without changing the colour of the text.
+        view.selectedTextAttributes = [.backgroundColor: NSColor.selectedTextBackgroundColor]
         view.linkTextAttributes = [:]
         view.typingAttributes = MarkdownStyler.baseAttributes
         view.defaultParagraphStyle = EditorStyle.paragraph()
@@ -137,6 +161,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextViewDelegat
         isLoading = true
         self.folder = folder
         closeSuggestions()
+        jump = nil
         revealed = []
         activeBlock = nil
         lineSignatures = []
@@ -149,7 +174,8 @@ public final class EditorController: NSObject, @preconcurrency NSTextViewDelegat
         textView.setSelectedRange(NSRange(location: 0, length: 0))
         textView.undoManager?.removeAllActions()
         isLoading = false
-        textView.scroll(.zero)
+        scrollToTop()
+        updateOutline()
         if focusTitle {
             textView.window?.makeFirstResponder(textView.titleField)
         }
@@ -230,6 +256,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextViewDelegat
     public func textStorage(_ textStorage: NSTextStorage, didProcessEditing editedMask: NSTextStorageEditActions, range editedRange: NSRange, changeInLength delta: Int) {
         guard editedMask.contains(.editedCharacters), !isApplyingStyle else { return }
         updateLayoutMode(for: textStorage.length)
+        if !isLoading { scheduleOutlineUpdate() }
         let oldDocument = document
         let oldSignatures = lineSignatures
         document = MarkdownParser.parse(storage.mutableString)
@@ -333,6 +360,18 @@ public final class EditorController: NSObject, @preconcurrency NSTextViewDelegat
         storage.endEditing()
         isApplyingStyle = false
         lineSignatures = computeSignatures()
+    }
+
+    /// The typeface, size, spacing or width changed in the settings: the whole note is set again, keeping the line
+    /// you are on where it is.
+    @objc func typographyChanged() {
+        textView.typingAttributes = MarkdownStyler.baseAttributes
+        textView.defaultParagraphStyle = EditorStyle.paragraph()
+        textView.applyTypography()
+        preservingScroll {
+            restyle(lines: Array(document.lines.indices))
+            layoutManager.invalidateLayout(forCharacterRange: NSRange(location: 0, length: storage.length), actualCharacterRange: nil)
+        }
     }
 
     func lines(of block: Int) -> [Int] {
@@ -446,6 +485,8 @@ public final class EditorController: NSObject, @preconcurrency NSTextViewDelegat
                 layoutManager.invalidateDisplay(forCharacterRange: lineRange)
             }
         }
+        // A heading's level tag is drawn in the margin, outside the text the layout manager invalidates.
+        textView.needsDisplay = true
     }
 
     /// Runs a change that may make lines taller or shorter and scrolls so that the caret (or the top line, when the
@@ -457,7 +498,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextViewDelegat
         let selection = textView.selectedRange()
         var index = anchor ?? selection.location
         var y = yPosition(of: index)
-        if anchor == nil, y < visible.minY || y > visible.maxY {
+        if anchor == nil, y < visible.minY + scrollView.contentInsets.top || y > visible.maxY {
             index = firstVisibleCharacter()
             y = yPosition(of: index)
         }
@@ -467,7 +508,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextViewDelegat
         let after = yPosition(of: index) - visible.minY
         let delta = after - before
         if abs(delta) > 0.5 {
-            clip.scroll(to: NSPoint(x: visible.minX, y: max(0, visible.minY + delta)))
+            clip.scroll(to: NSPoint(x: visible.minX, y: max(-scrollView.contentInsets.top, visible.minY + delta)))
             scrollView.reflectScrolledClipView(clip)
         }
     }
@@ -484,7 +525,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextViewDelegat
 
     private func firstVisibleCharacter() -> Int {
         let visible = scrollView.contentView.bounds
-        let point = NSPoint(x: visible.minX + 1, y: visible.minY - textView.textContainerOrigin.y + 1)
+        let point = NSPoint(x: visible.minX + 1, y: max(0, visible.minY + scrollView.contentInsets.top - textView.textContainerOrigin.y + 1))
         let glyph = layoutManager.glyphIndex(for: point, in: container)
         return layoutManager.characterIndexForGlyph(at: glyph)
     }

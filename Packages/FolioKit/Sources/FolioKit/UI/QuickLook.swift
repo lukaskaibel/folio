@@ -25,7 +25,7 @@ struct QuickLookView: NSViewRepresentable {
 
 /// The Quick Look panel, for a picture in a note or a file in the sidebar (Space, double click).
 @MainActor
-final class QuickLookPanel: NSObject, @preconcurrency QLPreviewPanelDataSource, @preconcurrency QLPreviewPanelDelegate {
+final class QuickLookPanel: NSObject, @preconcurrency QLPreviewPanelDataSource, QLPreviewPanelDelegate {
     static let shared = QuickLookPanel()
     private var url: URL?
 

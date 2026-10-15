@@ -1,7 +1,7 @@
 import AppKit
 import PDFKit
 
-/// Every file in the locations, with the text of every note (and of PDFs), for ⌘K, `[[` and resolving links. Built in
+/// Every file in the locations, with the text of every note (and of PDFs), for search, `[[` and resolving links. Built in
 /// the background when the app starts and kept up to date as files change.
 @MainActor
 @Observable
@@ -52,9 +52,10 @@ public final class SearchIndex {
             for (root, name, id) in roots {
                 result.append(contentsOf: Self.scan(root, locationName: name, locationID: id))
             }
+            let found = result
             await MainActor.run {
                 guard generation == self.generation else { return }
-                self.entries = result
+                self.entries = found
                 self.reindex()
                 self.isBuilding = false
                 self.indexPDFs()
@@ -140,8 +141,9 @@ public final class SearchIndex {
                 }
                 updates.append((folder.standardizedFileURL.path, found))
             }
+            let scanned = updates
             await MainActor.run {
-                for (folder, found) in updates {
+                for (folder, found) in scanned {
                     let foundPaths = Set(found.map { $0.url.standardizedFileURL.path })
                     // What was in the folder and is gone, with everything inside a folder that is gone.
                     let removed = self.entries.filter {
@@ -181,7 +183,7 @@ public final class SearchIndex {
     private var pdfTask: Task<Void, Never>?
     private static var pdfCache: [String: (Date?, String)] = [:]
 
-    /// Reads the text of PDFs in the background, a few at a time, so ⌘K finds what is in them.
+    /// Reads the text of PDFs in the background, a few at a time, so search finds what is in them.
     private func indexPDFs() {
         pdfTask?.cancel()
         let pending = entries.filter { $0.kind == .pdf && $0.text == nil && !$0.isInCloud }.map { ($0.url, $0.modified) }

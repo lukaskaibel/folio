@@ -43,6 +43,8 @@ enum DemoLibrary {
         - **Day 2** Arashiyama: bamboo grove early, then along the river
         - **Day 3** Day trip to [[Nara]]
 
+        Room details are on the [ryokan's site](https://www.example.com/ryokan). Check-in is ==from 3 pm==, dinner at 7.
+
         > [!tip] Good to know
         > Get an ICOCA card at the airport. It works on every train and in most convenience stores.
 
@@ -51,6 +53,9 @@ enum DemoLibrary {
         | 1 | Fushimi | Early start |
         | 2 | Arashiyama | Bamboo grove |
         | 3 | Nara | Deer park |
+        | 4 | Gion | Evening walk |
+
+        ![[Flight tickets.pdf]]
 
         """)
         write("Travel/Budget.md", """
@@ -115,7 +120,7 @@ enum DemoLibrary {
         Offer from the agency: [[Offer.pdf]]
 
         """)
-        write("Projects/Design/Meeting notes.md", "# Kick-off\n\n- Keep it **minimal**\n- Notes are plain files\n- ⌘K for everything\n")
+        write("Projects/Design/Meeting notes.md", "# Kick-off\n\n- Keep it **minimal**\n- Notes are plain files\n- ⌘F finds everything\n")
         write("University/Linear algebra/Week 3.md", """
         ## Eigenvalues
         λ is an eigenvalue of $A$ when there is a vector that $A$ only stretches:

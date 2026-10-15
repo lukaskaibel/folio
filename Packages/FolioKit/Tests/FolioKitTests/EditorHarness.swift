@@ -127,6 +127,16 @@ final class EditorHarness: NSObject, EditorControllerDelegate {
         (text as NSString).range(of: string)
     }
 
+    /// The colour drawn at a point of the text view.
+    func pixel(at point: CGPoint) -> NSColor? {
+        settle(0)
+        let view = textView
+        let rect = NSRect(x: point.x - 1, y: point.y - 1, width: 3, height: 3)
+        guard let bitmap = view.bitmapImageRepForCachingDisplay(in: rect) else { return nil }
+        view.cacheDisplay(in: rect, to: bitmap)
+        return bitmap.colorAt(x: 1, y: 1)?.usingColorSpace(.sRGB)
+    }
+
     /// The text view drawn into a PNG, for looking at.
     @discardableResult
     func snapshot(_ name: String) -> URL? {

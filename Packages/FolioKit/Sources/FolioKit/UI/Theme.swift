@@ -3,19 +3,19 @@ import SwiftUI
 
 /// Design tokens, the same as in Issues. Every colour has a light and a dark value.
 public enum Theme {
-    static let window = NSColor(light: 0xF1F2F4, dark: 0x0B0C0E)
-    static let panel = NSColor(light: 0xFBFBFC, dark: 0x111214)
-    static let panelBorder = NSColor(light: 0xE3E4E8, dark: 0x1F2126)
-    static let separator = NSColor(light: 0xEDEEF1, dark: 0x1B1D21)
-    static let card = NSColor(light: 0xFFFFFF, dark: 0x17181B)
-    static let cardBorder = NSColor(light: 0xE6E7EB, dark: 0x24262B)
-    static let hover = NSColor(light: 0xE8E9ED, dark: 0x1A1C20)
-    static let selected = NSColor(light: 0xE3E4E8, dark: 0x202227)
-    static let control = NSColor(light: 0xE7E8EC, dark: 0x191B1F)
-    static let popover = NSColor(light: 0xFFFFFF, dark: 0x1B1D21)
-    static let popoverBorder = NSColor(light: 0xDDDEE3, dark: 0x2C2F36)
-    static let popoverSelected = NSColor(light: 0xEEEFF2, dark: 0x2A2D33)
-    static let keycap = NSColor(light: 0xD0D2D8, dark: 0x3A3E46)
+    /// The page a note is written on: the system's text background, white or dark grey.
+    static let panel = NSColor.textBackgroundColor
+    static let panelBorder = NSColor(light: 0xE3E4E8, dark: 0x343437)
+    static let separator = NSColor.separatorColor
+    static let card = NSColor(light: 0xFFFFFF, dark: 0x262628)
+    static let cardBorder = NSColor(light: 0xE6E7EB, dark: 0x343437)
+    static let hover = NSColor(light: 0xE8E9ED, dark: 0x2A2A2D)
+    static let selected = NSColor(light: 0xE3E4E8, dark: 0x303033)
+    static let control = NSColor(light: 0xE7E8EC, dark: 0x2A2A2D)
+    static let popover = NSColor(light: 0xFFFFFF, dark: 0x2A2A2C)
+    static let popoverBorder = NSColor(light: 0xDDDEE3, dark: 0x3A3A3D)
+    static let popoverSelected = NSColor(light: 0xEEEFF2, dark: 0x38383B)
+    static let keycap = NSColor(light: 0xD0D2D8, dark: 0x4A4A4E)
 
     static let text = NSColor(light: 0x1A1B1E, dark: 0xE8E9EB)
     static let textSecondary = NSColor(light: 0x5F636B, dark: 0x9A9FA8)
@@ -24,7 +24,8 @@ public enum Theme {
     /// Markdown punctuation shown next to the caret.
     static let faint = NSColor(light: 0xA3A7AF, dark: 0x5A5E66)
 
-    static let accent = NSColor(light: 0x5B63D3, dark: 0x8F96F2)
+    /// The accent colour chosen in System Settings, or Folio's violet when it is set to Multicolour.
+    static let accent = NSColor.controlAccentColor
     static let positive = NSColor(light: 0x2F9B67, dark: 0x4CB782)
     static let warning = NSColor(light: 0xB8791C, dark: 0xE5A84B)
     static let red = NSColor(light: 0xD64545, dark: 0xEB6A6A)
@@ -34,14 +35,15 @@ public enum Theme {
     static let image = NSColor(light: 0x2F86B5, dark: 0x5AB0D8)
     static let video = NSColor(light: 0x7C5CC4, dark: 0xA08CF2)
 
-    static let code = NSColor(light: 0xF3F4F6, dark: 0x18191C)
-    static let codeBorder = NSColor(light: 0xE8E9ED, dark: 0x222429)
-    static let inlineCode = NSColor(light: 0xEEEFF2, dark: 0x22242A)
+    static let code = NSColor(light: 0xF5F5F7, dark: 0x262628)
+    static let codeBorder = NSColor(light: 0xE8E8EB, dark: 0x313134)
+    static let inlineCode = NSColor(light: 0xEFEFF2, dark: 0x2E2E31)
+    static let tableHeader = NSColor(light: 0xEDEEF2, dark: 0x333336)
+    static let tableStripe = NSColor(light: 0xF4F5F8, dark: 0x2A2A2D)
+    /// Behind `==highlighted==` text.
+    static let highlight = NSColor(light: 0xFCEFA1, dark: 0x6B5A12)
     static let searchMark = NSColor(srgbRed: 240 / 255, green: 180 / 255, blue: 41 / 255, alpha: 0.38)
 
-    static let sidebarWidth: CGFloat = 248
-    static let headerHeight: CGFloat = 44
-    static let rowHeight: CGFloat = 28
 
     static let spring = Animation.spring(response: 0.3, dampingFraction: 0.82)
     static let quick = Animation.easeOut(duration: 0.14)
