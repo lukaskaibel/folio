@@ -94,12 +94,17 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     var previousSelection = NSRange(location: 0, length: 0)
     /// True while the editor moves the selection itself, so it isn't corrected again.
     var isSettingSelection = false
-    var hasReportedChange = false
     var isWaitingForTracking = false
     /// A place restored while the note moves to another screen, kept for when it gets there.
     var pendingPlace: Place?
     enum Focus { case title, text }
     var pendingFocus: Focus?
+    /// The editor's own record of changes, for undo (`EditorUndo+UIKit`).
+    let undoStack = EditorUndoManager()
+    var openStep: UndoStep?
+    var isReplayingUndo = false
+    /// The text as it was before the last change, which tells what a change removed.
+    var shadowText = NSMutableString()
     #endif
     /// Where the `[[` the popup completes starts (just after the brackets). While it is set, that link is drawn as
     /// the text being typed rather than as a finished link.
@@ -161,7 +166,12 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         storage.replaceCharacters(in: NSRange(location: 0, length: storage.length), with: text)
         storage.endEditing()
         setSelection(NSRange(location: 0, length: 0))
+        #if os(iOS)
+        undoStack.clear()
+        openStep = nil
+        #else
         textView.undoManager?.removeAllActions()
+        #endif
         isLoading = false
         scrollToTop()
         updateOutline()
@@ -244,6 +254,12 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
 
     public func textStorage(_ textStorage: NSTextStorage, didProcessEditing editedMask: NSTextStorageEditActions, range editedRange: NSRange, changeInLength delta: Int) {
         guard editedMask.contains(.editedCharacters), !isApplyingStyle else { return }
+        #if os(iOS)
+        let oldRange = NSRange(location: editedRange.location, length: editedRange.length - delta)
+        let removed = shadowText.substring(with: oldRange)
+        shadowText.replaceCharacters(in: oldRange, with: (textStorage.string as NSString).substring(with: editedRange))
+        recordChange(editedRange, removed: removed)
+        #endif
         updateLayoutMode(for: textStorage.length)
         #if os(macOS)
         // Like the pointer, the copy button keeps out of the way while you type, and it would be left behind by a

@@ -165,14 +165,12 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         })
     }
 
-    /// Changes the text as typing does, so that it can be undone.
+    /// Changes the text as one step to undo (see `EditorUndo+UIKit`).
     func performEdit(_ range: NSRange, with string: String) -> Bool {
-        guard let start = textView.position(from: textView.beginningOfDocument, offset: range.location),
-              let end = textView.position(from: start, offset: range.length),
-              let textRange = textView.textRange(from: start, to: end) else { return false }
-        hasReportedChange = false
-        textView.replace(textRange, withText: string)
-        if !hasReportedChange { textChanged() }
+        guard range.upperBound <= storage.length else { return false }
+        storage.replaceCharacters(in: range, with: string)
+        setSelection(NSRange(location: range.location + (string as NSString).length, length: 0))
+        textChanged()
         return true
     }
 
@@ -182,6 +180,7 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         guard !isLoading else { return }
         let range = textView.selectedRange
         defer { previousSelection = textView.selectedRange }
+        closeTypingStep(at: range)
         // The caret steps over bullets and pictures, and a selection takes Markdown whole, as on the Mac. Not while
         // a finger drags the selection's handles, which would make them jump.
         if !isSettingSelection, textView.markedTextRange == nil {
@@ -216,7 +215,6 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
     }
 
     public func textViewDidChange(_ textView: UITextView) {
-        hasReportedChange = true
         textChanged()
     }
 

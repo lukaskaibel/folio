@@ -112,6 +112,9 @@ final class MarkdownTextView: UITextView {
     /// Where the text container starts, as `NSTextView.textContainerOrigin`.
     var textContainerOrigin: CGPoint { CGPoint(x: textContainerInset.left, y: textContainerInset.top) }
 
+    /// The editor's record of changes, which undo and redo go through (see `EditorUndo+UIKit`).
+    override var undoManager: UndoManager? { controller?.undoStack ?? super.undoManager }
+
     // MARK: - Caret
 
     /// A caret as tall as the text it is in, not as the line, which is taller than the font.
