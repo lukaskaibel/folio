@@ -22,7 +22,8 @@
   <a href="#how-notes-are-stored"><b>File format</b></a> &nbsp;·&nbsp;
   <a href="#getting-started"><b>Getting started</b></a> &nbsp;·&nbsp;
   <a href="#using-it"><b>Shortcuts</b></a> &nbsp;·&nbsp;
-  <a href="CHANGELOG.md"><b>Changelog</b></a>
+  <a href="CHANGELOG.md"><b>Changelog</b></a> &nbsp;·&nbsp;
+  <a href="https://lukaskaibel.github.io/notebook/"><b>Website</b></a>
 </p>
 
 <br>
@@ -289,6 +290,7 @@ Packages/NotebookKit/
   Tests/                     Parser, editor, merge, smoothness and app icon tests
 Config/                      Build settings, Info.plist and entitlements
 Design/                      The icon, the README pictures and the social preview
+Website/                     The website, published to GitHub Pages by .github/workflows/website.yml
 Tools/                       The app icon and the README pictures
 PLAN.md                      The plan: decisions, file format, architecture and milestones (in German)
 ```
