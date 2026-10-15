@@ -322,6 +322,18 @@ enum DebugRemote {
             }
         case "newnote":
             workspace?.newNote()
+        case "swipe":
+            // swipe back|forward <0…1>: holds a swipe still part of the way; swipe back|forward play: the whole
+            // thing by itself; swipe end 1|0: goes to the page, or back to where it started.
+            let bits = argument.split(separator: " ").map(String.init)
+            guard let pages = workspace?.pages, let first = bits.first else { break }
+            if first == "end" {
+                pages.end(commit: bits.count > 1 && bits[1] == "1")
+            } else {
+                let direction: PageSwiper.Direction = first == "back" ? .back : .forward
+                if bits.count > 1, bits[1] == "play" { pages.debugPlay(direction) } else { pages.debugShow(direction, numbers.first ?? 0.5) }
+            }
+            log("swipe \(argument)")
         case "undo":
             window?.firstResponder?.undoManager?.undo()
         default:

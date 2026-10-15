@@ -17,6 +17,9 @@ public final class Workspace: NSObject {
 
     private(set) var history: [URL] = []
     private(set) var historyIndex = -1
+    /// Back and Forward by swiping, and where you were in each note, to come back to.
+    @ObservationIgnored let pages = PageSwiper()
+    @ObservationIgnored private var places: [URL: EditorController.Place] = [:]
     private(set) var favorites: [String] = []
     private(set) var recents: [String] = []
 
@@ -52,6 +55,7 @@ public final class Workspace: NSObject {
     public override init() {
         super.init()
         editor.delegate = self
+        pages.workspace = self
     }
 
     // MARK: - Starting
@@ -199,6 +203,8 @@ public final class Workspace: NSObject {
             if focusTitle { editor.focusTitle() }
             return
         }
+        pages.willOpen(target)
+        if note != nil, let current = currentURL { places[current] = editor.place }
         leaveCurrentNote()
         if (try? target.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]).ubiquitousItemDownloadingStatus) == .notDownloaded {
             try? FileManager.default.startDownloadingUbiquitousItem(at: target)
@@ -214,6 +220,10 @@ public final class Workspace: NSObject {
             assetsInUse = FileOperations.assetNames(in: document.text)
             editor.load(text: document.text, folder: target.deletingLastPathComponent(), title: focusTitle ? "" : document.url.deletingPathExtension().lastPathComponent,
                         meta: meta(for: document), focusTitle: focusTitle)
+            if !recordHistory, let place = places[target] { restore(place) }
+            // The editor only reports changes, and a Quick Look file in between cleared the outline here.
+            editorOutlineDidChange(editor)
+            editorPositionDidChange(editor)
             if !focusTitle { DispatchQueue.main.async { [weak self] in self?.focusEditorIfNothingElse() } }
         } else {
             note = nil
@@ -236,6 +246,15 @@ public final class Workspace: NSObject {
         }
         // Only the selection moves in the sidebar: nothing above it changes, so nothing jumps.
         sidebar?.reveal(target, select: true)
+    }
+
+    /// Back and Forward come back to where you were, once the note is in the window again.
+    private func restore(_ place: EditorController.Place) {
+        if editor.view.window != nil {
+            editor.restore(place)
+        } else {
+            DispatchQueue.main.async { [weak self] in self?.editor.restore(place) }
+        }
     }
 
     private func focusEditorIfNothingElse() {

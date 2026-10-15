@@ -118,6 +118,29 @@ extension EditorController {
         scrollView.reflectScrolledClipView(clip)
     }
 
+    /// Where you are in the note: how far it is scrolled and where the caret is.
+    public struct Place {
+        var scroll: CGFloat
+        var selection: NSRange
+    }
+
+    public var place: Place {
+        Place(scroll: scrollView.contentView.bounds.minY, selection: textView.selectedRange())
+    }
+
+    /// Comes back to a place in the note, as Back and Forward do: the same caret, scrolled to the same spot.
+    public func restore(_ place: Place) {
+        guard place.selection.upperBound <= storage.length else { return }
+        textView.setSelectedRange(place.selection)
+        let clip = scrollView.contentView
+        layoutManager.ensureLayout(forBoundingRect: NSRect(x: 0, y: 0, width: container.size.width, height: place.scroll + clip.bounds.height), in: container)
+        let top = -scrollView.contentInsets.top
+        let bottom = max(top, textView.frame.height - clip.bounds.height)
+        clip.scroll(to: NSPoint(x: clip.bounds.minX, y: min(max(top, place.scroll), bottom)))
+        scrollView.reflectScrolledClipView(clip)
+        updatePosition()
+    }
+
     /// Scrolls a heading up to just below the toolbar, or to the title for `nil`. The caret stays where it is.
     public func scroll(to heading: OutlineHeading?, animated: Bool = true) {
         let clip = scrollView.contentView

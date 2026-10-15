@@ -210,7 +210,7 @@ folder and shows only them, for that run.
 | ⌘N | New note in the current folder |
 | ⇧⌘N | New folder |
 | ⌘F | Search |
-| ⌘[ and ⌘] | Back and forward |
+| ⌘[ and ⌘], or swipe between pages | Back and forward; the swipe follows System Settings, as in Safari |
 | ⌘O | Open a Markdown file in a window of its own |
 | ⌃⌘S | Show or hide the sidebar |
 | ⌃⌘I | Show or hide the outline |
