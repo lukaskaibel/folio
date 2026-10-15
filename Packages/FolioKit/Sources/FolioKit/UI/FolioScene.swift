@@ -12,6 +12,7 @@ public struct FolioScene: Scene {
             RootView()
                 .onAppear {
                     workspace.start()
+                    AppIconStore.shared.start()
                     #if DEBUG
                     DebugRemote.startIfRequested(workspace: workspace)
                     #endif
@@ -94,7 +95,21 @@ public struct FolioScene: Scene {
     }
 }
 
+/// Settings, in the system's tabbed window.
 struct SettingsView: View {
+    let workspace: Workspace
+    @AppStorage("settingsTab") private var tab = "general"
+
+    var body: some View {
+        TabView(selection: $tab) {
+            Tab("General", systemImage: "gearshape", value: "general") { GeneralSettings(workspace: workspace) }
+            Tab("App Icon", systemImage: "book.closed", value: "icon") { AppIconSettings() }
+        }
+        .frame(width: 540, height: 460)
+    }
+}
+
+struct GeneralSettings: View {
     let workspace: Workspace
 
     var body: some View {
@@ -131,6 +146,5 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 520, height: 420)
     }
 }
