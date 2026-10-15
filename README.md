@@ -127,7 +127,7 @@ appearance. The inspector shows a note's outline, with the section you're readin
 a heading scrolls there. In Settings › Text you pick the typeface (San Francisco, New York, Rounded or Monospaced),
 the size, the line spacing and the line width. The icon is a leather notebook, and Settings › App Icon makes it yours:
 pick the leather, the elastic band, the ribbon and the background, and the Dock shows your notebook while Folio is
-open.
+open. Links, the caret and folders are in ink blue to go with it, or in the accent colour you chose in System Settings.
 
 ## What it does
 
