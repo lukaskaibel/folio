@@ -2,6 +2,7 @@ import AppKit
 
 /// A Markdown table, ready to draw: the cells as styled text and, for each, where its Markdown is, so a click on a
 /// cell can put the caret in it.
+@MainActor
 final class TableModel {
     let rows: [[NSAttributedString]]
     let alignments: [TableAlignment]
@@ -10,8 +11,8 @@ final class TableModel {
     let signature: String
 
     static let padding = CGSize(width: 12, height: 7)
-    static let font = NSFont.systemFont(ofSize: 14)
-    static let headerFont = NSFont.systemFont(ofSize: 14, weight: .semibold)
+    static var font: NSFont { EditorStyle.face((EditorStyle.bodySize * 0.93).rounded()) }
+    static var headerFont: NSFont { EditorStyle.face((EditorStyle.bodySize * 0.93).rounded(), weight: .semibold) }
 
     init(text: NSString, lines: [MarkdownLine], alignments: [TableAlignment]) {
         let units = Array((text as String).utf16)
@@ -100,17 +101,19 @@ final class TableModel {
 
         NSGraphicsContext.saveGraphicsState()
         outline.addClip()
-        // The header row a shade darker.
-        if let headerHeight = layout.rowHeights.first {
-            Theme.code.setFill()
-            CGRect(x: frame.minX, y: frame.minY, width: frame.width, height: headerHeight).fill()
-        }
-        Theme.cardBorder.setFill()
+        // A tinted header and every other row striped; only the columns are ruled.
         var y = frame.minY
         for (index, height) in layout.rowHeights.enumerated() {
-            if index > 0 { CGRect(x: frame.minX, y: y, width: frame.width, height: 1).fill() }
+            if index == 0 {
+                Theme.tableHeader.setFill()
+                CGRect(x: frame.minX, y: y, width: frame.width, height: height).fill()
+            } else if index % 2 == 0 {
+                Theme.tableStripe.setFill()
+                CGRect(x: frame.minX, y: y, width: frame.width, height: height).fill()
+            }
             y += height
         }
+        Theme.cardBorder.setFill()
         var x = frame.minX
         for (index, width) in layout.columnWidths.enumerated() {
             if index > 0 { CGRect(x: x, y: frame.minY, width: 1, height: frame.height).fill() }

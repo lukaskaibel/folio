@@ -124,6 +124,8 @@ public struct InlineSpan: Equatable {
         case strong
         case emphasis
         case strikethrough
+        /// `==marked==` text.
+        case highlight
         case code
         case link(destination: String)
         case image(source: String, alt: String)

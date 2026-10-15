@@ -22,6 +22,8 @@ final class EditorObject: NSObject {
         case mathInline(tex: String)
         case callout(type: String, label: String?)
         case frontmatter(count: Int)
+        /// After a link's text: a pencil that edits where it goes.
+        case linkEdit
     }
 
     enum ChipIcon {
@@ -84,6 +86,7 @@ final class EditorObject: NSObject {
         case .mathInline(let tex): "imath\(tex)"
         case .callout(let type, let label): "callout\(type)\(label ?? "")"
         case .frontmatter(let count): "front\(count)"
+        case .linkEdit: "linkEdit"
         }
     }
 }
@@ -98,6 +101,7 @@ final class Decoration: NSObject {
         case chip(resolved: Bool)
         case mermaidPreview
         case mathPreview
+        case highlight
     }
 
     let kind: Kind

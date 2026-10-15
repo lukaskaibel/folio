@@ -10,7 +10,14 @@ extension EditorController {
     /// nothing selected.
     @discardableResult
     func copySelection(cut: Bool) -> Bool {
-        let range = expandSelection(textView.selectedRange())
+        var range = expandSelection(textView.selectedRange())
+        // A whole heading copies as a heading: its hidden #s come along.
+        if !cut, range.length > 0, !document.lines.isEmpty {
+            let line = document.lines[document.lineIndex(containing: range.location)]
+            if case .heading(_, let marker) = line.kind, range.location == marker.upperBound, range.upperBound >= line.range.upperBound {
+                range = NSRange(location: marker.location, length: range.upperBound - marker.location)
+            }
+        }
         guard range.length > 0 else { return false }
         let markdown = nsText.substring(with: range)
         let item = NSPasteboardItem()

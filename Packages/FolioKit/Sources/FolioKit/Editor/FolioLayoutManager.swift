@@ -21,6 +21,8 @@ final class FolioLayoutManager: NSLayoutManager, @preconcurrency NSLayoutManager
     weak var source: EditorLayoutSource?
     /// The ranges the text view has selected, for drawing selected objects.
     var selectedRanges: [NSRange] = []
+    /// For a copy that is printed or exported: controls for editing (a link's pencil) take no room and aren't drawn.
+    var hidesEditingControls = false
 
     override init() {
         super.init()
@@ -210,6 +212,8 @@ final class FolioLayoutManager: NSLayoutManager, @preconcurrency NSLayoutManager
             }
             _ = type
             return NSRect(x: 0, y: 0, width: width, height: 4)
+        case .linkEdit:
+            return NSRect(x: 0, y: 0, width: hidesEditingControls ? 0 : ceil(font.pointSize * 0.85) + 3, height: 4)
         case .frontmatter(let count):
             let text = frontmatterLabel(count) as NSString
             let textWidth = ceil(text.size(withAttributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium)]).width)
@@ -257,6 +261,25 @@ final class FolioLayoutManager: NSLayoutManager, @preconcurrency NSLayoutManager
             }
         }
         super.drawBackground(forGlyphRange: glyphsToShow, at: origin)
+    }
+
+    /// Where a heading's level shows while the caret is on it: in the margin, left of the text.
+    func headingMarkRect(at index: Int, origin: NSPoint) -> NSRect? {
+        guard let storage = textStorage, index < storage.length else { return nil }
+        let glyph = glyphIndexForCharacter(at: index)
+        guard glyph < numberOfGlyphs else { return nil }
+        let line = lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+        let font = (storage.attribute(.font, at: index, effectiveRange: nil) as? NSFont) ?? EditorStyle.body
+        let center = baseline(forGlyphAt: glyph, origin: origin) - font.capHeight / 2
+        return NSRect(x: origin.x + line.minX - 34, y: center - 9, width: 24, height: 18)
+    }
+
+    func drawHeadingMark(_ level: Int, in rect: NSRect) {
+        Theme.control.setFill()
+        NSBezierPath(roundedRect: rect, xRadius: 5, yRadius: 5).fill()
+        let label = NSAttributedString(string: "H\(level)", attributes: [.font: NSFont.systemFont(ofSize: 10.5, weight: .bold), .foregroundColor: Theme.textTertiary])
+        let size = label.size()
+        label.draw(at: CGPoint(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2))
     }
 
     /// Selected pictures, tables and diagrams draw their own selection, so the text selection behind them is left out.
@@ -326,16 +349,18 @@ final class FolioLayoutManager: NSLayoutManager, @preconcurrency NSLayoutManager
             let box = NSRect(x: rect.minX + 1, y: baseline - font.capHeight / 2 - side / 2, width: side, height: side)
             let path = NSBezierPath(roundedRect: box.insetBy(dx: 0.75, dy: 0.75), xRadius: 4.5, yRadius: 4.5)
             if checked {
-                Theme.accent.setFill()
-                NSBezierPath(roundedRect: box, xRadius: 5, yRadius: 5).fill()
+                // Done: a quiet grey box and tick, like the text next to it.
+                Theme.faint.setStroke()
+                path.lineWidth = 1.5
+                path.stroke()
                 let check = NSBezierPath()
                 check.move(to: CGPoint(x: box.minX + 4.2, y: box.midY + 0.2))
                 check.line(to: CGPoint(x: box.minX + 7, y: box.midY + 3))
                 check.line(to: CGPoint(x: box.maxX - 3.8, y: box.midY - 3.2))
-                check.lineWidth = 1.9
+                check.lineWidth = 1.8
                 check.lineCapStyle = .round
                 check.lineJoinStyle = .round
-                NSColor.white.setStroke()
+                Theme.textTertiary.setStroke()
                 check.stroke()
             } else {
                 Theme.textTertiary.setStroke()
@@ -411,6 +436,11 @@ final class FolioLayoutManager: NSLayoutManager, @preconcurrency NSLayoutManager
                 text.draw(at: CGPoint(x: rect.minX + 24, y: baseline - NSFont.systemFont(ofSize: EditorStyle.bodySize).ascender))
             }
 
+        case .linkEdit:
+            guard !hidesEditingControls else { break }
+            drawSymbol("pencil.line", size: font.pointSize * 0.72, color: Theme.accent.withAlphaComponent(0.75),
+                       center: CGPoint(x: rect.midX + 0.5, y: baseline - font.capHeight / 2 + 0.5))
+
         case .frontmatter(let count):
             let pill = NSRect(x: rect.minX, y: rect.minY, width: rect.width, height: 26)
             Theme.control.setFill()
@@ -463,22 +493,28 @@ final class FolioLayoutManager: NSLayoutManager, @preconcurrency NSLayoutManager
         } else {
             drawSymbol("doc", size: 22, color: url?.pathExtension.lowercased() == "pdf" ? Theme.pdf : Theme.textTertiary, center: CGPoint(x: thumbRect.midX, y: thumbRect.midY))
         }
-        let title = NSAttributedString(string: name, attributes: [.font: NSFont.systemFont(ofSize: 14, weight: .semibold), .foregroundColor: url == nil ? Theme.textTertiary : Theme.text])
-        title.draw(with: NSRect(x: rect.minX + 62, y: rect.minY + 14, width: rect.width - 170, height: 20), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
-        var detail = url == nil ? "Not found" : (url!.pathExtension.uppercased())
-        if let url, let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize {
-            detail += " · " + ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
+        let title = NSAttributedString(string: url.map { $0.deletingPathExtension().lastPathComponent } ?? name,
+                                       attributes: [.font: NSFont.systemFont(ofSize: 14, weight: .semibold), .foregroundColor: url == nil ? Theme.textTertiary : Theme.text])
+        title.draw(with: NSRect(x: rect.minX + 62, y: rect.minY + 13, width: rect.width - 76, height: 20), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+        guard let url else {
+            NSAttributedString(string: "Not found", attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: Theme.textTertiary])
+                .draw(at: CGPoint(x: rect.minX + 62, y: rect.minY + 37))
+            return
         }
-        NSAttributedString(string: detail, attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: Theme.textTertiary])
-            .draw(with: NSRect(x: rect.minX + 62, y: rect.minY + 35, width: rect.width - 170, height: 18), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
-        if url != nil {
-            let pill = NSRect(x: rect.maxX - 104, y: rect.midY - 14, width: 92, height: 28)
-            Theme.control.setFill()
-            NSBezierPath(roundedRect: pill, xRadius: 7, yRadius: 7).fill()
-            drawSymbol("eye", size: 12, color: Theme.textSecondary, center: CGPoint(x: pill.minX + 16, y: pill.midY))
-            NSAttributedString(string: "Quick Look", attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium), .foregroundColor: Theme.textSecondary])
-                .draw(at: CGPoint(x: pill.minX + 27, y: pill.midY - 8))
-        }
+        // The kind as a small badge, then size and date, as Lettera shows a file.
+        let kind = url.pathExtension.isEmpty ? "FILE" : url.pathExtension.uppercased()
+        let badgeText = NSAttributedString(string: kind, attributes: [.font: NSFont.systemFont(ofSize: 10.5, weight: .bold), .foregroundColor: Theme.textSecondary])
+        let badgeSize = badgeText.size()
+        let badge = NSRect(x: rect.minX + 62, y: rect.minY + 37, width: ceil(badgeSize.width) + 12, height: 18)
+        Theme.control.setFill()
+        NSBezierPath(roundedRect: badge, xRadius: 5, yRadius: 5).fill()
+        badgeText.draw(at: CGPoint(x: badge.minX + 6, y: badge.midY - badgeSize.height / 2))
+        let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+        var details: [String] = []
+        if let size = values?.fileSize { details.append(ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)) }
+        if let date = values?.contentModificationDate { details.append(date.formatted(date: .abbreviated, time: .omitted)) }
+        NSAttributedString(string: details.joined(separator: " · "), attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: Theme.textTertiary])
+            .draw(with: NSRect(x: badge.maxX + 8, y: rect.minY + 37, width: rect.maxX - badge.maxX - 20, height: 18), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
     }
 
     private func drawNoteEmbed(target: String, url: URL?, in rect: NSRect) {
@@ -513,11 +549,35 @@ final class FolioLayoutManager: NSLayoutManager, @preconcurrency NSLayoutManager
     }
 
     private func drawSymbol(_ name: String, size: CGFloat, color: NSColor, center: CGPoint, weight: NSFont.Weight = .medium) {
-        let configuration = NSImage.SymbolConfiguration(pointSize: size, weight: weight).applying(.init(paletteColors: [color]))
-        guard let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(configuration) else { return }
+        guard let image = Self.symbol(name, size: size, color: color, weight: weight) else { return }
         let imageSize = image.size
         image.draw(in: NSRect(x: center.x - imageSize.width / 2, y: center.y - imageSize.height / 2, width: imageSize.width, height: imageSize.height),
                    from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+    }
+
+    private static var symbols: [String: NSImage] = [:]
+
+    /// A symbol drawn into pixels once (at three times its size), so it looks the same on screen, in a PNG and in a
+    /// PDF, where a coloured symbol drawn as such comes out as a filled box.
+    static func symbol(_ name: String, size: CGFloat, color: NSColor, weight: NSFont.Weight) -> NSImage? {
+        let rgb = color.usingColorSpace(.sRGB) ?? color
+        let key = "\(name)|\(size)|\(weight.rawValue)|\(rgb.redComponent)|\(rgb.greenComponent)|\(rgb.blueComponent)|\(rgb.alphaComponent)"
+        if let cached = symbols[key] { return cached }
+        let configuration = NSImage.SymbolConfiguration(pointSize: size, weight: weight).applying(.init(paletteColors: [rgb]))
+        guard let vector = NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(configuration) else { return nil }
+        let scale: CGFloat = 3
+        guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(ceil(vector.size.width * scale)), pixelsHigh: Int(ceil(vector.size.height * scale)),
+                                            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return nil }
+        bitmap.size = vector.size
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+        vector.draw(in: NSRect(origin: .zero, size: vector.size))
+        NSGraphicsContext.restoreGraphicsState()
+        let image = NSImage(size: vector.size)
+        image.addRepresentation(bitmap)
+        if symbols.count > 200 { symbols.removeAll() }
+        symbols[key] = image
+        return image
     }
 
     // MARK: - Decorations
@@ -578,6 +638,14 @@ final class FolioLayoutManager: NSLayoutManager, @preconcurrency NSLayoutManager
                     Theme.faint.setStroke()
                     dashed.stroke()
                 }
+            }
+        case .highlight:
+            enumerateRects(decorationRange, container: container) { rect in
+                let font = (storage.attribute(.font, at: decorationRange.location, effectiveRange: nil) as? NSFont) ?? EditorStyle.body
+                let height = ceil(font.ascender - font.descender) + 3
+                let box = NSRect(x: rect.minX - 2, y: rect.midY - height / 2, width: rect.width + 4, height: height).offsetBy(dx: origin.x, dy: origin.y)
+                Theme.highlight.setFill()
+                NSBezierPath(roundedRect: box, xRadius: 3.5, yRadius: 3.5).fill()
             }
         case .mermaidPreview, .mathPreview:
             drawPreview(decoration, range: decorationRange, container: container, origin: origin)

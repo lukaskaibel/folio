@@ -10,6 +10,8 @@ extension NSAttributedString.Key {
     static let folioDecoration = NSAttributedString.Key("folio.decoration")
     /// Where a click goes: a URL or a note.
     static let folioLink = NSAttributedString.Key("folio.link")
+    /// On the first `#` of a heading: its level, shown in the margin next to the caret.
+    static let folioHeading = NSAttributedString.Key("folio.heading")
 }
 
 enum HiddenMode: Int {
@@ -17,38 +19,61 @@ enum HiddenMode: Int {
     case always = 2
 }
 
-/// Fonts, colours and spacing of a note.
+/// Fonts, colours and spacing of a note. Sizes follow the typography chosen in the settings.
+@MainActor
 enum EditorStyle {
-    static let bodySize: CGFloat = 15
-    static let lineHeight: CGFloat = 24
-    static let codeSize: CGFloat = 13
-    static let codeLineHeight: CGFloat = 20
-    static let contentWidth: CGFloat = 700
+    private(set) static var typography = Typography()
+
+    static var bodySize: CGFloat { typography.size }
+    static var lineHeight: CGFloat { (typography.size * typography.spacing.factor).rounded() }
+    static var codeSize: CGFloat { (typography.size * 0.87).rounded() }
+    static var codeLineHeight: CGFloat { (codeSize * typography.spacing.factor * 0.96).rounded(.down) }
+    static var contentWidth: CGFloat { typography.width.points }
     static let listIndent: CGFloat = 24
     static let quoteIndent: CGFloat = 18
     static let codePadding: CGFloat = 14
 
-    static let body = NSFont.systemFont(ofSize: bodySize)
-    static let mono = NSFont.monospacedSystemFont(ofSize: codeSize, weight: .regular)
-    static let inlineMono = NSFont.monospacedSystemFont(ofSize: bodySize * 0.88, weight: .regular)
+    private(set) static var body = NSFont.systemFont(ofSize: 15)
+    private(set) static var mono = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+    private(set) static var inlineMono = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
     static let tiny = NSFont.systemFont(ofSize: 0.5)
 
-    static func headingFont(_ level: Int) -> NSFont {
+    static func apply(_ typography: Typography) {
+        self.typography = typography
+        body = face(typography.size)
+        mono = .monospacedSystemFont(ofSize: codeSize, weight: .regular)
+        inlineMono = .monospacedSystemFont(ofSize: (typography.size * 0.88).rounded(), weight: .regular)
+    }
+
+    /// The chosen typeface at a size and weight: San Francisco, New York, SF Rounded or SF Mono.
+    static func face(_ size: CGFloat, weight: NSFont.Weight = .regular) -> NSFont {
+        let font = NSFont.systemFont(ofSize: size, weight: weight)
+        guard let design = typography.face.design, let descriptor = font.fontDescriptor.withDesign(design) else { return font }
+        return NSFont(descriptor: descriptor, size: size) ?? font
+    }
+
+    /// Heading sizes keep their proportion to the text.
+    private static func headingScale(_ level: Int) -> CGFloat {
         switch level {
-        case 1: .systemFont(ofSize: 28, weight: .bold)
-        case 2: .systemFont(ofSize: 22, weight: .semibold)
-        case 3: .systemFont(ofSize: 18, weight: .semibold)
-        default: .systemFont(ofSize: 16, weight: .semibold)
+        case 1: 28 / 15
+        case 2: 22 / 15
+        case 3: 18 / 15
+        default: 16 / 15
         }
     }
 
+    static func headingFont(_ level: Int) -> NSFont {
+        face((bodySize * headingScale(level)).rounded(), weight: level == 1 ? .bold : .semibold)
+    }
+
     static func headingLineHeight(_ level: Int) -> CGFloat {
-        switch level {
+        let normal: CGFloat = switch level {
         case 1: 36
         case 2: 30
         case 3: 26
         default: 24
         }
+        return (normal / 15 * bodySize * typography.spacing.factor / 1.6).rounded()
     }
 
     static func headingSpacingBefore(_ level: Int) -> CGFloat {
@@ -62,13 +87,14 @@ enum EditorStyle {
 
     /// Lines of a fixed height, with the text in the middle of the line rather than at its bottom.
     static func paragraph(
-        lineHeight: CGFloat = lineHeight,
+        lineHeight: CGFloat? = nil,
         before: CGFloat = 0,
         after: CGFloat = 2,
         firstIndent: CGFloat = 0,
         indent: CGFloat = 0,
         tail: CGFloat = 0
     ) -> NSMutableParagraphStyle {
+        let lineHeight = lineHeight ?? Self.lineHeight
         let style = NSMutableParagraphStyle()
         style.minimumLineHeight = lineHeight
         style.maximumLineHeight = lineHeight
@@ -111,10 +137,10 @@ enum EditorStyle {
     static func font(_ font: NSFont, bold: Bool = false, italic: Bool = false) -> NSFont {
         var result = font
         if bold {
-            if font.isFixedPitch {
+            if font.isFixedPitch, typography.face != .mono {
                 result = .monospacedSystemFont(ofSize: font.pointSize, weight: .bold)
             } else {
-                result = .systemFont(ofSize: font.pointSize, weight: weight(of: font) >= NSFont.Weight.semibold.rawValue - 0.01 ? .heavy : .semibold)
+                result = face(font.pointSize, weight: weight(of: font) >= NSFont.Weight.semibold.rawValue - 0.01 ? .heavy : .semibold)
             }
         }
         if italic {

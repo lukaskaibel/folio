@@ -113,7 +113,14 @@ enum MarkdownStyler {
                 .paragraphStyle: EditorStyle.paragraph(lineHeight: height, before: before, after: 4),
                 .baselineOffset: EditorStyle.baselineOffset(for: font, lineHeight: height),
             ], range: full)
-            hide(s, marker, .untilRevealed)
+            let hasSpace = marker.length > 0 && text.character(at: marker.upperBound - 1) == 32
+            if FolioSettings.shared.headingMarks == .margin, hasSpace {
+                // The #s never show; next to the caret the level shows in the margin instead, so the text never moves.
+                hide(s, marker, .always)
+                s.addAttribute(.folioHeading, value: level, range: NSRange(location: marker.location, length: 1))
+            } else {
+                hide(s, marker, .untilRevealed)
+            }
         case .listItem(let item):
             styleListItem(s, text: text, line: line, item: item, env: env)
         case .quote(let depth, let prefix):
@@ -167,7 +174,7 @@ enum MarkdownStyler {
             hide(s, NSRange(location: item.markerRange.upperBound, length: (item.checkbox?.location ?? item.prefix.upperBound) - item.markerRange.upperBound), .always)
         case .ordered:
             let marker = text.substring(with: NSRange(location: item.markerRange.location, length: item.prefix.upperBound - item.markerRange.location))
-            let numberFont = NSFont.monospacedDigitSystemFont(ofSize: EditorStyle.bodySize, weight: .regular)
+            let numberFont = EditorStyle.typography.face == .system ? NSFont.monospacedDigitSystemFont(ofSize: EditorStyle.bodySize, weight: .regular) : EditorStyle.body
             s.addAttributes([.foregroundColor: Theme.textTertiary, .font: numberFont], range: item.markerRange)
             if item.checkbox == nil {
                 // The number and the space after it stay text; wrapped lines line up with the text after them.
@@ -184,11 +191,8 @@ enum MarkdownStyler {
             hide(s, NSRange(location: checkbox.location + 1, length: item.prefix.upperBound - checkbox.location - 1), .always)
             prefixWidth = 28
             if item.checked {
-                s.addAttributes([
-                    .foregroundColor: Theme.textTertiary,
-                    .strikethroughStyle: NSUnderlineStyle.single.rawValue,
-                    .strikethroughColor: Theme.faint,
-                ], range: line.content)
+                // Done: greyed out, as in Reminders, without striking it through.
+                s.addAttribute(.foregroundColor, value: Theme.textTertiary, range: line.content)
             }
         }
         s.addAttribute(.paragraphStyle, value: EditorStyle.paragraph(after: 3, firstIndent: first, indent: first + prefixWidth), range: full)
@@ -304,7 +308,7 @@ enum MarkdownStyler {
                 hide(s, NSRange(location: marker.location + 1, length: marker.length - 1), .untilRevealed)
                 let titleRange = NSRange(location: marker.upperBound, length: line.range.upperBound - marker.upperBound)
                 if titleRange.length > 0 {
-                    s.addAttributes([.font: NSFont.systemFont(ofSize: EditorStyle.bodySize, weight: .semibold), .foregroundColor: CalloutStyle.color(type)], range: titleRange)
+                    s.addAttributes([.font: EditorStyle.face(EditorStyle.bodySize, weight: .semibold), .foregroundColor: CalloutStyle.color(type)], range: titleRange)
                 }
                 return
             }
@@ -380,18 +384,22 @@ enum MarkdownStyler {
                     .foregroundColor: Theme.textTertiary,
                 ], range: span.content)
                 markers(s, span)
+            case .highlight:
+                s.addAttribute(.folioDecoration, value: Decoration(.highlight), range: span.content)
+                markers(s, span)
             case .code:
                 restyleFont(s, span.range) { NSFont.monospacedSystemFont(ofSize: $0.pointSize * 0.88, weight: EditorStyle.weight(of: $0) > 0.2 ? .semibold : .regular) }
                 s.addAttribute(.folioDecoration, value: Decoration(.inlineCode), range: span.content)
                 markers(s, span)
             case .link(let destination):
-                s.addAttributes([
-                    .foregroundColor: Theme.accent,
-                    .underlineStyle: NSUnderlineStyle.single.rawValue,
-                    .underlineColor: Theme.accent.withAlphaComponent(0.35),
-                ], range: span.content)
-                s.addAttribute(.folioLink, value: LinkTarget(linkKind(destination, env: env)), range: span.range)
-                markers(s, span)
+                // The text reads and edits like text; the address stays behind a pencil after it, as in Lettera.
+                s.addAttributes([.foregroundColor: Theme.accent, .toolTip: destination], range: span.content)
+                s.addAttribute(.folioLink, value: LinkTarget(linkKind(destination, env: env)), range: span.content)
+                if let open = span.markers.first { hide(s, open, .always) }
+                if span.markers.count > 1, let close = span.markers.last, close.length > 0 {
+                    s.addAttribute(.folioObject, value: EditorObject(.linkEdit, range: span.range, at: close.location), range: NSRange(location: close.location, length: 1))
+                    hide(s, NSRange(location: close.location + 1, length: close.length - 1), .always)
+                }
             case .autolink(let url):
                 s.addAttributes([
                     .foregroundColor: Theme.accent,
@@ -439,7 +447,7 @@ enum MarkdownStyler {
             .foregroundColor: resolved ? Theme.accent : Theme.textTertiary,
             .folioDecoration: Decoration(.chip(resolved: resolved)),
         ], range: range)
-        restyleFont(s, span.content) { EditorStyle.weight(of: $0) < 0.2 ? NSFont.systemFont(ofSize: $0.pointSize, weight: .medium) : $0 }
+        restyleFont(s, span.content) { EditorStyle.weight(of: $0) < 0.2 ? EditorStyle.face($0.pointSize, weight: .medium) : $0 }
         let lead = span.markers.first ?? NSRange(location: range.location, length: 0)
         let trail = span.markers.last ?? NSRange(location: range.upperBound, length: 0)
         s.addAttribute(.folioObject, value: EditorObject(.chipLead(icon: icon), range: range), range: NSRange(location: lead.location, length: 1))

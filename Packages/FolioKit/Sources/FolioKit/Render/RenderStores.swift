@@ -19,6 +19,8 @@ final class ImageStore {
     private var sizes: [String: (modified: Date?, size: CGSize)] = [:]
     private var images: [Key: NSImage] = [:]
     private var loading: Set<Key> = []
+    /// Pictures still being decoded.
+    var isBusy: Bool { !loading.isEmpty }
 
     private func modified(_ url: URL) -> Date? {
         try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
@@ -62,9 +64,10 @@ final class ImageStore {
                let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) {
                 image = NSImage(cgImage: cgImage, size: CGSize(width: CGFloat(cgImage.width) / scale, height: CGFloat(cgImage.height) / scale))
             }
+            let decoded = image
             await MainActor.run {
                 self.loading.remove(key)
-                if let image {
+                if let image = decoded {
                     if self.images.count > 120 { self.images.removeAll() }
                     self.images[key] = image
                     ready()
@@ -81,6 +84,7 @@ final class ThumbnailStore {
     static let shared = ThumbnailStore()
     private var images: [String: NSImage] = [:]
     private var loading: Set<String> = []
+    var isBusy: Bool { !loading.isEmpty }
 
     func thumbnail(for url: URL, size: CGSize, ready: @escaping () -> Void) -> NSImage? {
         let key = url.path
@@ -140,6 +144,8 @@ enum DiagramStore {
 
     private static var cache: [Key: NSImage?] = [:]
     private static var pending: Set<Key> = []
+    /// Diagrams still being drawn.
+    static var isBusy: Bool { !pending.isEmpty }
 
     /// The diagram, if it is drawn; otherwise nil, and `ready` is called once it is. A diagram that can't be drawn
     /// gives `.some(nil)`.
@@ -166,10 +172,11 @@ enum DiagramStore {
                    let trimmed = trimmed(cgImage) {
                     result = NSImage(cgImage: trimmed, size: CGSize(width: CGFloat(trimmed.width) / scale, height: CGFloat(trimmed.height) / scale))
                 }
+                let drawn = result
                 await MainActor.run {
                     pending.remove(key)
                     if cache.count > 64 { cache.removeAll() }
-                    cache[key] = result
+                    cache[key] = drawn
                     ready()
                 }
             }
