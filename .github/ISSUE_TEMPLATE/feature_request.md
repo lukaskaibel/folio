@@ -10,4 +10,4 @@ labels: enhancement
 
 **How this is stored in the files**
 
-<!-- Folio keeps notes as plain Markdown that other apps read the same. What would this look like in the file? -->
+<!-- Notebook keeps notes as plain Markdown that other apps read the same. What would this look like in the file? -->

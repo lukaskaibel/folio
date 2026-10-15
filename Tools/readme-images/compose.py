@@ -2,7 +2,7 @@
 import numpy as np
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
-# Neutral for now: Folio's own colour comes with its icon. Change the glows here when it does.
+# Neutral for now: Notebook's own colour comes with its icon. Change the glows here when it does.
 THEMES = {
     # Glows: colour, strength, centre (fractions of width and height), radius (fraction of width).
     "dark": dict(

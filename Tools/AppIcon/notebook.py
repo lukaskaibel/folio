@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Draws Folio's app icon: a leather notebook with an elastic band and a ribbon, lying on a ground.
+"""Draws Notebook's app icon: a leather notebook with an elastic band and a ribbon, lying on a ground.
 
   notebook.py icon <out dir>     <out dir>/AppIcon.icon, the oxblood notebook in light and dark (the app's own icon)
   notebook.py passes <out dir>   the neutral passes behind Settings › App Icon (see NotebookIcon.swift)
