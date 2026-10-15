@@ -360,9 +360,21 @@ enum DebugRemote {
             log("swipe \(argument)")
         case "undo":
             window?.firstResponder?.undoManager?.undo()
-        case "pdfdelay":
-            // pdfdelay <seconds>: reading a PDF takes this long (0 for as long as it really takes).
-            PDFFileView.debugDelay = numbers.first.flatMap { $0 > 0 ? $0 : nil }
+        case "loaddelay", "pdfdelay":
+            // loaddelay <seconds>: reading a PDF, picture or video takes this long (0 for as long as it really takes).
+            FileLoading.debugDelay = numbers.first.flatMap { $0 > 0 ? $0 : nil }
+        case "pictureinfo":
+            // pictureinfo: the open picture's size, zoom and where it sits.
+            if let view = window?.contentView.flatMap(pictureView), let picture = view.picture {
+                log("picture size=\(picture.size) pixelsPerPoint=\(picture.pixelsPerPoint) animated=\(picture.animation != nil) zoom=\(view.magnification) fitting=\(view.fittingMagnification) fits=\(view.fits) clip=\(view.contentView.bounds) frame=\(view.frame) insets=\(view.contentInsets)")
+            } else {
+                log("picture none")
+            }
+        case "picturezoom":
+            // picturezoom: what a double click in the middle of the open picture does.
+            if let view = window?.contentView.flatMap(pictureView) {
+                view.toggleZoom(at: NSPoint(x: view.contentView.bounds.midX, y: view.contentView.bounds.midY))
+            }
         case "pdfinfo":
             // pdfinfo: how far the open PDF is scrolled, its zoom and its insets.
             if let pdf = window?.contentView.flatMap(pdfView), let scrollView = pdf.documentView?.enclosingScrollView {
@@ -377,6 +389,11 @@ enum DebugRemote {
         default:
             log("unknown command: \(line)")
         }
+    }
+
+    private static func pictureView(in view: NSView) -> PictureScrollView? {
+        if let picture = view as? PictureScrollView { return picture }
+        return view.subviews.lazy.compactMap(pictureView).first
     }
 
     private static func pdfView(in view: NSView) -> PDFView? {
