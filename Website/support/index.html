@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Support · Notebook</title>
+  <meta name="description" content="Help with Notebook: questions, problems and ideas, and answers to common questions.">
+  <meta name="theme-color" content="#F1ECE4" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#191715" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="../images/favicon-light.png" media="(prefers-color-scheme: light)">
+  <link rel="icon" href="../images/favicon-dark.png" media="(prefers-color-scheme: dark)">
+  <link rel="apple-touch-icon" href="../images/apple-touch-icon.png">
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../">
+      <picture>
+        <source srcset="../images/icon-dark.png" media="(prefers-color-scheme: dark)">
+        <img src="../images/icon-light.png" width="36" height="36" alt="">
+      </picture>
+      Notebook
+    </a>
+    <a class="link" href="https://github.com/lukaskaibel/notebook">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>
+      GitHub
+    </a>
+  </header>
+
+  <main class="doc">
+    <h1>Support</h1>
+    <p class="intro">A question, a problem or an idea? Open an issue on GitHub. Every one is read, and the answer helps
+      the next person too.</p>
+
+    <div class="cards">
+      <a class="card" href="https://github.com/lukaskaibel/notebook/issues">
+        <svg class="filled" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"/></svg>
+        <b>Issues on GitHub</b>
+        <span>Bugs, questions and ideas, in the open.</span>
+      </a>
+      <a class="card" href="https://github.com/lukaskaibel/notebook#getting-started">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6Z"/><path d="M14 3.5v4h4M9 12.5h6M9 16h6"/></svg>
+        <b>Getting started</b>
+        <span>What you need, and how to build and run it.</span>
+      </a>
+      <a class="card" href="https://github.com/lukaskaibel/notebook/security/advisories/new">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4.5 6v5.5c0 4.6 3.2 8 7.5 9.5 4.3-1.5 7.5-4.9 7.5-9.5V6Z"/><path d="m9 12 2 2 4-4"/></svg>
+        <b>Security</b>
+        <span>Report a vulnerability privately.</span>
+      </a>
+    </div>
+
+    <h2>Common questions</h2>
+    <div class="faq">
+      <details>
+        <summary>How do I get Notebook?</summary>
+        <p>For now you build it yourself: a Mac with Apple silicon and macOS 27, Xcode 27, and about five minutes. The
+          <a href="https://github.com/lukaskaibel/notebook#build-and-run">steps are in the README</a>, and a local build
+          needs no Apple developer account. The Mac App Store comes later.</p>
+      </details>
+      <details>
+        <summary>Where are my notes kept?</summary>
+        <p>Where they already are. Notebook shows the folders you add, iCloud Drive or any other, and reads and writes
+          the Markdown files in them in place. A note's title is its file name. Pictures and files you add to a note go
+          into a hidden <code>.assets</code> folder next to it, and that is all Notebook adds.</p>
+      </details>
+      <details>
+        <summary>Can I keep using Obsidian, iA Writer or GitHub?</summary>
+        <p>Yes. Notes are ordinary Markdown, so other apps read them just the same, and <code>[[links]]</code> find the
+          note by its name as Obsidian does: one in the same folder first, then the one with the shortest path.</p>
+      </details>
+      <details>
+        <summary>What if a note changes on another Mac?</summary>
+        <p>Notebook watches the open note. If it changed somewhere else and you haven't typed, it reloads quietly. If
+          both sides changed, it merges the two line by line and never writes over a change it hasn't seen. Only when
+          both changed the same lines does it ask: keep this version, use the other one, or keep both.</p>
+      </details>
+      <details>
+        <summary>Is there a version for iPhone and iPad?</summary>
+        <p>Not yet. iPhone and iPad versions are planned, from the same project, together with quick capture from a
+          widget and the share menu.</p>
+      </details>
+      <details>
+        <summary>Does Notebook collect anything?</summary>
+        <p>No. It has no server, no accounts, no analytics and no advertising, and it never connects to the internet.
+          The details are in the <a href="../privacy/">privacy policy</a>.</p>
+      </details>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <span>© 2026 Lukas Kaibel · Not affiliated with Apple</span>
+    <nav aria-label="Support and legal">
+      <a href="../support/" aria-current="page">Support</a>
+      <a href="../privacy/">Privacy</a>
+      <a href="../impressum/">Impressum</a>
+    </nav>
+  </footer>
+</body>
+</html>
