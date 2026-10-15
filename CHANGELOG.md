@@ -7,7 +7,7 @@ versions follow [semantic versioning](https://semver.org).
 
 ## [0.1.0] – not released yet
 
-The first version: a Mac app for Markdown notes in your own folders.
+The first version: a Mac app for Markdown notes in your own folders. While it was being built, it was called Folio.
 
 ### Added
 
@@ -32,4 +32,4 @@ The first version: a Mac app for Markdown notes in your own folders.
   sidebar.
 - Settings for the typeface, size, line spacing and line width, and for what the sidebar shows.
 - A leather notebook as the app icon. Make it your own in Settings › App Icon: the leather, the elastic band, the
-  ribbon and the background, shown in the Dock while Folio is open. A tip in the sidebar points there.
+  ribbon and the background, shown in the Dock while Notebook is open. A tip in the sidebar points there.
