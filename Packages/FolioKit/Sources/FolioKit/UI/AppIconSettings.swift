@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import TipKit
 
 /// Settings › App Icon: the notebook on Folio's icon, in the leather, ribbon and background you like.
 struct AppIconSettings: View {
@@ -41,6 +42,7 @@ struct AppIconSettings: View {
         .formStyle(.grouped)
         .onAppear {
             if store.lightIcon == nil { store.renderPreviews() }
+            AppIconTip().invalidate(reason: .actionPerformed)
         }
     }
 
@@ -97,5 +99,48 @@ private struct SwatchRow: View {
         }
         // The row's label lines up with the middle of the colours, not their top.
         .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
+    }
+}
+
+/// The tip at the bottom of the sidebar that Folio's icon can be made your own. It goes once you close it or open
+/// Settings › App Icon.
+struct AppIconTip: Tip {
+    var title: Text { Text("Make the icon yours") }
+    var message: Text? { Text("Pick the notebook’s leather, ribbon and background.") }
+    var image: Image? { Image(systemName: "book.closed") }
+    var actions: [Action] { [Action(id: "open", title: "Open Settings")] }
+
+    @MainActor private static var configured = false
+
+    /// Starts TipKit, once, before any tip shows.
+    @MainActor
+    static func configure() {
+        guard !configured else { return }
+        configured = true
+        #if DEBUG
+        // -FolioTips hide|show: the README pictures go without tips; `show` brings them back to look at.
+        switch UserDefaults.standard.string(forKey: "FolioTips") {
+        case "hide": Tips.hideAllTipsForTesting()
+        case "show": Tips.showAllTipsForTesting()
+        default: break
+        }
+        #endif
+        try? Tips.configure()
+    }
+}
+
+/// The App Icon tip, with its button opening Settings at the App Icon tab.
+struct AppIconTipView: View {
+    @Environment(\.openSettings) private var openSettings
+    private let tip = AppIconTip()
+
+    var body: some View {
+        TipView(tip, arrowEdge: nil) { _ in
+            UserDefaults.standard.set("icon", forKey: "settingsTab")
+            openSettings()
+        }
+        // Measured narrower than the sidebar ever gets, its text would wrap word by word and make the window tall.
+        .frame(minWidth: 180)
+        .padding(10)
     }
 }

@@ -46,7 +46,7 @@ launch() {
   : > "$work/cmd"
   rm -f "$work/cmd.log"
   open -n -g "$app" --args -FolioLibrary "$PWD/$library" -FolioLibraryName "iCloud Drive" -FolioDemo YES \
-    -AppleLanguages '(en)' -AppleLocale en_US -NSAllowContinuousSpellChecking NO -debugCommandFile "$PWD/$work/cmd" \
+    -AppleLanguages '(en)' -AppleLocale en_US -NSAllowContinuousSpellChecking NO -FolioTips hide -debugCommandFile "$PWD/$work/cmd" \
     "-NSWindow Frame main" "160 80 1280 820 0 0 1512 949"
   for _ in $(seq 40); do
     pid=$(pgrep -nf "$PWD/$app/Contents/MacOS" || true)

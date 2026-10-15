@@ -6,7 +6,9 @@ public struct FolioScene: Scene {
     @State private var workspace = Workspace.shared
     @State private var settings = FolioSettings.shared
 
-    public init() {}
+    public init() {
+        AppIconTip.configure()
+    }
 
     public var body: some Scene {
         Window("Folio", id: "main") {
