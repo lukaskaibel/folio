@@ -99,7 +99,9 @@ final class PageSwiper {
             configuration.showsCursor = false
             guard let image = try? await SCScreenshotManager.captureImage(contentFilter: SCContentFilter(desktopIndependentWindow: shown), configuration: configuration),
                   !Task.isCancelled, self.quickLookURL == url else { return }
-            self.keep(PageSnapshot(image: image, frame: area, in: self.anchor), for: url)
+            // A PDF lies on the grey behind its pages, which reaches up under the toolbar.
+            let background: NSColor = FileKind(url: url, isDirectory: false) == .pdf ? .underPageBackgroundColor : Theme.panel
+            self.keep(PageSnapshot(image: image, frame: area, in: self.anchor, background: background), for: url)
         }
     }
 
@@ -291,20 +293,24 @@ final class PageSwiper {
     #endif
 }
 
-/// A page as it looked: a picture, where it sat on the stage (from the top, centred like the note's text), and
-/// whether it was light or dark.
+/// A page as it looked: a picture, where it sat on the stage (from the top, centred like the note's text), what
+/// was around it, and whether it was light or dark.
 struct PageSnapshot {
     let image: CGImage
     let size: CGSize
     let top: CGFloat
     let centerOffset: CGFloat
+    let background: CGColor
     let appearance: NSAppearance.Name?
 
-    init(image: CGImage, frame: NSRect, in view: NSView) {
+    init(image: CGImage, frame: NSRect, in view: NSView, background: NSColor = Theme.panel) {
         self.image = image
         size = frame.size
         top = view.bounds.maxY - frame.maxY
         centerOffset = frame.midX - view.bounds.midX
+        var color = background.cgColor
+        view.effectiveAppearance.performAsCurrentDrawingAppearance { color = background.cgColor }
+        self.background = color
         appearance = Self.appearance(of: view)
     }
 
@@ -368,14 +374,12 @@ final class SwipeStageView: NSView {
         CATransaction.setDisableActions(true)
         layer?.removeAllAnimations()
         layer?.opacity = 1
-        for (content, snapshot) in [(lowerContent, direction == .back ? target : page), (upperContent, direction == .back ? page : target)] {
+        for (side, content, snapshot) in [(lower, lowerContent, direction == .back ? target : page), (upper, upperContent, direction == .back ? page : target)] {
+            side.removeAllAnimations()
+            side.frame = bounds
+            side.backgroundColor = snapshot?.background ?? background
             content.contents = snapshot?.image
             content.frame = snapshot?.frame(in: bounds) ?? .zero
-        }
-        for page in [lower, upper] {
-            page.removeAllAnimations()
-            page.frame = bounds
-            page.backgroundColor = background
         }
         dimming.frame = bounds
         edgeShadow.frame = NSRect(x: -Self.shadowWidth, y: 0, width: Self.shadowWidth, height: bounds.height)

@@ -21,7 +21,8 @@ The first version: a Mac app for Markdown notes in your own folders.
 - The title is the file name; renaming a note updates the links to it.
 - Search with ⌘F across file names, note text and PDF text.
 - Back and forward with ⌘[ and ⌘], or with a swipe as in Safari.
-- Quick Look for every other file, with its details in the inspector.
+- PDFs in the window as in Preview, there at once and back where you left them; Quick Look for every other file.
+  The inspector shows a file's details.
 - The outline of a note in the inspector, with a word count.
 - Saving as you type, with a three-way merge when a note changed somewhere else, and a choice when both changed the
   same lines.

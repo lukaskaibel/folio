@@ -41,8 +41,8 @@
 Apple Notes is a pleasure to write in, but it keeps your notes in its own database. Markdown apps keep them as files,
 but most of them feel like a code editor or ask you to move everything into a vault. Folio does both: it shows the
 folders you already have, iCloud Drive first, and turns the Markdown files in them into notes that write like Notes.
-Pictures, PDFs and every other file sit right next to them and open in Quick Look. What Folio saves is ordinary
-Markdown that GitHub, Obsidian or iA Writer read just the same.
+Pictures, PDFs and every other file sit right next to them and open in the window: PDFs as in Preview, the rest in
+Quick Look. What Folio saves is ordinary Markdown that GitHub, Obsidian or iA Writer read just the same.
 
 ## A quick tour
 
@@ -105,20 +105,21 @@ With an empty field, it lists what you opened last.
   <img alt="The search field with kyoto typed in: the note Kyoto trip under Files, and under In Notes and PDFs a match on page 1 of Flight tickets.pdf and one in the note Budget, then New Note kyoto" src="Design/screenshots/search-light.webp">
 </picture>
 
-### Every other file, in Quick Look
+### PDFs and every other file
 
-Folio is a browser for your folders, not only for notes. A PDF, a picture, a video or a spreadsheet opens in Quick
-Look right in the window, and the inspector shows its details. "Open in" hands it to its own app.
+Folio is a browser for your folders, not only for notes. A PDF opens right in the window the way Preview shows it,
+its pages one under the other: there at once, and back where you left it when you return. A picture, a video or a
+spreadsheet opens in Quick Look. The inspector shows a file's details, and "Open in" hands it to its own app.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/quicklook-dark.webp">
-  <img alt="Flight tickets.pdf open in the window through Quick Look, with its kind, size, page count, dates and folder in the inspector" src="Design/screenshots/quicklook-light.webp">
+  <img alt="Flight tickets.pdf open in the window, its page on grey as in Preview, with its kind, size, page count, dates and folder in the inspector" src="Design/screenshots/quicklook-light.webp">
 </picture>
 
 ### A Mac app, made of the Mac's parts
 
 The window is built from the system's own pieces: a source-list sidebar, a toolbar with the system's search field and
-share menu, an inspector, Settings, alerts and Quick Look. It follows the system's light or dark appearance. The
+share menu, an inspector, Settings, alerts, PDFKit and Quick Look. It follows the system's light or dark appearance. The
 inspector shows a note's outline, with the section you're reading marked and a word count; a click on a heading
 scrolls there. In Settings › Text you pick the typeface (San Francisco, New York, Rounded or Monospaced), the size,
 the line spacing and the line width.
@@ -137,6 +138,7 @@ the line spacing and the line width.
   folds into a small "properties" pill.
 - **Pictures and files in notes.** Paste or drop them in; `![[embeds]]` of other notes show an excerpt, of files a
   card with a preview.
+- **PDFs and other files** open in the window: PDFs as in Preview, the rest in Quick Look.
 - **Search** across file names, note text and PDF text.
 - **Saves as you type,** and never overwrites a change made somewhere else (see below).
 - **Export** a note as a PDF or a PNG image, or print it.
@@ -275,7 +277,7 @@ Packages/FolioKit/
     Render/                  Tables, maths, diagrams and code highlighting
     Files/                   Locations, the file tree, file operations, saving, watching and the three-way merge
     Index/                   Search over names, note text and PDF text, and how [[links]] resolve
-    UI/                      The window, sidebar, inspector, search field, Settings, file windows and Quick Look
+    UI/                      The window, sidebar, inspector, search field, Settings, file windows, PDFs and Quick Look
     Debug/                   The debug remote and the sample notes (Debug builds only)
   Tests/                     Parser, editor, merge and smoothness tests
 Config/                      Build settings, Info.plist and entitlements

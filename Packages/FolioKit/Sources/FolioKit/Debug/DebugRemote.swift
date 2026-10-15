@@ -1,5 +1,6 @@
 #if DEBUG
 import AppKit
+import PDFKit
 import SwiftUI
 
 /// Development-only remote control, as in Issues. Launch with `-debugCommandFile <path>` and append lines to that
@@ -359,9 +360,28 @@ enum DebugRemote {
             log("swipe \(argument)")
         case "undo":
             window?.firstResponder?.undoManager?.undo()
+        case "pdfdelay":
+            // pdfdelay <seconds>: reading a PDF takes this long (0 for as long as it really takes).
+            PDFFileView.debugDelay = numbers.first.flatMap { $0 > 0 ? $0 : nil }
+        case "pdfinfo":
+            // pdfinfo: how far the open PDF is scrolled, its zoom and its insets.
+            if let pdf = window?.contentView.flatMap(pdfView), let scrollView = pdf.documentView?.enclosingScrollView {
+                log("pdf clip=\(scrollView.contentView.bounds) scale=\(pdf.scaleFactor) auto=\(pdf.autoScales) insets=\(scrollView.contentInsets) document=\(scrollView.documentView?.frame ?? .zero)")
+            }
+        case "pdfscroll":
+            // pdfscroll <y>: scrolls the open PDF, in its pages' points from the top.
+            if let pdf = window?.contentView.flatMap(pdfView), let scrollView = pdf.documentView?.enclosingScrollView, let y = numbers.first {
+                scrollView.contentView.scroll(to: NSPoint(x: scrollView.contentView.bounds.minX, y: y))
+                scrollView.reflectScrolledClipView(scrollView.contentView)
+            }
         default:
             log("unknown command: \(line)")
         }
+    }
+
+    private static func pdfView(in view: NSView) -> PDFView? {
+        if let pdf = view as? PDFView { return pdf }
+        return view.subviews.lazy.compactMap(pdfView).first
     }
 
     private static func dump() {
