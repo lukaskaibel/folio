@@ -1,5 +1,6 @@
 #if DEBUG
 import AppKit
+import PDFKit
 import SwiftUI
 
 /// Development-only remote control, as in Issues. Launch with `-debugCommandFile <path>` and append lines to that
@@ -18,9 +19,12 @@ enum DebugRemote {
         activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .latencyCritical], reason: "Debug remote")
         processed = (try? String(contentsOfFile: path, encoding: .utf8))?.split(separator: "\n", omittingEmptySubsequences: false).count ?? 0
         if processed > 0 { processed -= 1 }
-        timer = Timer.scheduledTimer(withTimeInterval: 0.02, repeats: true) { _ in
+        let timer = Timer(timeInterval: 0.02, repeats: true) { _ in
             MainActor.assumeIsolated { poll(path) }
         }
+        // In every run loop mode, so commands keep coming while a popover, menu or drag is in progress.
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
     }
 
     private static var waitUntil: Date?
@@ -53,11 +57,18 @@ enum DebugRemote {
         }
     }
 
+    /// Commands go to the main window, or after `usewindow file` to the last file window opened.
+    private static var usesFileWindow = false
+
     private static var window: NSWindow? {
-        NSApp.windows.first { $0.isVisible && $0.frame.width > 500 && !($0 is NSPanel) }
+        if usesFileWindow { return FileWindows.shared.windows.last }
+        return NSApp.windows.first { $0.isVisible && $0.frame.width > 500 && !($0 is NSPanel) && !($0.windowController is FileWindowController) }
     }
 
-    private static var editor: EditorController? { workspace?.editor }
+    private static var editor: EditorController? {
+        if usesFileWindow { return (FileWindows.shared.windows.last?.windowController as? FileWindowController)?.editor }
+        return workspace?.editor
+    }
 
     private static func run(_ line: String) {
         let parts = line.split(separator: " ", maxSplits: 1).map(String.init)
@@ -137,6 +148,15 @@ enum DebugRemote {
                 editor.scrollView.contentView.scroll(to: NSPoint(x: 0, y: y))
                 editor.scrollView.reflectScrolledClipView(editor.scrollView.contentView)
             }
+        case "hover":
+            // hover <character index>: as if the pointer rested on that character (the real one stays put).
+            if let editor, let index = numbers.first, let window, let content = window.contentView,
+               let point = windowPoint(ofCharacter: Int(index), fraction: 0.5, in: editor) {
+                editor.updateCopyButton(at: editor.textView.convert(NSPoint(x: point.x, y: content.bounds.height - point.y), from: nil))
+                let button = editor.textView.copyButton
+                let frame = editor.textView.convert(button.frame, to: nil)
+                log(button.isHidden ? "hover \(Int(index)): no copy button" : "hover \(Int(index)): copy button at \(Int(frame.midX)) \(Int(content.bounds.height - frame.midY))")
+            }
         case "snapshot":
             snapshot(to: argument)
         case "dump":
@@ -188,16 +208,180 @@ enum DebugRemote {
             let item = menu.items[index]
             log("menu \(argument): enabled=\(item.isEnabled) key=\(item.keyEquivalentModifierMask.rawValue)+\(item.keyEquivalent)")
             if item.isEnabled { menu.performActionForItem(at: index) }
+        case "menus":
+            // menus: every menu item with its shortcut and action, to check shortcuts are unique.
+            func walk(_ menu: NSMenu, _ path: String) {
+                menu.delegate?.menuNeedsUpdate?(menu)
+                menu.update()
+                for item in menu.items where !item.isSeparatorItem {
+                    let key = item.keyEquivalent.isEmpty ? "" : " [\(item.keyEquivalentModifierMask.rawValue >> 16)+\(item.keyEquivalent)]"
+                    log("\(path)/\(item.title)\(key) \(item.action.map(NSStringFromSelector) ?? "")\(item.isEnabled ? "" : " (disabled)")")
+                    if let submenu = item.submenu { walk(submenu, "\(path)/\(item.title)") }
+                }
+            }
+            if let main = NSApp.mainMenu { walk(main, "") }
+        case "editlink":
+            // editlink <index>: opens the link editor for the link around a character, as its pencil does.
+            if let editor, let index = numbers.first.map(Int.init) {
+                let line = editor.document.lines[editor.document.lineIndex(containing: index)]
+                if let link = line.spans.first(where: { if case .link = $0.kind { return $0.range.contains(index) } else { return false } }) {
+                    log("editlink opening \(link.range)")
+                    editor.editLink(at: link.range)
+                    log("editlink opened")
+                } else {
+                    log("editlink: no link at \(index)")
+                }
+            }
+        case "popovertype":
+            // popovertype <text>: what typing the address into the open link editor does.
+            if let model = LinkEditorModel.current { model.address = argument; log("popovertype ok") } else { log("popovertype: no link editor") }
+        case "popoverreturn":
+            if let model = LinkEditorModel.current { model.finish(.save(model.address)) }
+        case "showcaret":
+            MarkdownTextView.drawsCaretAlways = argument == "1"
+            editor?.textView.needsDisplay = true
+        case "settings":
+            // settings <general|text|sidebar>: opens Settings at that tab.
+            UserDefaults.standard.set(argument.isEmpty ? "general" : argument, forKey: "settingsTab")
+            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        case "usewindow":
+            usesFileWindow = argument == "file"
+        case "openfile":
+            FileWindows.shared.open(URL(fileURLWithPath: argument))
+        case "openurls":
+            // openurls <path>: what File › Open and the Dock icon do with a file or folder.
+            FileWindows.shared.open([URL(fileURLWithPath: argument)])
+        case "rows":
+            // rows: the sidebar as shown, indented, with the selected row marked and the visible rows' range.
+            if let outline = workspace?.sidebar?.outline {
+                let lines = (0..<outline.numberOfRows).map { row -> String in
+                    let item = outline.item(atRow: row)
+                    let name = (item as? FileNode)?.name ?? (outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView)?.textField?.stringValue ?? "?"
+                    return String(repeating: "  ", count: outline.level(forRow: row)) + name + (outline.selectedRow == row ? " *" : "")
+                }
+                let visible = outline.rows(in: outline.visibleRect)
+                log("rows (visible \(visible.location)..<\(visible.location + visible.length)):\n" + lines.joined(separator: "\n"))
+            }
+        case "exportto":
+            // exportto <pdf|png> <path>: writes the open note without asking where.
+            let bits = argument.split(separator: " ", maxSplits: 1).map(String.init)
+            if let editor, bits.count == 2 {
+                let title = usesFileWindow ? (window?.title ?? "") : (workspace?.currentTitle ?? "")
+                Task { @MainActor in
+                    let data = await NoteExporter.data(for: editor, title: title, as: bits[0] == "png" ? .png : .pdf)
+                    try? data?.write(to: URL(fileURLWithPath: bits[1]))
+                    log("exportto \(bits[0]): \(data?.count ?? 0) bytes")
+                }
+            }
+        case "set":
+            // set <setting> <value>: face, size, spacing, width, headings, onlynotes, dim, foldersfirst.
+            let bits = argument.split(separator: " ").map(String.init)
+            guard bits.count == 2 else { break }
+            let settings = FolioSettings.shared
+            switch bits[0] {
+            case "face": if let face = Typography.Face(rawValue: bits[1]) { settings.typography.face = face }
+            case "size": if let size = Double(bits[1]) { settings.typography.size = size }
+            case "spacing": if let spacing = Typography.Spacing(rawValue: bits[1]) { settings.typography.spacing = spacing }
+            case "width": if let width = Typography.Width(rawValue: bits[1]) { settings.typography.width = width }
+            case "headings": if let marks = FolioSettings.HeadingMarks(rawValue: bits[1]) { settings.headingMarks = marks }
+            case "onlynotes": settings.showsOnlyNotes = bits[1] == "1"
+            case "dim": settings.dimsOtherFiles = bits[1] == "1"
+            case "foldersfirst": settings.foldersFirst = bits[1] == "1"
+            default: break
+            }
+            log("set \(argument)")
         case "palette":
-            workspace?.paletteMode = .search
-            workspace?.isPaletteOpen = true
+            workspace?.search.focus()
+        case "search":
+            // search <text>: what the suggestions menu lists for it.
+            if let search = workspace?.search {
+                search.field.stringValue = argument
+                let sections = search.sections(for: argument)
+                log("search \(argument): " + sections.map { "[\($0.title ?? "")] " + $0.items.map { $0.title + ($0.secondaryTitle.map { " (\($0))" } ?? "") }.joined(separator: " | ") }.joined(separator: " "))
+            }
+        case "searchfield":
+            // searchfield: where the search field, its buttons and the text you type in it are, in the field's points.
+            guard let field = workspace?.search.field, let cell = field.cell as? NSSearchFieldCell else { break }
+            let bounds = field.bounds
+            var line = "searchfield frame=\(field.convert(bounds, to: nil)) bounds=\(bounds) focused=\(field.currentEditor() != nil)"
+            line += " glass=\(cell.searchButtonRect(forBounds: bounds)) text=\(cell.searchTextRect(forBounds: bounds)) clear=\(cell.cancelButtonRect(forBounds: bounds))"
+            if let editor = field.currentEditor() as? NSTextView, let layout = editor.layoutManager, let container = editor.textContainer {
+                layout.ensureLayout(for: container)
+                let used = layout.usedRect(for: container).offsetBy(dx: editor.textContainerOrigin.x, dy: editor.textContainerOrigin.y)
+                line += " editor=\(editor.convert(editor.bounds, to: field)) typed=\(editor.convert(used, to: field))"
+            }
+            log(line)
+        case "selectlist":
+            // selectlist <row>: selects a row of the inspector's list, as a click on it does.
+            if let root = window?.contentView?.superview, let row = numbers.first.map(Int.init) {
+                func lists(in view: NSView) -> [NSOutlineView] {
+                    (view as? NSOutlineView).map { [$0] } ?? view.subviews.flatMap(lists)
+                }
+                if let list = lists(in: root).first(where: { $0 !== workspace?.sidebar?.outline }) {
+                    list.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+                    log("selectlist \(row) of \(list.numberOfRows)")
+                }
+            }
+        case "expanded":
+            // expanded: the folders open in the sidebar.
+            if let outline = workspace?.sidebar?.outline {
+                let names = (0..<outline.numberOfRows).compactMap { row -> String? in
+                    guard let node = outline.item(atRow: row) as? FileNode, outline.isItemExpanded(node) else { return nil }
+                    return node.name
+                }
+                log("expanded: " + names.joined(separator: ", "))
+            }
+        case "movetargets":
+            // movetargets: the folders Move To lists for the open file.
+            if let workspace, let url = workspace.currentURL {
+                log("movetargets: " + workspace.moveTargets(for: url).map { target in
+                    "[\(target.location.name)] " + target.folders.map { String(repeating: "·", count: max(0, $0.depth)) + $0.name }.joined(separator: ", ")
+                }.joined(separator: " "))
+            }
+        case "searchpick":
+            // searchpick <n>: chooses the nth suggestion, counted over all sections.
+            if let search = workspace?.search, let n = numbers.first.map(Int.init) {
+                let items = search.sections(for: search.field.stringValue).flatMap(\.items)
+                if let item = items[safe: n] { search.run(item.representedValue) }
+            }
         case "newnote":
             workspace?.newNote()
+        case "swipe":
+            // swipe back|forward <0…1>: holds a swipe still part of the way; swipe back|forward play: the whole
+            // thing by itself; swipe end 1|0: goes to the page, or back to where it started.
+            let bits = argument.split(separator: " ").map(String.init)
+            guard let pages = workspace?.pages, let first = bits.first else { break }
+            if first == "end" {
+                pages.end(commit: bits.count > 1 && bits[1] == "1")
+            } else {
+                let direction: PageSwiper.Direction = first == "back" ? .back : .forward
+                if bits.count > 1, bits[1] == "play" { pages.debugPlay(direction) } else { pages.debugShow(direction, numbers.first ?? 0.5) }
+            }
+            log("swipe \(argument)")
         case "undo":
             window?.firstResponder?.undoManager?.undo()
+        case "pdfdelay":
+            // pdfdelay <seconds>: reading a PDF takes this long (0 for as long as it really takes).
+            PDFFileView.debugDelay = numbers.first.flatMap { $0 > 0 ? $0 : nil }
+        case "pdfinfo":
+            // pdfinfo: how far the open PDF is scrolled, its zoom and its insets.
+            if let pdf = window?.contentView.flatMap(pdfView), let scrollView = pdf.documentView?.enclosingScrollView {
+                log("pdf clip=\(scrollView.contentView.bounds) scale=\(pdf.scaleFactor) auto=\(pdf.autoScales) insets=\(scrollView.contentInsets) document=\(scrollView.documentView?.frame ?? .zero)")
+            }
+        case "pdfscroll":
+            // pdfscroll <y>: scrolls the open PDF, in its pages' points from the top.
+            if let pdf = window?.contentView.flatMap(pdfView), let scrollView = pdf.documentView?.enclosingScrollView, let y = numbers.first {
+                scrollView.contentView.scroll(to: NSPoint(x: scrollView.contentView.bounds.minX, y: y))
+                scrollView.reflectScrolledClipView(scrollView.contentView)
+            }
         default:
             log("unknown command: \(line)")
         }
+    }
+
+    private static func pdfView(in view: NSView) -> PDFView? {
+        if let pdf = view as? PDFView { return pdf }
+        return view.subviews.lazy.compactMap(pdfView).first
     }
 
     private static func dump() {
@@ -211,8 +395,9 @@ enum DebugRemote {
         revealed: \(editor.revealed.map { "\($0.location)+\($0.length)" }.joined(separator: " "))
         activeBlock: \(editor.activeBlock.map(String.init) ?? "none")
         responder: \(window?.firstResponder.map { String(describing: type(of: $0)) } ?? "nil")
-        scroll: \(Int(editor.scrollView.contentView.bounds.minY))
-        palette: \(workspace?.isPaletteOpen == true)
+        scroll: \(Int(editor.scrollView.contentView.bounds.minY)) inset: \(Int(editor.scrollView.contentInsets.top))
+        outline: \(workspace?.outline.map { "\($0.level):\($0.title)" }.joined(separator: ", ") ?? "") current: \(workspace?.currentHeading.map(String.init) ?? "title") titleAway: \(workspace?.isTitleScrolledAway == true)
+        search: \(workspace?.search.field.stringValue ?? "")
         text: \(text.prefix(4000))
         """)
     }
@@ -277,8 +462,25 @@ enum DebugRemote {
             NSEvent.mouseEvent(with: type, location: at, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
                                windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: clicks, pressure: type == .leftMouseUp ? 0 : 1)
         }
+        // A button over the note (a code block's copy button) tracks clicks with a gesture recognizer, which only sees
+        // events the window delivers to a key window: press it the way accessibility does.
+        if let button = target as? NSButton, button.superview is NSTextView, end == nil, !right {
+            button.performClick(nil)
+            log("press \(Int(point.x)),\(Int(point.y)) on \(type(of: button))")
+            return
+        }
+        // SwiftUI controls track clicks through the window, so they get the events the way the window would send them.
+        let isAppKitView = sequence(first: target, next: { $0.superview }).contains { $0 is NSTextView || $0 is NSTableView }
+        if !isAppKitView, end == nil, !right {
+            for click in 1...count {
+                if let down = event(.leftMouseDown, location, clicks: click) { window.sendEvent(down) }
+                if let up = event(.leftMouseUp, location, clicks: click) { window.sendEvent(up) }
+            }
+            log("click \(Int(point.x)),\(Int(point.y)) through the window on \(type(of: target))")
+            return
+        }
         for click in 1...count {
-            if let end, click == count {
+            if end != nil, click == count {
                 for step in 1...8 {
                     let t = CGFloat(step) / 8
                     let at = CGPoint(x: location.x + (endLocation.x - location.x) * t, y: location.y + (endLocation.y - location.y) * t)
@@ -310,7 +512,7 @@ enum DebugRemote {
             "left": (String(UnicodeScalar(NSLeftArrowFunctionKey)!), 123), "right": (String(UnicodeScalar(NSRightArrowFunctionKey)!), 124),
             "down": (String(UnicodeScalar(NSDownArrowFunctionKey)!), 125), "up": (String(UnicodeScalar(NSUpArrowFunctionKey)!), 126),
         ]
-        let codes: [String: UInt16] = ["[": 33, "]": 30, ",": 43, "7": 26, "9": 25, "'": 39, "a": 0, "s": 1, "b": 11, "i": 34, "k": 40, "n": 45, "z": 6, "x": 7, "c": 8, "v": 9, "e": 14, "l": 37, "u": 32, "t": 17]
+        let codes: [String: UInt16] = ["[": 33, "]": 30, ",": 43, "7": 26, "9": 25, "'": 39, "a": 0, "s": 1, "f": 3, "b": 11, "i": 34, "k": 40, "n": 45, "z": 6, "x": 7, "c": 8, "v": 9, "e": 14, "l": 37, "u": 32, "t": 17]
         if let (characters, code) = table[name] {
             if [123, 124, 125, 126].contains(code) { modifiers.insert(.function) }
             sendKey(characters, code: code, modifiers: modifiers)

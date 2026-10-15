@@ -17,18 +17,36 @@ public final class Workspace: NSObject {
 
     private(set) var history: [URL] = []
     private(set) var historyIndex = -1
+    /// Back and Forward by swiping, and where you were in each note, to come back to.
+    @ObservationIgnored let pages = PageSwiper()
+    @ObservationIgnored private var places: [URL: EditorController.Place] = [:]
     private(set) var favorites: [String] = []
     private(set) var recents: [String] = []
 
-    var isPaletteOpen = false
-    var paletteMode: PaletteMode = .search
-    var isSidebarVisible = true
-    /// A short message at the bottom of the window ("Updated links in 3 notes").
-    var toast: String?
+    /// The search field in the toolbar.
+    @ObservationIgnored lazy var search = SearchController(workspace: self)
+    var columnVisibility: NavigationSplitViewVisibility = .all
+    var isSidebarVisible: Bool {
+        get { columnVisibility != .detailOnly }
+        set { columnVisibility = newValue ? .all : .detailOnly }
+    }
+    /// The outline of the open note, on the right.
+    var isOutlineVisible = UserDefaults.standard.object(forKey: "showsOutline") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(isOutlineVisible, forKey: "showsOutline") }
+    }
+    /// The open note's headings and length, and where in it you are.
+    private(set) var outline: [OutlineHeading] = []
+    private(set) var stats = NoteStats()
+    private(set) var currentHeading: Int?
+    /// True once the note's title has scrolled up under the toolbar, which then shows it.
+    private(set) var isTitleScrolledAway = false
     /// The folder selected in the sidebar, where ⌘N puts a note when no note is open.
     var selectedFolder: URL?
     /// Locations given on the command line for this run only (tests, the demo library).
     @ObservationIgnored private var temporaryLocations = false
+    @ObservationIgnored private var isStarted = false
+    /// Brings the main window up (set by the window, which SwiftUI opens).
+    @ObservationIgnored var showWindow: (() -> Void)?
 
     @ObservationIgnored weak var sidebar: SidebarController?
     @ObservationIgnored private var watcher: FileWatcher?
@@ -37,19 +55,25 @@ public final class Workspace: NSObject {
     /// `.assets` files the open note used, so the ones it drops can go to the Trash when you leave it.
     @ObservationIgnored private var assetsInUse = Set<String>()
 
-    enum PaletteMode: Equatable {
-        case search
-        case move(URL)
-    }
-
     public override init() {
         super.init()
         editor.delegate = self
+        pages.workspace = self
     }
 
     // MARK: - Starting
 
+    /// Reads the locations, once: when the window first appears, or before that when a folder is opened from the Dock.
     public func start() {
+        guard !isStarted else { return }
+        isStarted = true
+        #if DEBUG
+        // The welcome screen, for screenshots, without touching the locations you added.
+        if UserDefaults.standard.bool(forKey: "FolioWelcome") {
+            temporaryLocations = true
+            return
+        }
+        #endif
         favorites = UserDefaults.standard.stringArray(forKey: "favorites") ?? []
         recents = UserDefaults.standard.stringArray(forKey: "recents") ?? []
         if let path = UserDefaults.standard.string(forKey: "FolioLibrary") {
@@ -72,12 +96,18 @@ public final class Workspace: NSObject {
     }
 
     private func locationsChanged() {
+        for index in locations.indices { locations[index].findLinkedFolders() }
         var fresh: [UUID: FileNode] = [:]
         for location in locations {
-            fresh[location.id] = roots[location.id] ?? FileNode(url: location.url, kind: .folder, parent: nil)
+            let root = roots[location.id] ?? FileNode(url: location.url, kind: .folder, parent: nil)
+            if root.linked != location.linked {
+                root.linked = location.linked
+                root.reload()
+            }
+            fresh[location.id] = root
         }
         roots = fresh
-        watcher = FileWatcher(paths: locations.map(\.path)) { [weak self] paths in
+        watcher = FileWatcher(paths: locations.flatMap { $0.folders.map(\.url.path) }) { [weak self] paths in
             MainActor.assumeIsolated { self?.filesChanged(paths) }
         }
         index.rebuild(locations)
@@ -85,6 +115,7 @@ public final class Workspace: NSObject {
     }
 
     public func addLocation(_ url: URL) {
+        let url = url.standardizedFileURL
         guard !locations.contains(where: { $0.path == url.path }) else { return }
         locations.append(LocationStore.make(for: url))
         if !temporaryLocations { LocationStore.save(locations) }
@@ -104,22 +135,62 @@ public final class Workspace: NSObject {
         addLocation(url)
     }
 
+    /// A folder from File › Open or the Dock icon: shown where it is in the sidebar, or added as a location of its own
+    /// (iCloud Drive, say) when no location has it yet.
+    public func openFolder(_ url: URL) {
+        start()
+        let url = url.standardizedFileURL
+        if location(containing: url) == nil { addLocation(url) }
+        showWindow?()
+        isSidebarVisible = true
+        open(url)
+    }
+
     func root(for location: Location) -> FileNode? { roots[location.id] }
 
     func location(containing url: URL) -> Location? {
+        locations.first { $0.contains(url) }
+    }
+
+    /// iCloud Drive's Desktop and the like: shown in a location, but not to be renamed, moved or thrown away from it.
+    func isLinkedFolder(_ url: URL) -> Bool {
+        locations.contains { $0.isLinkedFolder(url) }
+    }
+
+    /// A folder's name as the sidebar shows it: a location's, a linked folder's, or the folder's own.
+    func folderName(_ url: URL) -> String {
         let path = url.standardizedFileURL.path
-        return locations.first { path == $0.url.path || path.hasPrefix($0.url.path + "/") }
+        if let location = locations.first(where: { $0.url.path == path }) { return location.name }
+        if let linked = locations.lazy.flatMap(\.linked).first(where: { $0.url.path == path }) { return linked.name }
+        return url.lastPathComponent
+    }
+
+    /// The nodes from a location's top down to a file, as far as they go: reading folders on the way, or with
+    /// `reading` false only through folders already read. `complete` says whether they reach the file.
+    func nodes(to url: URL, reading: Bool = true) -> (location: Location, nodes: [FileNode], complete: Bool)? {
+        let path = url.standardizedFileURL.path
+        guard let location = location(containing: url), let root = roots[location.id], let folder = location.folder(containing: path) else { return nil }
+        var nodes = [root]
+        func children(of node: FileNode) -> [FileNode] {
+            reading || node.hasLoadedChildren ? node.loadedChildren() : []
+        }
+        if let linked = folder.linked {
+            guard let top = children(of: root).first(where: { $0.isLinked && $0.url.path == linked.url.path }) else { return (location, nodes, false) }
+            nodes.append(top)
+        }
+        for component in path.dropFirst(folder.url.path.count).split(separator: "/") {
+            guard let next = children(of: nodes[nodes.count - 1]).first(where: { !$0.isLinked && $0.url.lastPathComponent == component }) else {
+                return (location, nodes, false)
+            }
+            nodes.append(next)
+        }
+        return (location, nodes, true)
     }
 
     /// The node for a file, reading folders on the way to it.
     func node(for url: URL) -> FileNode? {
-        guard let location = location(containing: url), var node = roots[location.id] else { return nil }
-        let relative = url.standardizedFileURL.path.dropFirst(location.url.path.count).split(separator: "/")
-        for component in relative {
-            guard let next = node.child(named: String(component)) else { return nil }
-            node = next
-        }
-        return node
+        guard let found = nodes(to: url), found.complete else { return nil }
+        return found.nodes.last
     }
 
     // MARK: - Files changing
@@ -161,13 +232,8 @@ public final class Workspace: NSObject {
 
     /// A node that is already in the tree, without reading anything.
     private func existingNode(for url: URL) -> FileNode? {
-        guard let location = location(containing: url), var node = roots[location.id] else { return nil }
-        let relative = url.standardizedFileURL.path.dropFirst(location.url.path.count).split(separator: "/")
-        for component in relative {
-            guard node.hasLoadedChildren, let next = node.loadedChildren().first(where: { $0.url.lastPathComponent == component }) else { return nil }
-            node = next
-        }
-        return node
+        guard let found = nodes(to: url, reading: false), found.complete else { return nil }
+        return found.nodes.last
     }
 
     // MARK: - Opening
@@ -185,6 +251,8 @@ public final class Workspace: NSObject {
             if focusTitle { editor.focusTitle() }
             return
         }
+        pages.willOpen(target)
+        if note != nil, let current = currentURL { places[current] = editor.place }
         leaveCurrentNote()
         if (try? target.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]).ubiquitousItemDownloadingStatus) == .notDownloaded {
             try? FileManager.default.startDownloadingUbiquitousItem(at: target)
@@ -200,9 +268,17 @@ public final class Workspace: NSObject {
             assetsInUse = FileOperations.assetNames(in: document.text)
             editor.load(text: document.text, folder: target.deletingLastPathComponent(), title: focusTitle ? "" : document.url.deletingPathExtension().lastPathComponent,
                         meta: meta(for: document), focusTitle: focusTitle)
+            if !recordHistory, let place = places[target] { restore(place) }
+            // The editor only reports changes, and a Quick Look file in between cleared the outline here.
+            editorOutlineDidChange(editor)
+            editorPositionDidChange(editor)
             if !focusTitle { DispatchQueue.main.async { [weak self] in self?.focusEditorIfNothingElse() } }
         } else {
             note = nil
+            outline = []
+            stats = NoteStats()
+            currentHeading = nil
+            isTitleScrolledAway = false
         }
         if recordHistory {
             if historyIndex < history.count - 1 { history.removeSubrange((historyIndex + 1)...) }
@@ -216,8 +292,17 @@ public final class Workspace: NSObject {
             UserDefaults.standard.set(recents, forKey: "recents")
             UserDefaults.standard.set(target.path, forKey: "lastOpened")
         }
+        // Only the selection moves in the sidebar: nothing above it changes, so nothing jumps.
         sidebar?.reveal(target, select: true)
-        sidebar?.reloadSections()
+    }
+
+    /// Back and Forward come back to where you were, once the note is in the window again.
+    private func restore(_ place: EditorController.Place) {
+        if editor.view.window != nil {
+            editor.restore(place)
+        } else {
+            DispatchQueue.main.async { [weak self] in self?.editor.restore(place) }
+        }
     }
 
     private func focusEditorIfNothingElse() {
@@ -310,8 +395,14 @@ public final class Workspace: NSObject {
         favorites.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) }
     }
 
+    /// The files opened last, newest first, without the one that is open: for File › Open Recent and search.
     var recentURLs: [URL] {
-        recents.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) && $0 != currentURL }.prefix(3).map { $0 }
+        recents.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) && $0 != currentURL }
+    }
+
+    func clearRecents() {
+        recents = []
+        if !temporaryLocations { UserDefaults.standard.set(recents, forKey: "recents") }
     }
 
     private func replacePath(_ old: URL, with new: URL) {
@@ -369,12 +460,15 @@ public final class Workspace: NSObject {
 
     @discardableResult
     func rename(_ url: URL, to name: String) -> URL? {
+        guard !isLinkedFolder(url) else { NSSound.beep(); return nil }
         let isNote = FileKind(url: url, isDirectory: false) == .note
         let oldName = url.deletingPathExtension().lastPathComponent
         if url == currentURL { note?.saveNow() }
         guard let renamed = FileOperations.rename(url, to: name) else {
-            NSSound.beep()
-            showToast("“\(name)” is taken here")
+            let alert = NSAlert()
+            alert.messageText = "The name “\(name)” is already taken."
+            alert.informativeText = "Please choose a different name."
+            if let window = editor.textView.window ?? NSApp.mainWindow { alert.beginSheetModal(for: window) } else { alert.runModal() }
             return nil
         }
         if note?.url.standardizedFileURL == url.standardizedFileURL { note?.moved(to: renamed) }
@@ -385,14 +479,16 @@ public final class Workspace: NSObject {
         }
         if isNote, let location = location(containing: renamed) {
             let newName = renamed.deletingPathExtension().lastPathComponent
-            let count = FileOperations.updateLinks(from: oldName, to: newName, under: location.url, skipping: nil)
-            if count > 0 { showToast("Updated links in \(count) \(count == 1 ? "note" : "notes")") }
+            for folder in location.folders {
+                _ = FileOperations.updateLinks(from: oldName, to: newName, under: folder.url, skipping: nil)
+            }
         }
         sidebar?.reveal(renamed, select: renamed == currentURL)
         return renamed
     }
 
     func move(_ url: URL, into folder: URL) {
+        guard !isLinkedFolder(url) else { NSSound.beep(); return }
         let destination = FileOperations.uniqueURL(in: folder, name: url.deletingPathExtension().lastPathComponent, extension: url.pathExtension.isEmpty ? nil : url.pathExtension)
         if url == currentURL { note?.saveNow() }
         // A note takes the pictures it uses along into the new folder's .assets.
@@ -418,10 +514,36 @@ public final class Workspace: NSObject {
             editor.load(text: editor.text, folder: folder, title: moved.deletingPathExtension().lastPathComponent, meta: meta(for: note))
         }
         sidebar?.reveal(moved, select: moved == currentURL)
-        showToast("Moved to \(folder.lastPathComponent)")
+    }
+
+    /// Where a file can be moved: every folder of every location, in order, with how deep it is.
+    func moveTargets(for url: URL) -> [(location: Location, folders: [(url: URL, name: String, depth: Int)])] {
+        let all = index.folders(matching: "", limit: .max)
+        let source = url.standardizedFileURL.path
+        return locations.map { location in
+            // Linked folders (iCloud Drive's Desktop) sit at the top, under their own names.
+            let folders = location.folders.flatMap { folder -> [(url: URL, name: String, depth: Int, path: String)] in
+                let base = folder.url.path
+                let prefix = folder.linked.map { $0.name + "/" } ?? ""
+                var found = all.compactMap { entry -> (url: URL, name: String, depth: Int, path: String)? in
+                    let path = entry.url.standardizedFileURL.path
+                    guard path.hasPrefix(base + "/"), path != source, !path.hasPrefix(source + "/") else { return nil }
+                    let relative = prefix + String(path.dropFirst(base.count + 1))
+                    return (entry.url, entry.name, relative.split(separator: "/").count - 1, relative)
+                }
+                if let linked = folder.linked, base != source, !base.hasPrefix(source + "/") {
+                    found.append((linked.url, linked.name, 0, linked.name))
+                }
+                return found
+            }
+            .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+            .map { (url: $0.url, name: $0.name, depth: $0.depth) }
+            return (location, [(url: location.url, name: location.name, depth: -1)] + folders)
+        }
     }
 
     func trash(_ url: URL) {
+        guard !isLinkedFolder(url) else { NSSound.beep(); return }
         let wasCurrent = url == currentURL || (currentURL?.path.hasPrefix(url.path + "/") ?? false)
         if wasCurrent {
             note?.close()
@@ -434,11 +556,10 @@ public final class Workspace: NSObject {
         if wasCurrent, let previous = history.last(where: { $0 != url && FileManager.default.fileExists(atPath: $0.path) }) {
             open(previous, recordHistory: false)
         }
-        showToast("Moved “\(url.deletingPathExtension().lastPathComponent)” to the Trash")
     }
 
     func duplicate(_ url: URL) {
-        guard let copy = FileOperations.duplicate(url) else { return }
+        guard !isLinkedFolder(url), let copy = FileOperations.duplicate(url) else { return }
         refreshNow(url.deletingLastPathComponent())
         sidebar?.reveal(copy, select: false)
     }
@@ -451,32 +572,31 @@ public final class Workspace: NSObject {
         let name = FileKind(url: url, isDirectory: false) == .note ? url.deletingPathExtension().lastPathComponent : url.lastPathComponent
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString("[[\(name)]]", forType: .string)
-        showToast("Copied [[\(name)]]")
     }
 
-    func showToast(_ text: String) {
-        toast = text
-        let current = text
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.4) { [weak self] in
-            MainActor.assumeIsolated {
-                if self?.toast == current { self?.toast = nil }
-            }
+    /// The note in the window you are working in: a file window's, or this window's.
+    func activeEditor() -> (editor: EditorController, title: String, window: NSWindow?)? {
+        if let key = NSApp.keyWindow, let controller = key.windowController as? FileWindowController {
+            return (controller.editor, controller.url.deletingPathExtension().lastPathComponent, key)
         }
+        guard note != nil else { return nil }
+        return (editor, currentTitle, editor.textView.window)
     }
 
-    /// The folders from the location down to the open file, for the bar above it.
-    var breadcrumb: [(name: String, url: URL)] {
-        guard let currentURL, let location = location(containing: currentURL) else { return [] }
-        var items: [(String, URL)] = [(location.name, location.url)]
-        var url = location.url
-        let relative = currentURL.path.dropFirst(location.url.path.count).split(separator: "/")
-        for (index, component) in relative.enumerated() {
-            url = url.appendingPathComponent(String(component))
-            let isLast = index == relative.count - 1
-            let name = isLast && FileKind(url: url, isDirectory: false) == .note ? url.deletingPathExtension().lastPathComponent : String(component)
-            items.append((name, url))
-        }
-        return items
+    func export(as format: NoteExporter.Format) {
+        guard let active = activeEditor() else { NSSound.beep(); return }
+        NoteExporter.export(active.editor, title: active.title, as: format, from: active.window)
+    }
+
+    func printNote() {
+        guard let active = activeEditor() else { NSSound.beep(); return }
+        NoteExporter.print(active.editor, title: active.title, from: active.window)
+    }
+
+    /// The open file's name as you read it: notes without their extension.
+    var currentTitle: String {
+        guard let currentURL else { return "Folio" }
+        return FileKind(url: currentURL, isDirectory: false) == .note ? currentURL.deletingPathExtension().lastPathComponent : currentURL.lastPathComponent
     }
 
     /// Saves everything; called when the app goes to the background or quits.
@@ -504,6 +624,16 @@ public final class Workspace: NSObject {
 extension Workspace: EditorControllerDelegate {
     public func editorTextDidChange(_ editor: EditorController) {
         note?.update(text: editor.text)
+    }
+
+    public func editorOutlineDidChange(_ editor: EditorController) {
+        outline = editor.outline
+        stats = editor.stats
+    }
+
+    public func editorPositionDidChange(_ editor: EditorController) {
+        if currentHeading != editor.currentHeading { currentHeading = editor.currentHeading }
+        if isTitleScrolledAway != editor.isTitleScrolledAway { isTitleScrolledAway = editor.isTitleScrolledAway }
     }
 
     public func editor(_ editor: EditorController, open target: LinkTarget.Kind) {

@@ -219,10 +219,30 @@ extension EditorController {
                 replace(item.prefix, with: "", select: NSRange(location: item.prefix.location, length: 0))
             case .quote(_, let prefix):
                 replace(prefix, with: "", select: NSRange(location: prefix.location, length: 0))
+            case .heading(_, let marker):
+                // At the start of a heading's text: it becomes body text, as in Notes.
+                replace(marker, with: "", select: NSRange(location: marker.location, length: 0), actionName: "Format")
             default:
                 return false
             }
             return true
+        }
+
+        // Around a link the address is hidden: deleting takes the link's text, never its punctuation.
+        if let link = line.spans.first(where: { if case .link = $0.kind { return true } else { return false } }) {
+            if location == link.range.upperBound || (location > link.content.upperBound && location < link.range.upperBound) {
+                if link.content.length > 0 {
+                    replace(NSRange(location: link.content.upperBound - 1, length: 1), with: "", select: NSRange(location: link.content.upperBound - 1, length: 0), actionName: "Delete")
+                } else {
+                    replace(link.range, with: "", select: NSRange(location: link.range.location, length: 0), actionName: "Delete")
+                }
+                return true
+            }
+            if location == link.content.location {
+                guard link.range.location > line.range.location else { return true }
+                replace(NSRange(location: link.range.location - 1, length: 1), with: "", select: NSRange(location: link.range.location - 1, length: 0), actionName: "Delete")
+                return true
+            }
         }
 
         // At the start of a line under a table, diagram or picture: select it first, as Notes does, instead of
@@ -251,6 +271,12 @@ extension EditorController {
         }
         if let object = blockObjectSpan(in: line), object.location == selection.location {
             replace(object, with: "", select: NSRange(location: object.location, length: 0), actionName: "Delete")
+            return true
+        }
+        // At the end of a link's text, forward delete takes what comes after the link.
+        if let link = line.spans.first(where: { if case .link = $0.kind { return $0.content.upperBound == selection.location } else { return false } }) {
+            guard link.range.upperBound < line.range.upperBound else { return true }
+            replace(NSRange(location: link.range.upperBound, length: 1), with: "", select: NSRange(location: link.content.upperBound, length: 0), actionName: "Delete")
             return true
         }
         return false
@@ -401,7 +427,7 @@ extension EditorController {
     // MARK: - Formatting
 
     enum InlineFormat {
-        case bold, italic, code, strikethrough
+        case bold, italic, code, strikethrough, highlight
 
         var marker: String {
             switch self {
@@ -409,12 +435,13 @@ extension EditorController {
             case .italic: "*"
             case .code: "`"
             case .strikethrough: "~~"
+            case .highlight: "=="
             }
         }
 
         func matches(_ kind: InlineSpan.Kind) -> Bool {
             switch (self, kind) {
-            case (.bold, .strong), (.italic, .emphasis), (.code, .code), (.strikethrough, .strikethrough): true
+            case (.bold, .strong), (.italic, .emphasis), (.code, .code), (.strikethrough, .strikethrough), (.highlight, .highlight): true
             default: false
             }
         }
@@ -510,7 +537,9 @@ extension EditorController {
         let selection = textView.selectedRange()
         if selection.length > 0 {
             let selected = nsText.substring(with: selection)
-            replace(selection, with: "[" + selected + "]()", select: NSRange(location: selection.upperBound + 3, length: 0), actionName: "Add Link")
+            replace(selection, with: "[" + selected + "]()", select: NSRange(location: selection.upperBound + 1, length: 0), actionName: "Add Link")
+            // The address goes in with the link editor, as the address itself is never shown in the text.
+            editLink(at: NSRange(location: selection.location, length: selection.length + 4), isNew: true)
         } else {
             replace(selection, with: "[[]]", select: NSRange(location: selection.location + 2, length: 0), actionName: "Add Link")
             suggestionAnchor = selection.location + 2

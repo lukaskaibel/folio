@@ -9,6 +9,7 @@ extension EditorController {
         switch line.kind {
         case .listItem(let item): item.prefix.upperBound
         case .quote(_, let prefix): prefix.upperBound
+        case .heading(_, let marker): isHidden(marker) ? marker.upperBound : nil
         default: nil
         }
     }
@@ -44,11 +45,25 @@ extension EditorController {
             return contentStart
         }
 
+        // A link's address is hidden behind its pencil: the caret is before the pencil or after it.
+        for span in line.spans {
+            guard case .link = span.kind, location > span.content.upperBound, location < span.range.upperBound else { continue }
+            if stepped { return location > previous ? span.range.upperBound : span.content.upperBound }
+            return span.range.upperBound
+        }
+
         // Leading spaces hidden in front of a picture on a line of its own.
         if let object = blockObjectSpan(in: line), location < object.location, location > line.range.location {
             return stepped && location < previous ? line.range.location : object.location
         }
         return location
+    }
+
+    /// Whether a range is hidden for good (a heading's #s once they are followed by a space).
+    func isHidden(_ range: NSRange) -> Bool {
+        guard range.length > 0, range.location < storage.length,
+              let mode = storage.attribute(.folioHidden, at: range.location, effectiveRange: nil) as? Int else { return false }
+        return mode == HiddenMode.always.rawValue
     }
 
     /// The picture or embed that is a whole line on its own.

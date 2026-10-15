@@ -64,7 +64,7 @@ enum MarkdownStyler {
                 return
             case .mermaid:
                 if active {
-                    styleCode(s, text: text, doc: doc, line: line, index: index, block: block, language: "mermaid", preview: env.previewHeight(block), previewKind: .mermaidPreview)
+                    styleCode(s, text: text, doc: doc, line: line, index: index, block: block, language: "mermaid", preview: env.previewHeight(block), previewKind: .diagram(source: diagramSource(text, doc, block)))
                 } else {
                     styleSwapped(s, line: line, index: index, block: block, object: .mermaid(source: blockContent(text, doc, block)))
                 }
@@ -79,7 +79,7 @@ enum MarkdownStyler {
                 return
             case .math:
                 if active {
-                    styleCode(s, text: text, doc: doc, line: line, index: index, block: block, language: "tex", preview: env.previewHeight(block), previewKind: .mathPreview)
+                    styleCode(s, text: text, doc: doc, line: line, index: index, block: block, language: "tex", preview: env.previewHeight(block), previewKind: .math(tex: mathSource(text, doc, block)))
                 } else {
                     styleSwapped(s, line: line, index: index, block: block, object: .mathBlock(tex: mathSource(text, doc, block)))
                 }
@@ -113,7 +113,14 @@ enum MarkdownStyler {
                 .paragraphStyle: EditorStyle.paragraph(lineHeight: height, before: before, after: 4),
                 .baselineOffset: EditorStyle.baselineOffset(for: font, lineHeight: height),
             ], range: full)
-            hide(s, marker, .untilRevealed)
+            let hasSpace = marker.length > 0 && text.character(at: marker.upperBound - 1) == 32
+            if FolioSettings.shared.headingMarks == .margin, hasSpace {
+                // The #s never show; next to the caret the level shows in the margin instead, so the text never moves.
+                hide(s, marker, .always)
+                s.addAttribute(.folioHeading, value: level, range: NSRange(location: marker.location, length: 1))
+            } else {
+                hide(s, marker, .untilRevealed)
+            }
         case .listItem(let item):
             styleListItem(s, text: text, line: line, item: item, env: env)
         case .quote(let depth, let prefix):
@@ -167,7 +174,7 @@ enum MarkdownStyler {
             hide(s, NSRange(location: item.markerRange.upperBound, length: (item.checkbox?.location ?? item.prefix.upperBound) - item.markerRange.upperBound), .always)
         case .ordered:
             let marker = text.substring(with: NSRange(location: item.markerRange.location, length: item.prefix.upperBound - item.markerRange.location))
-            let numberFont = NSFont.monospacedDigitSystemFont(ofSize: EditorStyle.bodySize, weight: .regular)
+            let numberFont = EditorStyle.typography.face == .system ? NSFont.monospacedDigitSystemFont(ofSize: EditorStyle.bodySize, weight: .regular) : EditorStyle.body
             s.addAttributes([.foregroundColor: Theme.textTertiary, .font: numberFont], range: item.markerRange)
             if item.checkbox == nil {
                 // The number and the space after it stay text; wrapped lines line up with the text after them.
@@ -184,11 +191,8 @@ enum MarkdownStyler {
             hide(s, NSRange(location: checkbox.location + 1, length: item.prefix.upperBound - checkbox.location - 1), .always)
             prefixWidth = 28
             if item.checked {
-                s.addAttributes([
-                    .foregroundColor: Theme.textTertiary,
-                    .strikethroughStyle: NSUnderlineStyle.single.rawValue,
-                    .strikethroughColor: Theme.faint,
-                ], range: line.content)
+                // Done: greyed out, as in Reminders, without striking it through.
+                s.addAttribute(.foregroundColor, value: Theme.textTertiary, range: line.content)
             }
         }
         s.addAttribute(.paragraphStyle, value: EditorStyle.paragraph(after: 3, firstIndent: first, indent: first + prefixWidth), range: full)
@@ -199,7 +203,7 @@ enum MarkdownStyler {
 
     private static func styleCode(
         _ s: NSTextStorage, text: NSString, doc: MarkdownDocument, line: MarkdownLine, index: Int, block: MarkdownBlock,
-        language: String, preview: CGFloat = 0, previewKind: Decoration.Kind? = nil
+        language: String, preview: CGFloat = 0, previewKind: Decoration.Preview? = nil
     ) {
         let full = line.fullRange
         let isFirst = index == block.lines.lowerBound
@@ -216,11 +220,9 @@ enum MarkdownStyler {
             .foregroundColor: Theme.textBody,
             .paragraphStyle: style,
             .baselineOffset: EditorStyle.baselineOffset(for: EditorStyle.mono, lineHeight: EditorStyle.codeLineHeight),
-            .folioDecoration: decoration(for: block, .codeBlock(language: language, active: previewKind != nil || language == "yaml" || language == "tex")),
+            // The preview belongs to the box, so the box goes round the closing fence too and the preview hangs below it.
+            .folioDecoration: decoration(for: block, .codeBlock(language: language, active: previewKind != nil || language == "yaml" || language == "tex", preview: previewKind)),
         ], range: full)
-        if let previewKind, isLast {
-            s.addAttribute(.folioDecoration, value: Decoration(previewKind), range: line.range.length > 0 ? line.range : full)
-        }
         switch line.kind {
         case .fence, .frontmatterDelimiter, .mathDelimiter:
             s.addAttribute(.foregroundColor, value: Theme.faint, range: line.range)
@@ -304,7 +306,7 @@ enum MarkdownStyler {
                 hide(s, NSRange(location: marker.location + 1, length: marker.length - 1), .untilRevealed)
                 let titleRange = NSRange(location: marker.upperBound, length: line.range.upperBound - marker.upperBound)
                 if titleRange.length > 0 {
-                    s.addAttributes([.font: NSFont.systemFont(ofSize: EditorStyle.bodySize, weight: .semibold), .foregroundColor: CalloutStyle.color(type)], range: titleRange)
+                    s.addAttributes([.font: EditorStyle.face(EditorStyle.bodySize, weight: .semibold), .foregroundColor: CalloutStyle.color(type)], range: titleRange)
                 }
                 return
             }
@@ -380,18 +382,22 @@ enum MarkdownStyler {
                     .foregroundColor: Theme.textTertiary,
                 ], range: span.content)
                 markers(s, span)
+            case .highlight:
+                s.addAttribute(.folioDecoration, value: Decoration(.highlight), range: span.content)
+                markers(s, span)
             case .code:
                 restyleFont(s, span.range) { NSFont.monospacedSystemFont(ofSize: $0.pointSize * 0.88, weight: EditorStyle.weight(of: $0) > 0.2 ? .semibold : .regular) }
                 s.addAttribute(.folioDecoration, value: Decoration(.inlineCode), range: span.content)
                 markers(s, span)
             case .link(let destination):
-                s.addAttributes([
-                    .foregroundColor: Theme.accent,
-                    .underlineStyle: NSUnderlineStyle.single.rawValue,
-                    .underlineColor: Theme.accent.withAlphaComponent(0.35),
-                ], range: span.content)
-                s.addAttribute(.folioLink, value: LinkTarget(linkKind(destination, env: env)), range: span.range)
-                markers(s, span)
+                // The text reads and edits like text; the address stays behind a pencil after it, as in Lettera.
+                s.addAttributes([.foregroundColor: Theme.accent, .toolTip: destination], range: span.content)
+                s.addAttribute(.folioLink, value: LinkTarget(linkKind(destination, env: env)), range: span.content)
+                if let open = span.markers.first { hide(s, open, .always) }
+                if span.markers.count > 1, let close = span.markers.last, close.length > 0 {
+                    s.addAttribute(.folioObject, value: EditorObject(.linkEdit, range: span.range, at: close.location), range: NSRange(location: close.location, length: 1))
+                    hide(s, NSRange(location: close.location + 1, length: close.length - 1), .always)
+                }
             case .autolink(let url):
                 s.addAttributes([
                     .foregroundColor: Theme.accent,
@@ -439,7 +445,7 @@ enum MarkdownStyler {
             .foregroundColor: resolved ? Theme.accent : Theme.textTertiary,
             .folioDecoration: Decoration(.chip(resolved: resolved)),
         ], range: range)
-        restyleFont(s, span.content) { EditorStyle.weight(of: $0) < 0.2 ? NSFont.systemFont(ofSize: $0.pointSize, weight: .medium) : $0 }
+        restyleFont(s, span.content) { EditorStyle.weight(of: $0) < 0.2 ? EditorStyle.face($0.pointSize, weight: .medium) : $0 }
         let lead = span.markers.first ?? NSRange(location: range.location, length: 0)
         let trail = span.markers.last ?? NSRange(location: range.upperBound, length: 0)
         s.addAttribute(.folioObject, value: EditorObject(.chipLead(icon: icon), range: range), range: NSRange(location: lead.location, length: 1))
@@ -490,7 +496,8 @@ enum MarkdownStyler {
     static func isImageFile(_ url: URL) -> Bool { imageExtensions.contains(url.pathExtension.lowercased()) }
     static func isImageName(_ name: String) -> Bool { imageExtensions.contains((name as NSString).pathExtension.lowercased()) }
 
-    private static func blockContent(_ text: NSString, _ doc: MarkdownDocument, _ block: MarkdownBlock) -> String {
+    /// The code between a block's fences, as it is copied.
+    static func blockContent(_ text: NSString, _ doc: MarkdownDocument, _ block: MarkdownBlock) -> String {
         let inner = block.lines.dropFirst().filter { doc.lines[$0].kind == .code }
         return inner.map { text.substring(with: doc.lines[$0].range) }.joined(separator: "\n")
     }

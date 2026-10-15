@@ -8,11 +8,21 @@ extension EditorController {
         case link(LinkTarget.Kind)
         case picture(range: NSRange, url: URL?)
         case block(index: Int, caret: Int)
+        case editLink(range: NSRange)
+        case headingLevel(line: Int)
     }
 
     func hitTest(_ point: NSPoint) -> Hit? {
         guard storage.length > 0 else { return nil }
         let origin = textView.textContainerOrigin
+        // The level tag in the margin next to the heading the caret is on.
+        if point.x < origin.x, !document.lines.isEmpty {
+            let line = document.lineIndex(containing: textView.selectedRange().location)
+            if case .heading(_, let marker) = document.lines[line].kind, isRevealed(marker.location),
+               let rect = layoutManager.headingMarkRect(at: marker.location, origin: origin), rect.insetBy(dx: -4, dy: -4).contains(point) {
+                return .headingLevel(line: line)
+            }
+        }
         let local = NSPoint(x: point.x - origin.x, y: point.y - origin.y)
         let glyph = layoutManager.glyphIndex(for: local, in: container)
         guard glyph < layoutManager.numberOfGlyphs else { return nil }
@@ -44,6 +54,8 @@ extension EditorController {
                 let block = document.blocks[blockIndex]
                 let line = block.lines.count > 1 ? document.lines[block.lines.lowerBound + 1] : document.lines[block.lines.lowerBound]
                 return .block(index: blockIndex, caret: line.range.upperBound)
+            case .linkEdit:
+                return .editLink(range: range)
             case .chipLead, .chipTrail:
                 if let link = storage.attribute(.folioLink, at: index, effectiveRange: nil) as? LinkTarget { return .link(link.kind) }
                 return nil
@@ -79,6 +91,12 @@ extension EditorController {
             textView.setSelectedRange(range)
             if event.clickCount >= 2, let url { delegate?.editor(self, quickLook: url) }
             return true
+        case .editLink(let range):
+            editLink(at: range)
+            return true
+        case .headingLevel:
+            showHeadingMenu(at: point)
+            return true
         case .block(let index, let caret):
             let clickOffset = point.y - scrollView.contentView.bounds.minY
             textView.window?.makeFirstResponder(textView)
@@ -89,8 +107,9 @@ extension EditorController {
             let lineHeight = EditorStyle.codeLineHeight
             let target = lineTop + lineHeight / 2 - clickOffset
             let clip = scrollView.contentView
-            let maxY = max(0, textView.frame.height - clip.bounds.height)
-            clip.scroll(to: NSPoint(x: clip.bounds.minX, y: min(max(0, target), maxY)))
+            let top = -scrollView.contentInsets.top
+            let maxY = max(top, textView.frame.height - clip.bounds.height)
+            clip.scroll(to: NSPoint(x: clip.bounds.minX, y: min(max(top, target), maxY)))
             scrollView.reflectScrolledClipView(clip)
             _ = index
             return true
@@ -99,8 +118,9 @@ extension EditorController {
 
     func updateCursor(for event: NSEvent) {
         let point = textView.convert(event.locationInWindow, from: nil)
+        if !textView.copyButton.isHidden, textView.copyButton.frame.contains(point) { return NSCursor.arrow.set() }
         switch hitTest(point) {
-        case .checkbox, .link: NSCursor.pointingHand.set()
+        case .checkbox, .link, .editLink, .headingLevel: NSCursor.pointingHand.set()
         case .picture, .block: NSCursor.arrow.set()
         case nil: break
         }
@@ -142,6 +162,7 @@ extension EditorController {
             menu.addItem(NSMenuItem(title: "Delete", action: #selector(NSText.delete(_:)), keyEquivalent: ""))
             return menu
         }
+        if let base { addCopyCode(to: base, at: point) }
         return base
     }
 }
@@ -162,6 +183,7 @@ extension MarkdownTextView {
     @objc func toggleItalics(_ sender: Any?) { controller?.toggle(.italic) }
     @objc func toggleInlineCode(_ sender: Any?) { controller?.toggle(.code) }
     @objc func toggleStrikethrough(_ sender: Any?) { controller?.toggle(.strikethrough) }
+    @objc func toggleHighlight(_ sender: Any?) { controller?.toggle(.highlight) }
     @objc func makeTitle(_ sender: Any?) { controller?.setLineFormat(.heading(1)) }
     @objc func makeHeading(_ sender: Any?) { controller?.setLineFormat(.heading(2)) }
     @objc func makeSubheading(_ sender: Any?) { controller?.setLineFormat(.heading(3)) }

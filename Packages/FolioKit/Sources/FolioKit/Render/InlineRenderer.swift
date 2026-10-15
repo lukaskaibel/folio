@@ -2,6 +2,7 @@ import AppKit
 
 /// Inline Markdown turned into the text you read, without its punctuation: for table cells, embedded notes and
 /// excerpts, where nothing is edited.
+@MainActor
 enum InlineRenderer {
     static func render(_ text: String, font: NSFont, color: NSColor) -> NSAttributedString {
         let units = Array(text.utf16)
@@ -17,6 +18,8 @@ enum InlineRenderer {
                 restyleFont(result, span.content) { EditorStyle.font($0, italic: true) }
             case .strikethrough:
                 result.addAttributes([.strikethroughStyle: NSUnderlineStyle.single.rawValue, .foregroundColor: Theme.textTertiary], range: span.content)
+            case .highlight:
+                result.addAttribute(.backgroundColor, value: Theme.highlight, range: span.content)
             case .code:
                 result.addAttributes([.font: NSFont.monospacedSystemFont(ofSize: font.pointSize * 0.9, weight: .regular), .backgroundColor: Theme.inlineCode], range: span.content)
             case .link, .autolink, .wikiLink, .embed:

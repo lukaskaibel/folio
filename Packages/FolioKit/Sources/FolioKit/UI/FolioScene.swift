@@ -4,6 +4,7 @@ import SwiftUI
 /// The app's window, its settings and its menus. The app target only has to show this scene.
 public struct FolioScene: Scene {
     @State private var workspace = Workspace.shared
+    @State private var settings = FolioSettings.shared
 
     public init() {}
 
@@ -20,9 +21,20 @@ public struct FolioScene: Scene {
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.willResignActiveNotification)) { _ in workspace.saveAll() }
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in workspace.saveAll() }
         }
-        .windowStyle(.hiddenTitleBar)
+        .windowToolbarStyle(.unified)
         .defaultSize(width: 1280, height: 820)
         .commands {
+            CommandGroup(replacing: .importExport) {
+                Menu("Export As") {
+                    Button("PDF…") { workspace.export(as: .pdf) }
+                        .keyboardShortcut("e", modifiers: [.command, .option])
+                    Button("PNG Image…") { workspace.export(as: .png) }
+                }
+            }
+            CommandGroup(replacing: .printItem) {
+                Button("Print…") { workspace.printNote() }
+                    .keyboardShortcut("p", modifiers: .command)
+            }
             CommandGroup(replacing: .newItem) {
                 Button("New Note") { workspace.newNote() }
                     .keyboardShortcut("n", modifiers: .command)
@@ -30,41 +42,64 @@ public struct FolioScene: Scene {
                 Button("New Folder") { workspace.newFolder() }
                     .keyboardShortcut("n", modifiers: [.command, .shift])
                     .disabled(workspace.locations.isEmpty)
+                Button("Open…") { FileWindows.shared.choose() }
+                    .keyboardShortcut("o", modifiers: .command)
+                Menu("Open Recent") {
+                    ForEach(workspace.recentURLs.prefix(10), id: \.self) { url in
+                        Button(FileKind(url: url, isDirectory: false) == .note ? url.deletingPathExtension().lastPathComponent : url.lastPathComponent) {
+                            workspace.open(url)
+                        }
+                    }
+                    Divider()
+                    Button("Clear Menu") { workspace.clearRecents() }
+                        .disabled(workspace.recentURLs.isEmpty)
+                }
+                Divider()
+                if let url = workspace.currentURL {
+                    MoveToMenu(workspace: workspace, url: url)
+                }
                 Divider()
                 Button("Add Location…") { workspace.chooseLocation(iCloud: false) }
             }
-            CommandGroup(after: .sidebar) {
+            // The window's own sidebar item, bound to the same state as the toolbar button.
+            CommandGroup(replacing: .sidebar) {
                 Button(workspace.isSidebarVisible ? "Hide Sidebar" : "Show Sidebar") {
                     withAnimation(Theme.spring) { workspace.isSidebarVisible.toggle() }
                 }
                 .keyboardShortcut("s", modifiers: [.command, .control])
+                .disabled(workspace.locations.isEmpty)
+                Button(workspace.isOutlineVisible ? "Hide Outline" : "Show Outline") {
+                    withAnimation(Theme.spring) { workspace.isOutlineVisible.toggle() }
+                }
+                .keyboardShortcut("i", modifiers: [.command, .control])
+                .disabled(workspace.locations.isEmpty)
+                Divider()
+                Toggle("Show Only Notes", isOn: $settings.showsOnlyNotes)
+                Toggle("Dim Files That Aren’t Notes", isOn: $settings.dimsOtherFiles)
+                Toggle("Keep Folders on Top", isOn: $settings.foldersFirst)
+                Divider()
+                Button("Bigger") { settings.changeTextSize(by: 1) }
+                    .keyboardShortcut("+", modifiers: .command)
+                Button("Smaller") { settings.changeTextSize(by: -1) }
+                    .keyboardShortcut("-", modifiers: .command)
+                Button("Actual Size") { settings.typography.size = 15 }
+                    .keyboardShortcut("0", modifiers: .command)
             }
             CommandMenu("Go") {
-                Button("Search…") {
-                    workspace.paletteMode = .search
-                    workspace.isPaletteOpen.toggle()
-                }
-                .keyboardShortcut("k", modifiers: .command)
+                Button("Search…") { workspace.search.focus() }
+                    .keyboardShortcut("f", modifiers: .command)
                 Button("Back") { workspace.goBack() }
                     .keyboardShortcut("[", modifiers: .command)
                     .disabled(!workspace.canGoBack)
                 Button("Forward") { workspace.goForward() }
                     .keyboardShortcut("]", modifiers: .command)
                     .disabled(!workspace.canGoForward)
-                Divider()
-                Button("Move Note to…") {
-                    if let url = workspace.currentURL {
-                        workspace.paletteMode = .move(url)
-                        workspace.isPaletteOpen = true
-                    }
-                }
-                .keyboardShortcut("m", modifiers: [.command, .shift])
-                .disabled(workspace.currentURL == nil)
             }
             CommandMenu("Format") {
                 formatButton("Bold", #selector(MarkdownTextView.toggleBoldface(_:)), "b", .command)
                 formatButton("Italic", #selector(MarkdownTextView.toggleItalics(_:)), "i", .command)
                 formatButton("Strikethrough", #selector(MarkdownTextView.toggleStrikethrough(_:)), "x", [.command, .shift])
+                formatButton("Highlight", #selector(MarkdownTextView.toggleHighlight(_:)), "h", [.command, .control])
                 formatButton("Code", #selector(MarkdownTextView.toggleInlineCode(_:)), "e", .command)
                 formatButton("Link", #selector(MarkdownTextView.addLink(_:)), "l", .command)
                 Divider()
@@ -95,7 +130,7 @@ public struct FolioScene: Scene {
     }
 }
 
-/// Settings, in the system's tabbed window.
+/// Settings, in the system's tabbed window: where notes live, how they are set, what the sidebar shows, the app icon.
 struct SettingsView: View {
     let workspace: Workspace
     @AppStorage("settingsTab") private var tab = "general"
@@ -103,12 +138,76 @@ struct SettingsView: View {
     var body: some View {
         TabView(selection: $tab) {
             Tab("General", systemImage: "gearshape", value: "general") { GeneralSettings(workspace: workspace) }
+            Tab("Text", systemImage: "textformat", value: "text") { TextSettings() }
+            Tab("Sidebar", systemImage: "sidebar.left", value: "sidebar") { SidebarSettings() }
             Tab("App Icon", systemImage: "book.closed", value: "icon") { AppIconSettings() }
         }
         .frame(width: 540, height: 460)
     }
 }
 
+/// The typeface, size, line spacing and width of notes, with a sample set as you choose.
+struct TextSettings: View {
+    @Bindable private var settings = FolioSettings.shared
+
+    var body: some View {
+        Form {
+            Section {
+                Picker("Font", selection: $settings.typography.face) {
+                    ForEach(Typography.Face.allCases) { face in Text(face.name).tag(face) }
+                }
+                LabeledContent("Size") {
+                    HStack {
+                        Slider(value: $settings.typography.size, in: Typography.sizes, step: 1)
+                        Text("\(Int(settings.typography.size)) pt")
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                            .frame(width: 44, alignment: .trailing)
+                    }
+                }
+                Picker("Line spacing", selection: $settings.typography.spacing) {
+                    ForEach(Typography.Spacing.allCases) { Text($0.name).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                Picker("Line width", selection: $settings.typography.width) {
+                    ForEach(Typography.Width.allCases) { Text($0.name).tag($0) }
+                }
+                .pickerStyle(.segmented)
+            }
+            Section("Preview") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("The Rise of Rococo")
+                        .font(Font(EditorStyle.headingFont(2)))
+                    Text("Emerging from the grandeur of Baroque, Rococo offered something more intimate and playful.")
+                        .font(Font(EditorStyle.body))
+                        .lineSpacing(EditorStyle.lineHeight - EditorStyle.bodySize * 1.2)
+                }
+                .padding(.vertical, 4)
+                .id(settings.typography)
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+struct SidebarSettings: View {
+    @Bindable private var settings = FolioSettings.shared
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Show only notes", isOn: $settings.showsOnlyNotes)
+                Toggle("Dim files that aren’t notes", isOn: $settings.dimsOtherFiles)
+                    .disabled(settings.showsOnlyNotes)
+                Toggle("Keep folders on top", isOn: $settings.foldersFirst)
+            } footer: {
+                Text("PDFs, pictures and other files still open from search and from links in your notes.")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
 struct GeneralSettings: View {
     let workspace: Workspace
 

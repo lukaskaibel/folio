@@ -22,6 +22,8 @@ final class EditorObject: NSObject {
         case mathInline(tex: String)
         case callout(type: String, label: String?)
         case frontmatter(count: Int)
+        /// After a link's text: a pencil that edits where it goes.
+        case linkEdit
     }
 
     enum ChipIcon {
@@ -84,6 +86,7 @@ final class EditorObject: NSObject {
         case .mathInline(let tex): "imath\(tex)"
         case .callout(let type, let label): "callout\(type)\(label ?? "")"
         case .frontmatter(let count): "front\(count)"
+        case .linkEdit: "linkEdit"
         }
     }
 }
@@ -92,12 +95,17 @@ final class EditorObject: NSObject {
 /// run of characters that carry this very instance; that moves along with the text when text before it changes.
 final class Decoration: NSObject {
     enum Kind: Equatable {
-        case codeBlock(language: String, active: Bool)
+        case codeBlock(language: String, active: Bool, preview: Preview? = nil)
         case callout(type: String)
         case inlineCode
         case chip(resolved: Bool)
-        case mermaidPreview
-        case mathPreview
+        case highlight
+    }
+
+    /// What a diagram or formula being edited looks like, drawn under the box with its source.
+    enum Preview: Equatable {
+        case diagram(source: String)
+        case math(tex: String)
     }
 
     let kind: Kind

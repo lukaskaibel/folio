@@ -1,9 +1,11 @@
 import AppKit
+import PDFKit
 import SwiftUI
 
-/// The window: the welcome screen until there is a location, then the sidebar and the open file.
+/// The window: the welcome screen until there is a location, then the sidebar, the open file and its outline.
 public struct RootView: View {
     @State private var workspace = Workspace.shared
+    @Environment(\.openWindow) private var openWindow
 
     public init() {}
 
@@ -16,256 +18,113 @@ public struct RootView: View {
             }
         }
         .frame(minWidth: 760, minHeight: 480)
-        .background(Color.theme(Theme.window))
+        .onAppear {
+            // Opening a folder from a file window, or with this one closed, brings this window back.
+            workspace.showWindow = { [openWindow] in openWindow(id: "main") }
+        }
     }
 }
 
+/// A Mac window like the system's own: a sidebar of files, the note, and an inspector with the note's outline.
 struct MainView: View {
-    let workspace: Workspace
+    @Bindable var workspace: Workspace
 
     var body: some View {
-        ZStack {
-            HStack(spacing: 0) {
-                if workspace.isSidebarVisible {
-                    SidebarColumn(workspace: workspace)
-                        .frame(width: Theme.sidebarWidth)
-                        .transition(.move(edge: .leading).combined(with: .opacity))
-                }
-                ContentPanel(workspace: workspace)
-                    .padding(.vertical, 8)
-                    .padding(.trailing, 8)
-                    .padding(.leading, workspace.isSidebarVisible ? 0 : 8)
-            }
-            if workspace.isPaletteOpen {
-                Color.black.opacity(0.18)
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        workspace.isPaletteOpen = false
-                        workspace.paletteMode = .search
-                    }
-                VStack {
-                    CommandPalette(workspace: workspace)
-                        .padding(.top, 96)
-                    Spacer()
-                }
-                .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
-            }
-            if let toast = workspace.toast {
-                VStack {
-                    Spacer()
-                    Text(toast)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(Color.theme(Theme.text))
-                        .padding(.horizontal, 16)
-                        .frame(height: 34)
-                        .background(Capsule().fill(Color.theme(Theme.popover)))
-                        .overlay(Capsule().strokeBorder(Color.theme(Theme.popoverBorder)))
-                        .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
-                        .padding(.bottom, 24)
-                }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .allowsHitTesting(false)
-            }
-        }
-        .animation(Theme.quick, value: workspace.isPaletteOpen)
-        .animation(Theme.spring, value: workspace.toast)
-        .ignoresSafeArea()
-    }
-}
-
-// MARK: - Sidebar
-
-struct SidebarColumn: View {
-    let workspace: Workspace
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Spacer()
-                IconButton(symbol: "sidebar.left", help: "Hide sidebar (⌃⌘S)") {
-                    withAnimation(Theme.spring) { workspace.isSidebarVisible = false }
-                }
-            }
-            .frame(height: 44)
-            .padding(.trailing, 8)
-            HStack(spacing: 6) {
-                Button {
-                    workspace.paletteMode = .search
-                    workspace.isPaletteOpen = true
-                } label: {
-                    HStack(spacing: 7) {
-                        Image(systemName: "magnifyingglass").font(.system(size: 12))
-                        Text("Search")
-                        Spacer()
-                        Keycap("⌘K")
-                    }
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.theme(Theme.textTertiary))
-                    .padding(.leading, 8)
-                    .padding(.trailing, 5)
-                    .frame(height: 28)
-                    .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.theme(Theme.control)))
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Search")
-                IconButton(symbol: "square.and.pencil", help: "New note (⌘N)") { workspace.newNote() }
-            }
-            .padding(.horizontal, 10)
-            .padding(.bottom, 4)
+        NavigationSplitView(columnVisibility: $workspace.columnVisibility) {
             SidebarOutline(workspace: workspace)
-                .padding(.horizontal, 4)
-            Button {
-                workspace.chooseLocation(iCloud: false)
-            } label: {
-                HStack(spacing: 7) {
-                    Image(systemName: "plus").font(.system(size: 12))
-                    Text("Add location")
-                    Spacer()
-                }
-                .font(.system(size: 13))
-                .foregroundStyle(Color.theme(Theme.textTertiary))
-                .padding(.horizontal, 10)
-                .frame(height: 28)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(HoverButtonStyle())
-            .padding(.horizontal, 8)
-            .padding(.bottom, 10)
-        }
-    }
-}
-
-// MARK: - Content
-
-struct ContentPanel: View {
-    let workspace: Workspace
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HeaderBar(workspace: workspace)
-            Rectangle().fill(Color.theme(Theme.separator)).frame(height: 1)
-            if let conflict = workspace.note?.conflict {
-                ConflictBanner(conflict: conflict, workspace: workspace)
-            }
-            DocumentBody(workspace: workspace)
-        }
-        .background(Color.theme(Theme.panel))
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.theme(Theme.panelBorder)))
-    }
-}
-
-struct DocumentBody: View {
-    let workspace: Workspace
-
-    var body: some View {
-        Group {
-            if let url = workspace.currentURL {
-                if workspace.note != nil {
-                    NoteEditorView(editor: workspace.editor)
-                } else {
-                    QuickLookView(url: url)
-                        .id(url)
-                }
-            } else {
-                EmptyState(workspace: workspace)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-struct NoteEditorView: NSViewRepresentable {
-    let editor: EditorController
-
-    func makeNSView(context: Context) -> NSView { editor.view }
-    func updateNSView(_ view: NSView, context: Context) {}
-}
-
-struct EmptyState: View {
-    let workspace: Workspace
-
-    var body: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "doc.text")
-                .font(.system(size: 28, weight: .light))
-                .foregroundStyle(Color.theme(Theme.faint))
-            Text("Pick a note, or start a new one")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Color.theme(Theme.textSecondary))
-            HStack(spacing: 14) {
-                HStack(spacing: 4) { Keycap("⌘N"); Text("new note") }
-                HStack(spacing: 4) { Keycap("⌘K"); Text("search") }
-            }
-            .font(.system(size: 12))
-            .foregroundStyle(Color.theme(Theme.textTertiary))
-        }
-    }
-}
-
-struct HeaderBar: View {
-    let workspace: Workspace
-
-    var body: some View {
-        HStack(spacing: 2) {
-            if !workspace.isSidebarVisible {
-                Spacer().frame(width: 70)
-                IconButton(symbol: "sidebar.left", help: "Show sidebar (⌃⌘S)") {
-                    withAnimation(Theme.spring) { workspace.isSidebarVisible = true }
-                }
-            }
-            IconButton(symbol: "chevron.left", help: "Back (⌘[)", enabled: workspace.canGoBack) { workspace.goBack() }
-            IconButton(symbol: "chevron.right", help: "Forward (⌘])", enabled: workspace.canGoForward) { workspace.goForward() }
-            Breadcrumb(workspace: workspace)
-                .padding(.leading, 8)
-            Spacer(minLength: 8)
-            if let url = workspace.currentURL {
-                if workspace.note == nil {
-                    Button("Open in \(defaultAppName(url))") { NSWorkspace.shared.open(url) }
-                        .buttonStyle(OutlineButtonStyle())
-                        .padding(.trailing, 6)
-                }
-                IconButton(symbol: workspace.isFavorite(url) ? "star.fill" : "star", help: workspace.isFavorite(url) ? "Remove from favorites" : "Add to favorites",
-                           tint: workspace.isFavorite(url) ? Color.theme(Theme.accent) : nil) {
-                    workspace.toggleFavorite(url)
-                }
-                ShareLink(item: url) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 13))
-                        .frame(width: 28, height: 28)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(HoverButtonStyle())
-                .foregroundStyle(Color.theme(Theme.textSecondary))
-                .help("Share")
-                Menu {
-                    Button("Rename") { workspace.editor.focusTitle() }.disabled(workspace.note == nil)
-                    Button("Move to…") {
-                        workspace.paletteMode = .move(url)
-                        workspace.isPaletteOpen = true
+                .navigationSplitViewColumnWidth(min: 200, ideal: 250, max: 400)
+                .toolbar {
+                    ToolbarItem {
+                        Button { workspace.newNote() } label: { Label("New Note", systemImage: "square.and.pencil") }
+                            .help("New note (⌘N)")
                     }
-                    Button("Duplicate") { workspace.duplicate(url) }
-                    Divider()
-                    Button("Copy Link") { workspace.copyLink(url) }
-                    Button("Show in Finder") { workspace.revealInFinder(url) }
-                    Divider()
-                    Button("Move to Trash", role: .destructive) { workspace.trash(url) }
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 13))
-                        .frame(width: 28, height: 28)
                 }
-                .menuStyle(.button)
-                .menuIndicator(.hidden)
-                .buttonStyle(HoverButtonStyle())
-                .foregroundStyle(Color.theme(Theme.textSecondary))
-                .fixedSize()
-                .help("More")
-            }
+        } detail: {
+            DetailColumn(workspace: workspace)
+                .inspector(isPresented: $workspace.isOutlineVisible) {
+                    OutlinePanel(workspace: workspace)
+                        .inspectorColumnWidth(min: 200, ideal: 240, max: 360)
+                }
+                .toolbar { DocumentToolbar(workspace: workspace) }
+                .toolbar(removing: .title)
         }
-        .padding(.horizontal, 10)
-        .frame(height: Theme.headerHeight)
+        .navigationTitle(workspace.currentTitle)
+        .alert(conflictTitle, isPresented: Binding(get: { workspace.note?.conflict != nil }, set: { _ in }), presenting: workspace.note?.conflict) { _ in
+            Button("Keep Both") { workspace.resolveConflict(.keepBoth) }
+            Button("Keep This Version") { workspace.resolveConflict(.keepThis) }
+            Button("Use the Other Version") { workspace.resolveConflict(.takeOther) }
+        } message: { conflict in
+            Text("It changed on \(conflict.source) while you were editing it here. Keep both to have the other version as a copy next to it.")
+        }
+    }
+
+    private var conflictTitle: String {
+        "“\(workspace.currentTitle)” was changed somewhere else."
+    }
+}
+
+// MARK: - Toolbar
+
+/// Back and forward on the left; formatting, sharing, more, search and the outline on the right.
+struct DocumentToolbar: ToolbarContent {
+    let workspace: Workspace
+
+    var body: some ToolbarContent {
+        ToolbarItemGroup(placement: .navigation) {
+            Button { workspace.goBack() } label: { Label("Back", systemImage: "chevron.left") }
+                .disabled(!workspace.canGoBack)
+                .help("Back")
+            Button { workspace.goForward() } label: { Label("Forward", systemImage: "chevron.right") }
+                .disabled(!workspace.canGoForward)
+                .help("Forward")
+        }
+        // The note's name, once its title has scrolled up under the toolbar. At most so wide that a long name never
+        // pushes the search field into the toolbar's overflow menu.
+        ToolbarItem(placement: .navigation) {
+            Text(workspace.currentTitle)
+                .font(.system(size: 13, weight: .semibold))
+                .lineLimit(1)
+                .frame(maxWidth: 220, alignment: .leading)
+                .padding(.leading, 6)
+                .opacity(workspace.currentURL != nil && (workspace.isTitleScrolledAway || workspace.note == nil) ? 1 : 0)
+                .animation(Theme.quick, value: workspace.isTitleScrolledAway)
+                .accessibilityAddTraits(.isHeader)
+        }
+        .sharedBackgroundVisibility(.hidden)
+
+        ToolbarSpacer(.flexible)
+        if let url = workspace.currentURL {
+            if workspace.note != nil {
+                ToolbarItem { FormatMenu() }
+                ToolbarSpacer(.fixed)
+            } else {
+                ToolbarItem {
+                    Button("Open in \(defaultAppName(url))") { NSWorkspace.shared.open(url) }
+                }
+                ToolbarSpacer(.fixed)
+            }
+            ToolbarItemGroup {
+                ShareLink(item: url) { Label("Share", systemImage: "square.and.arrow.up") }
+                    .help("Share")
+                MoreMenu(workspace: workspace, url: url)
+            }
+            ToolbarSpacer(.fixed)
+        }
+        ToolbarItem {
+            SearchFieldItem(controller: workspace.search)
+                .frame(width: 190, height: 36)
+                .padding(.horizontal, 6)
+                .help("Search names, notes and PDFs (⌘F)")
+        }
+        ToolbarSpacer(.fixed)
+        ToolbarItem {
+            Button {
+                withAnimation(Theme.spring) { workspace.isOutlineVisible.toggle() }
+            } label: {
+                Label(workspace.isOutlineVisible ? "Hide Outline" : "Show Outline", systemImage: "sidebar.right")
+            }
+            .help(workspace.isOutlineVisible ? "Hide outline (⌃⌘I)" : "Show outline (⌃⌘I)")
+        }
     }
 
     private func defaultAppName(_ url: URL) -> String {
@@ -274,106 +133,265 @@ struct HeaderBar: View {
     }
 }
 
-struct Breadcrumb: View {
+/// The formatting commands, as in Notes' Aa button. They go to the note, which keeps the caret.
+struct FormatMenu: View {
+    var body: some View {
+        Menu {
+            item("Title", #selector(MarkdownTextView.makeTitle(_:)))
+            item("Heading", #selector(MarkdownTextView.makeHeading(_:)))
+            item("Subheading", #selector(MarkdownTextView.makeSubheading(_:)))
+            item("Body", #selector(MarkdownTextView.makeBody(_:)))
+            Divider()
+            item("Bold", #selector(MarkdownTextView.toggleBoldface(_:)), "bold")
+            item("Italic", #selector(MarkdownTextView.toggleItalics(_:)), "italic")
+            item("Strikethrough", #selector(MarkdownTextView.toggleStrikethrough(_:)), "strikethrough")
+            item("Highlight", #selector(MarkdownTextView.toggleHighlight(_:)), "highlighter")
+            item("Code", #selector(MarkdownTextView.toggleInlineCode(_:)), "chevron.left.forwardslash.chevron.right")
+            item("Link", #selector(MarkdownTextView.addLink(_:)), "link")
+            Divider()
+            item("Checklist", #selector(MarkdownTextView.makeChecklist(_:)), "checklist")
+            item("Bulleted List", #selector(MarkdownTextView.makeBulletedList(_:)), "list.bullet")
+            item("Numbered List", #selector(MarkdownTextView.makeNumberedList(_:)), "list.number")
+            item("Block Quote", #selector(MarkdownTextView.makeQuote(_:)), "text.quote")
+        } label: {
+            Label("Format", systemImage: "textformat")
+        }
+        .help("Format")
+    }
+
+    private func item(_ title: String, _ action: Selector, _ symbol: String? = nil) -> some View {
+        Button { NSApp.sendAction(action, to: nil, from: nil) } label: {
+            if let symbol { Label(title, systemImage: symbol) } else { Text(title) }
+        }
+    }
+}
+
+struct MoreMenu: View {
     let workspace: Workspace
+    let url: URL
 
     var body: some View {
-        let items = workspace.breadcrumb
-        HStack(spacing: 5) {
-            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                if index > 0 {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(Color.theme(Theme.faint))
+        Menu {
+            let favorite = workspace.isFavorite(url)
+            Button { workspace.toggleFavorite(url) } label: {
+                Label(favorite ? "Remove from Favorites" : "Add to Favorites", systemImage: favorite ? "star.slash" : "star")
+            }
+            Divider()
+            Button { workspace.editor.focusTitle() } label: { Label("Rename", systemImage: "pencil") }
+                .disabled(workspace.note == nil)
+            MoveToMenu(workspace: workspace, url: url)
+            Button { workspace.duplicate(url) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
+            Divider()
+            Button { workspace.copyLink(url) } label: { Label("Copy Link", systemImage: "link") }
+            Button { workspace.revealInFinder(url) } label: { Label("Show in Finder", systemImage: "finder") }
+            if workspace.note != nil {
+                Divider()
+                Menu {
+                    Button("PDF…") { workspace.export(as: .pdf) }
+                    Button("PNG Image…") { workspace.export(as: .png) }
+                } label: {
+                    Label("Export As", systemImage: "square.and.arrow.up.on.square")
                 }
-                let isLast = index == items.count - 1
-                Text(item.name)
-                    .font(.system(size: 13, weight: isLast ? .medium : .regular))
-                    .foregroundStyle(Color.theme(isLast ? Theme.text : Theme.textTertiary))
-                    .lineLimit(1)
-                    .onTapGesture {
-                        if !isLast { workspace.sidebar?.reveal(item.url, select: true) }
-                    }
+                Button { workspace.printNote() } label: { Label("Print…", systemImage: "printer") }
             }
+            Divider()
+            Button(role: .destructive) { workspace.trash(url) } label: { Label("Move to Trash", systemImage: "trash") }
+        } label: {
+            Label("More", systemImage: "ellipsis")
+        }
+        .menuIndicator(.hidden)
+        .help("More")
+    }
+}
+
+/// Move To, as in Notes: every folder, indented under its location.
+struct MoveToMenu: View {
+    let workspace: Workspace
+    let url: URL
+
+    var body: some View {
+        Menu {
+            ForEach(workspace.moveTargets(for: url), id: \.location.id) { target in
+                Section(target.location.name) {
+                    ForEach(target.folders, id: \.url) { folder in
+                        Button {
+                            workspace.move(url, into: folder.url)
+                        } label: {
+                            Text(String(repeating: "    ", count: max(0, folder.depth)) + (folder.depth < 0 ? "Top Level" : folder.name))
+                        }
+                        .disabled(folder.url.standardizedFileURL == url.deletingLastPathComponent().standardizedFileURL)
+                    }
+                }
+            }
+        } label: {
+            Label("Move To", systemImage: "folder")
         }
     }
 }
 
-struct ConflictBanner: View {
-    let conflict: NoteDocument.Conflict
+// MARK: - The note
+
+struct DetailColumn: View {
     let workspace: Workspace
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "exclamationmark.arrow.triangle.2.circlepath")
-                .foregroundStyle(Color.theme(Theme.warning))
-            VStack(alignment: .leading, spacing: 1) {
-                Text("This note changed on \(conflict.source) while you were editing it here.")
-                    .font(.system(size: 13, weight: .semibold))
-                Text("Nothing is lost until you choose.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.theme(Theme.textSecondary))
+        Group {
+            if let url = workspace.currentURL {
+                if workspace.note != nil {
+                    NoteEditorView(editor: workspace.editor)
+                        .ignoresSafeArea(.container, edges: .top)
+                } else if FileKind(url: url, isDirectory: false) == .pdf {
+                    PDFFileView(url: url)
+                        .id(url)
+                } else {
+                    QuickLookView(url: url)
+                        .id(url)
+                }
+            } else {
+                EmptyState()
             }
-            Spacer()
-            Button("Keep this one") { workspace.resolveConflict(.keepThis) }.buttonStyle(OutlineButtonStyle())
-            Button("Use the other") { workspace.resolveConflict(.takeOther) }.buttonStyle(OutlineButtonStyle())
-            Button("Keep both") { workspace.resolveConflict(.keepBoth) }.buttonStyle(OutlineButtonStyle(prominent: true))
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(Color.theme(Theme.warning).opacity(0.1))
-        .overlay(alignment: .bottom) { Rectangle().fill(Color.theme(Theme.warning).opacity(0.3)).frame(height: 1) }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.theme(Theme.panel).ignoresSafeArea())
+        .overlay {
+            SwipeAnchor(swiper: workspace.pages)
+                .ignoresSafeArea(.container, edges: .top)
+                .allowsHitTesting(false)
+        }
     }
 }
 
-// MARK: - Controls
+/// The note fills the column and scrolls under the toolbar; AppKit starts it just below.
+struct NoteEditorView: NSViewRepresentable {
+    let editor: EditorController
 
-struct IconButton: View {
-    var symbol: String
-    var help: String
-    var enabled = true
-    var tint: Color?
-    var action: () -> Void
+    func makeNSView(context: Context) -> NSView { editor.view }
+    func updateNSView(_ view: NSView, context: Context) {}
+}
+
+struct EmptyState: View {
+    var body: some View {
+        ContentUnavailableView {
+            Label("No Note Open", systemImage: "doc.text")
+        } description: {
+            Text("Pick a note in the sidebar, press ⌘N for a new one, or ⌘F to search.")
+        }
+    }
+}
+
+// MARK: - Outline
+
+/// The inspector: the note's headings, the one you are reading selected, and how long the note is.
+struct OutlinePanel: View {
+    let workspace: Workspace
 
     var body: some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 13))
-                .foregroundStyle(tint ?? Color.theme(enabled ? Theme.textSecondary : Theme.faint))
-                .frame(width: 28, height: 28)
-                .contentShape(Rectangle())
+        if workspace.note == nil {
+            if let url = workspace.currentURL {
+                FileInfoPanel(url: url, place: workspace.index.entry(for: url)?.place ?? "")
+                    .id(url)
+            } else {
+                ContentUnavailableView {
+                    Label("No Outline", systemImage: "list.bullet.indent")
+                } description: {
+                    Text("Notes show their headings here.")
+                }
+            }
+        } else {
+            let base = workspace.outline.map(\.level).min() ?? 1
+            ScrollViewReader { proxy in
+                List(selection: selection) {
+                    Section("Outline") {
+                        Text(workspace.currentTitle)
+                            .fontWeight(.medium)
+                            .tag(-1)
+                            .id(-1)
+                        ForEach(workspace.outline) { heading in
+                            Text(heading.title)
+                                .lineLimit(2)
+                                .padding(.leading, CGFloat(heading.level - base + 1) * 12)
+                                .tag(heading.id)
+                                .id(heading.id)
+                        }
+                    }
+                }
+                .listStyle(.sidebar)
+                .onChange(of: workspace.currentHeading) { _, current in
+                    withAnimation(Theme.quick) { proxy.scrollTo(current ?? -1) }
+                }
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                Text("\(workspace.stats.words.formatted()) \(workspace.stats.words == 1 ? "word" : "words") · \(workspace.stats.readingMinutes) min read")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+            }
         }
-        .buttonStyle(HoverButtonStyle())
-        .disabled(!enabled)
-        .help(help)
-        .accessibilityLabel(help)
+    }
+
+    /// The section you are reading, and the one you pick to go to.
+    private var selection: Binding<Int?> {
+        Binding(get: { workspace.currentHeading ?? -1 }, set: { id in
+            guard let id else { return }
+            workspace.editor.scroll(to: workspace.outline.first { $0.id == id })
+        })
     }
 }
 
-struct HoverButtonStyle: ButtonStyle {
-    @State private var hovering = false
+/// For a PDF, picture or any other file: what it is, as the Finder's Get Info has it.
+private struct FileInfoPanel: View {
+    let url: URL
+    let place: String
+    @State private var facts: [(String, String)] = []
 
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(hovering ? Color.theme(Theme.hover) : .clear))
-            .opacity(configuration.isPressed ? 0.7 : 1)
-            .onHover { hovering = $0 }
-            .animation(Theme.quick, value: hovering)
+    var body: some View {
+        Form {
+            Section {
+                VStack(spacing: 8) {
+                    Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
+                        .resizable()
+                        .frame(width: 64, height: 64)
+                    Text(url.lastPathComponent)
+                        .font(.headline)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+            }
+            Section("Info") {
+                ForEach(facts, id: \.0) { fact in
+                    LabeledContent(fact.0, value: fact.1)
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .task(id: url) { facts = await Self.facts(for: url, place: place) }
     }
-}
 
-struct OutlineButtonStyle: ButtonStyle {
-    var prominent = false
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 12.5, weight: .medium))
-            .foregroundStyle(prominent ? Color.theme(Theme.panel) : Color.theme(Theme.text))
-            .padding(.horizontal, 11)
-            .frame(height: 26)
-            .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(prominent ? Color.theme(Theme.text) : Color.theme(Theme.panel)))
-            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(prominent ? .clear : Color.theme(Theme.panelBorder)))
-            .opacity(configuration.isPressed ? 0.75 : 1)
+    private static func facts(for url: URL, place: String) async -> [(String, String)] {
+        let values = try? url.resourceValues(forKeys: [.localizedTypeDescriptionKey, .fileSizeKey, .creationDateKey, .contentModificationDateKey])
+        var facts: [(String, String)] = []
+        if let kind = values?.localizedTypeDescription { facts.append(("Kind", kind)) }
+        if let size = values?.fileSize { facts.append(("Size", ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file))) }
+        let detail = await Task.detached(priority: .utility) { () -> (String, String)? in
+            if url.pathExtension.lowercased() == "pdf", let pages = PDFDocument(url: url)?.pageCount {
+                return ("Pages", "\(pages)")
+            }
+            if let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+               let width = properties[kCGImagePropertyPixelWidth] as? Int, let height = properties[kCGImagePropertyPixelHeight] as? Int {
+                return ("Dimensions", "\(width) × \(height)")
+            }
+            return nil
+        }.value
+        if let detail { facts.append(detail) }
+        if let created = values?.creationDate { facts.append(("Created", created.formatted(date: .abbreviated, time: .shortened))) }
+        if let modified = values?.contentModificationDate { facts.append(("Modified", modified.formatted(date: .abbreviated, time: .shortened))) }
+        if !place.isEmpty { facts.append(("Where", place)) }
+        return facts
     }
 }
 
@@ -385,15 +403,10 @@ struct WelcomeView: View {
     var body: some View {
         VStack(spacing: 0) {
             Spacer()
-            ZStack {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(Color.theme(Theme.accent))
-                    .frame(width: 88, height: 88)
-                Image(systemName: "doc.text")
-                    .font(.system(size: 38, weight: .regular))
-                    .foregroundStyle(.white)
-            }
-            .padding(.bottom, 26)
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .frame(width: 112, height: 112)
+                .padding(.bottom, 18)
             Text("Your notes live in your folders")
                 .font(.system(size: 32, weight: .bold))
                 .padding(.bottom, 10)
@@ -405,7 +418,7 @@ struct WelcomeView: View {
                 .padding(.bottom, 40)
             HStack(alignment: .top, spacing: 28) {
                 point("folder", "Plain files", "Every note is a .md file. Move it in Finder, open it anywhere.")
-                point("magnifyingglass", "Find anything", "⌘K searches names, notes and PDFs.")
+                point("magnifyingglass", "Find anything", "⌘F searches names, notes and PDFs.")
                 point("icloud", "On every device", "iCloud Drive keeps your Mac, iPhone and iPad in step.")
             }
             .frame(maxWidth: 820)
@@ -415,12 +428,10 @@ struct WelcomeView: View {
             } label: {
                 Label("Open iCloud Drive", systemImage: "icloud")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 22)
-                    .frame(height: 40)
-                    .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Color.theme(Theme.accent)))
+                    .padding(.horizontal, 10)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.borderedProminent)
+            .controlSize(.extraLarge)
             .keyboardShortcut(.defaultAction)
             Button("Choose another folder…") { workspace.chooseLocation(iCloud: false) }
                 .buttonStyle(.plain)
@@ -428,25 +439,27 @@ struct WelcomeView: View {
                 .foregroundStyle(Color.theme(Theme.textSecondary))
                 .padding(.top, 14)
             Spacer()
-            Text("You can add more locations later from the sidebar. Folio only sees the folders you choose.")
+            Text("You can add more folders later with File › Add Location. Folio only sees the folders you choose.")
                 .font(.system(size: 12))
                 .foregroundStyle(Color.theme(Theme.textTertiary))
                 .padding(.bottom, 22)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.theme(Theme.panel))
+        .background(Color.theme(Theme.panel).ignoresSafeArea())
+        .toolbar(removing: .title)
+        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
     }
 
+    /// A line of what Folio does, as on the system's own welcome screens.
     private func point(_ symbol: String, _ title: String, _ text: String) -> some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .top, spacing: 12) {
             Image(systemName: symbol)
-                .font(.system(size: 17))
-                .foregroundStyle(Color.theme(Theme.accent))
-                .frame(width: 36, height: 36)
-                .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Color.theme(Theme.accent).opacity(0.13)))
+                .font(.system(size: 22))
+                .foregroundStyle(.tint)
+                .frame(width: 30)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 14, weight: .semibold))
-                Text(text).font(.system(size: 13)).foregroundStyle(Color.theme(Theme.textSecondary)).fixedSize(horizontal: false, vertical: true)
+                Text(title).font(.headline)
+                Text(text).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
