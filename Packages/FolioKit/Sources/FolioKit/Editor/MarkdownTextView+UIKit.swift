@@ -15,11 +15,12 @@ final class MarkdownTextView: UITextView {
     /// where the margin is wide enough for it (iPad), since the iPhone's is too narrow.
     let headingButton = UIButton(configuration: .plain())
 
-    static let titleHeight: CGFloat = 40
+    /// As tall as the title's font needs.
+    private var titleHeight: CGFloat { ceil(titleField.font?.lineHeight ?? 40) + 2 }
 
     private var isCompact: Bool { bounds.width < 500 }
-    private var titleTop: CGFloat { isCompact ? 12 : 30 }
-    var headerHeight: CGFloat { titleTop + Self.titleHeight + 34 }
+    private var titleTop: CGFloat { isCompact ? 10 : 28 }
+    var headerHeight: CGFloat { titleTop + titleHeight + 34 }
     /// The space left and right of the text.
     var sideMargin: CGFloat {
         isCompact ? 20 : max(48, floor((bounds.width - EditorStyle.contentWidth) / 2))
@@ -53,9 +54,10 @@ final class MarkdownTextView: UITextView {
 
     required init?(coder: NSCoder) { fatalError() }
 
-    /// The title in the note's typeface.
+    /// The title in the note's typeface, twice the size of the text: as large as a large title at the standard size,
+    /// and larger than the note's own headings.
     func applyTypography() {
-        let font = EditorStyle.face(isCompact ? 28 : 30, weight: .bold)
+        let font = EditorStyle.face((EditorStyle.bodySize * 2).rounded(), weight: .bold)
         titleField.font = font
         titleField.attributedPlaceholder = NSAttributedString(string: "Untitled", attributes: [.font: font, .foregroundColor: Theme.faint])
         setNeedsLayout()
@@ -81,8 +83,8 @@ final class MarkdownTextView: UITextView {
         let inset = UIEdgeInsets(top: headerHeight, left: side, bottom: 48, right: side)
         if textContainerInset != inset { textContainerInset = inset }
         let width = bounds.width - side * 2
-        titleField.frame = CGRect(x: side, y: titleTop, width: width, height: Self.titleHeight)
-        metaLabel.frame = CGRect(x: side, y: titleTop + Self.titleHeight + 2, width: width, height: 18)
+        titleField.frame = CGRect(x: side, y: titleTop, width: width, height: titleHeight)
+        metaLabel.frame = CGRect(x: side, y: titleTop + titleHeight + 2, width: width, height: 18)
         if laidOutWidth != bounds.width {
             laidOutWidth = bounds.width
             applyTypography()

@@ -1,4 +1,7 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 /// The typeface, size, line spacing and width of notes, with a sample set as you choose.
 struct TextSettings: View {
@@ -23,10 +26,12 @@ struct TextSettings: View {
                     ForEach(Typography.Spacing.allCases) { Text($0.name).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                Picker("Line width", selection: $settings.typography.width) {
-                    ForEach(Typography.Width.allCases) { Text($0.name).tag($0) }
+                if showsWidth {
+                    Picker("Line width", selection: $settings.typography.width) {
+                        ForEach(Typography.Width.allCases) { Text($0.name).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
                 }
-                .pickerStyle(.segmented)
             }
             Section("Preview") {
                 VStack(alignment: .leading, spacing: 6) {
@@ -41,6 +46,15 @@ struct TextSettings: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    /// On the iPhone the text is as wide as the screen, whatever the setting.
+    private var showsWidth: Bool {
+        #if os(iOS)
+        UIDevice.current.userInterfaceIdiom != .phone
+        #else
+        true
+        #endif
     }
 }
 

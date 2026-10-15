@@ -367,7 +367,7 @@ public final class Workspace: NSObject {
     }
 
     /// The folder Folio keeps on this device, shown in the Files app under On My iPhone › Folio.
-    public static var onDeviceFolder: URL {
+    nonisolated public static var onDeviceFolder: URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
 

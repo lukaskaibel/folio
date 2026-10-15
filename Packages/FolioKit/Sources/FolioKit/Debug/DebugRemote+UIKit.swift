@@ -18,7 +18,8 @@ enum DebugRemote {
         self.workspace = workspace
         path = (file as NSString).expandingTildeInPath
         if !FileManager.default.fileExists(atPath: path) { FileManager.default.createFile(atPath: path, contents: nil) }
-        processed = max(0, ((try? String(contentsOfFile: path, encoding: .utf8))?.components(separatedBy: "\n").count ?? 1) - 1)
+        // Every line in the file runs, also those written while the app was starting: start with an empty file.
+        processed = 0
         let timer = Timer(timeInterval: 0.05, repeats: true) { _ in
             MainActor.assumeIsolated { poll() }
         }
@@ -59,7 +60,8 @@ enum DebugRemote {
     }
 
     private static func run(_ line: String) {
-        guard let workspace else { return }
+        guard let workspace else { return log("no workspace for \(line)") }
+        log("> \(line)")
         let editor = workspace.editor
         let parts = line.split(separator: " ", maxSplits: 1).map(String.init)
         let command = parts[0]
@@ -127,6 +129,46 @@ enum DebugRemote {
             if let url = url(argument) ?? workspace.currentURL { workspace.toggleFavorite(url) }
         case "rename":
             if let url = workspace.currentURL { workspace.rename(url, to: argument) }
+        case "renamealert":
+            workspace.renaming = url(argument) ?? workspace.currentURL
+        case "typebench":
+            // Types into the note as fast as it takes it, and says how long each keystroke took.
+            let count = Int(numbers.first ?? 50)
+            var times: [Double] = []
+            for index in 0..<count {
+                let start = CACurrentMediaTime()
+                editor.debugType(index % 7 == 6 ? " " : "a")
+                editor.textView.layoutIfNeeded()
+                times.append((CACurrentMediaTime() - start) * 1000)
+            }
+            log(String(format: "typing in a %d character note: average %.1f ms, worst %.1f ms", editor.text.utf16.count, times.reduce(0, +) / Double(times.count), times.max() ?? 0))
+        case "makelong":
+            // A long note to try typing in: the sample notes many times over.
+            guard let root = workspace.locations.first?.url else { return }
+            let parts = ["Travel/Kyoto trip.md", "Projects/Folio roadmap.md", "University/Linear algebra/Week 3.md", "Travel/Budget.md"]
+            let text = parts.compactMap { try? String(contentsOf: root.appendingPathComponent($0), encoding: .utf8) }.joined(separator: "\n\n")
+            let long = Array(repeating: text, count: Int(numbers.first ?? 20)).joined(separator: "\n\n## Again\n\n")
+            try? long.write(to: root.appendingPathComponent("Long note.md"), atomically: true, encoding: .utf8)
+            workspace.refreshNow(root)
+        case "dismiss":
+            log("dismissing renaming \(workspace.renaming?.lastPathComponent ?? "-") deleting \(workspace.deleting?.lastPathComponent ?? "-") problem \(workspace.problem?.title ?? "-")")
+            workspace.renaming = nil
+            workspace.deleting = nil
+            workspace.problem = nil
+        case "deletenow":
+            if let url = workspace.deleting { workspace.deleteImmediately(url) }
+            workspace.deleting = nil
+        case "trash":
+            if let url = url(argument) { workspace.moveToTrash(url) }
+        case "move":
+            // move <file> > <folder>
+            let paths = argument.components(separatedBy: " > ")
+            if paths.count == 2, let file = url(paths[0]), let folder = url(paths[1]) { workspace.move(file, into: folder) }
+        case "exists":
+            log("exists \(argument): \(url(argument).map { FileManager.default.fileExists(atPath: $0.path) } ?? false)")
+        case "ls":
+            let folder = url(argument) ?? URL(fileURLWithPath: "/")
+            log("ls \(argument): \((try? FileManager.default.contentsOfDirectory(atPath: folder.path))?.sorted().joined(separator: ", ") ?? "-")")
         case "export":
             Task {
                 let file = await NoteExporter.pdfFile(for: editor, title: workspace.currentTitle)

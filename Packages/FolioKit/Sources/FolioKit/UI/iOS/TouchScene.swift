@@ -212,7 +212,7 @@ struct TouchSettings: View {
                         Label {
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(location.name)
-                                Text(location.url.path).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.head)
+                                Text(location.place).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                             }
                         } icon: {
                             Image(systemName: location.isICloudDrive ? "icloud" : "folder")

@@ -26,7 +26,7 @@ struct DocumentScreen: View {
             .toolbar { toolbar }
             .sheet(isPresented: $showsOutline) {
                 NavigationStack {
-                    OutlinePanel(workspace: workspace)
+                    OutlinePanel(workspace: workspace, showsHeader: false)
                         .navigationTitle(isNote ? "Outline" : "Info")
                         .navigationBarTitleDisplayMode(.inline)
                         .toolbar {
@@ -40,6 +40,16 @@ struct DocumentScreen: View {
                     .presentationDetents([.medium, .large])
                     .ignoresSafeArea()
             }
+            #if DEBUG
+            .onReceive(NotificationCenter.default.publisher(for: .folioDebug)) { notification in
+                guard isOpen else { return }
+                switch notification.userInfo?["command"] as? String {
+                case "showoutline": showsOutline = notification.userInfo?["argument"] as? String != "hide"
+                case "exportsheet": export()
+                default: break
+                }
+            }
+            #endif
             .onChange(of: workspace.currentHeading) { _, _ in
                 // Picking a heading in the outline sheet takes you there and puts the sheet away.
                 if showsOutline, workspace.editor.isJumping { showsOutline = false }

@@ -48,6 +48,8 @@ struct EmptyState: View {
 /// The inspector: the note's headings, the one you are reading selected, and how long the note is.
 struct OutlinePanel: View {
     let workspace: Workspace
+    /// In a sheet titled "Outline", the list doesn't say it again.
+    var showsHeader = true
 
     var body: some View {
         if workspace.note == nil {
@@ -65,7 +67,7 @@ struct OutlinePanel: View {
             let base = workspace.outline.map(\.level).min() ?? 1
             ScrollViewReader { proxy in
                 List(selection: selection) {
-                    Section("Outline") {
+                    Section {
                         Text(workspace.currentTitle)
                             .fontWeight(.medium)
                             .tag(-1)
@@ -77,6 +79,8 @@ struct OutlinePanel: View {
                                 .tag(heading.id)
                                 .id(heading.id)
                         }
+                    } header: {
+                        if showsHeader { Text("Outline") }
                     }
                 }
                 .listStyle(.sidebar)

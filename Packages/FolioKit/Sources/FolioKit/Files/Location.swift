@@ -56,6 +56,23 @@ public struct Location: Identifiable, Codable, Equatable, Sendable {
         [(url, name, nil)] + linked.map { ($0.url, name + " › " + $0.name, $0) }
     }
 
+    #if os(iOS)
+    /// Where the folder is, as the Files app names the places: "iCloud Drive › Notes", "On My iPhone › Folio".
+    @MainActor
+    var place: String {
+        let path = url.path
+        if let range = path.range(of: "/Mobile Documents/com~apple~CloudDocs") {
+            return (["iCloud Drive"] + path[range.upperBound...].split(separator: "/").map(String.init)).joined(separator: " › ")
+        }
+        let documents = Workspace.onDeviceFolder.standardizedFileURL.path
+        if path == documents || path.hasPrefix(documents + "/") {
+            let device = UIDevice.current.userInterfaceIdiom == .pad ? "On My iPad" : "On My iPhone"
+            return ([device, "Folio"] + path.dropFirst(documents.count).split(separator: "/").map(String.init)).joined(separator: " › ")
+        }
+        return url.pathComponents.suffix(2).joined(separator: " › ")
+    }
+    #endif
+
     func contains(_ url: URL) -> Bool {
         folder(containing: url.standardizedFileURL.path) != nil
     }
