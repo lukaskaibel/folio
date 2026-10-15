@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 
 /// Clicks on the things drawn in place of Markdown: a checkbox ticks, a link opens, a picture is selected like a
 /// character, a table or diagram opens for editing right where you clicked.
@@ -14,10 +18,10 @@ extension EditorController {
 
     func hitTest(_ point: NSPoint) -> Hit? {
         guard storage.length > 0 else { return nil }
-        let origin = textView.textContainerOrigin
+        let origin = textOrigin
         // The level tag in the margin next to the heading the caret is on.
         if point.x < origin.x, !document.lines.isEmpty {
-            let line = document.lineIndex(containing: textView.selectedRange().location)
+            let line = document.lineIndex(containing: selection.location)
             if case .heading(_, let marker) = document.lines[line].kind, isRevealed(marker.location),
                let rect = layoutManager.headingMarkRect(at: marker.location, origin: origin), rect.insetBy(dx: -4, dy: -4).contains(point) {
                 return .headingLevel(line: line)
@@ -71,6 +75,20 @@ extension EditorController {
         return nil
     }
 
+    /// Puts the caret into a table or diagram where it was clicked, keeping the line with the caret under the pointer
+    /// as the block opens up.
+    func openBlock(caret: Int, at point: NSPoint) {
+        let clickOffset = point.y - scrollTop
+        makeTextFirstResponder()
+        setSelection(NSRange(location: caret, length: 0))
+        layoutManager.ensureLayout(forCharacterRange: NSRange(location: 0, length: min(storage.length, caret + 1)))
+        let lineTop = yPosition(of: caret)
+        let lineHeight = EditorStyle.codeLineHeight
+        let target = lineTop + lineHeight / 2 - clickOffset
+        setScrollTop(min(max(-topInset, target), maxScrollTop))
+    }
+
+    #if os(macOS)
     /// Handles the click itself when it lands on something that isn't text; returns false to let AppKit place the
     /// caret or start a selection.
     func handleMouseDown(_ event: NSEvent) -> Bool {
@@ -88,7 +106,7 @@ extension EditorController {
             return true
         case .picture(let range, let url):
             textView.window?.makeFirstResponder(textView)
-            textView.setSelectedRange(range)
+            setSelection(range)
             if event.clickCount >= 2, let url { delegate?.editor(self, quickLook: url) }
             return true
         case .editLink(let range):
@@ -97,21 +115,8 @@ extension EditorController {
         case .headingLevel:
             showHeadingMenu(at: point)
             return true
-        case .block(let index, let caret):
-            let clickOffset = point.y - scrollView.contentView.bounds.minY
-            textView.window?.makeFirstResponder(textView)
-            textView.setSelectedRange(NSRange(location: caret, length: 0))
-            // Keep the line with the caret under the pointer as the block opens up.
-            layoutManager.ensureLayout(forCharacterRange: NSRange(location: 0, length: min(storage.length, caret + 1)))
-            let lineTop = yPosition(of: caret)
-            let lineHeight = EditorStyle.codeLineHeight
-            let target = lineTop + lineHeight / 2 - clickOffset
-            let clip = scrollView.contentView
-            let top = -scrollView.contentInsets.top
-            let maxY = max(top, textView.frame.height - clip.bounds.height)
-            clip.scroll(to: NSPoint(x: clip.bounds.minX, y: min(max(top, target), maxY)))
-            scrollView.reflectScrolledClipView(clip)
-            _ = index
+        case .block(_, let caret):
+            openBlock(caret: caret, at: point)
             return true
         }
     }
@@ -129,7 +134,7 @@ extension EditorController {
     func handleKeyDown(_ event: NSEvent) -> Bool {
         // Space on a selected picture opens Quick Look, as in the Finder.
         if event.charactersIgnoringModifiers == " ", event.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty {
-            let selection = textView.selectedRange()
+            let selection = self.selection
             if selection.length > 0, let object = layoutManager.object(at: selection.location), object.range(at: selection.location) == selection {
                 switch object.kind {
                 case .image(let url, _, _), .fileCard(let url, _):
@@ -146,7 +151,7 @@ extension EditorController {
     func contextMenu(for event: NSEvent, base: NSMenu?) -> NSMenu? {
         let point = textView.convert(event.locationInWindow, from: nil)
         if case .picture(let range, let url) = hitTest(point) {
-            textView.setSelectedRange(range)
+            setSelection(range)
             let menu = NSMenu()
             if let url {
                 let look = NSMenuItem(title: "Quick Look", action: #selector(MarkdownTextView.quickLookSelection(_:)), keyEquivalent: "")
@@ -165,8 +170,10 @@ extension EditorController {
         if let base { addCopyCode(to: base, at: point) }
         return base
     }
+    #endif
 }
 
+#if os(macOS)
 extension MarkdownTextView {
     @objc func quickLookSelection(_ sender: NSMenuItem) {
         guard let url = sender.representedObject as? URL, let controller else { return }
@@ -197,3 +204,4 @@ extension MarkdownTextView {
     @objc func indentLines(_ sender: Any?) { controller?.indent(by: 1) }
     @objc func outdentLines(_ sender: Any?) { controller?.indent(by: -1) }
 }
+#endif

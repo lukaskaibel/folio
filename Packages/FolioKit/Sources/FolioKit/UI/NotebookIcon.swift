@@ -1,3 +1,4 @@
+#if os(macOS)
 import Accelerate
 import AppKit
 import Observation
@@ -385,3 +386,4 @@ public final class AppIconStore {
         NSApp.applicationIconImage = dark ? darkIcon : lightIcon
     }
 }
+#endif

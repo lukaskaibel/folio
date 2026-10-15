@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 
 /// A heading in the note, for the outline next to it.
 public struct OutlineHeading: Identifiable, Equatable {
@@ -73,20 +77,15 @@ extension EditorController {
 
     // MARK: - Where you are
 
-    @objc func scrolled() {
-        updatePosition()
-        updateCopyButtonForPointer()
-    }
-
     /// The top of what you see, below the toolbar, in the text view's coordinates.
-    var visibleTop: CGFloat { scrollView.contentView.bounds.minY + scrollView.contentInsets.top }
+    var visibleTop: CGFloat { scrollTop + topInset }
 
     func updatePosition(force: Bool = false) {
-        let titleAway = textView.titleField.frame.midY < visibleTop
+        let titleAway = titleFrame.midY < visibleTop
         var current: Int?
         if !outline.isEmpty, storage.length > 0 {
             // The section a reader is in is the one whose heading is above a line or two below the toolbar.
-            let y = visibleTop + 40 - textView.textContainerOrigin.y
+            let y = visibleTop + 40 - textOrigin.y
             var index = 0
             if y > 0 {
                 let glyph = layoutManager.glyphIndex(for: NSPoint(x: 1, y: y), in: container)
@@ -94,16 +93,15 @@ extension EditorController {
             }
             current = outline.lastIndex { $0.location <= index }
             // With the title in view, you are at the start of the note.
-            if scrollView.contentView.bounds.minY <= -scrollView.contentInsets.top + 1 { current = nil }
+            if scrollTop <= -topInset + 1 { current = nil }
             // Scrolled to the very bottom, the last headings can't reach the top: the last one you can see counts.
-            let clip = scrollView.contentView
-            if clip.bounds.minY > -scrollView.contentInsets.top + 1, clip.bounds.maxY >= textView.frame.height - 2, let last = outline.indices.last,
-               yPosition(of: outline[last].location) < clip.bounds.maxY {
+            if scrollTop > -topInset + 1, scrollTop >= maxScrollTop - 2, let last = outline.indices.last,
+               yPosition(of: outline[last].location) < visibleRect.maxY {
                 current = last
             }
         }
         if let jump {
-            if isJumping || abs(scrollView.contentView.bounds.minY - jump.y) < 1 { current = jump.heading } else { self.jump = nil }
+            if isJumping || abs(scrollTop - jump.y) < 1 { current = jump.heading } else { self.jump = nil }
         }
         guard force || titleAway != isTitleScrolledAway || current != currentHeading else { return }
         isTitleScrolledAway = titleAway
@@ -114,64 +112,60 @@ extension EditorController {
     // MARK: - Scrolling
 
     func scrollToTop() {
-        let clip = scrollView.contentView
-        clip.scroll(to: NSPoint(x: 0, y: -scrollView.contentInsets.top))
-        scrollView.reflectScrolledClipView(clip)
+        setScrollTop(-topInset)
     }
 
     /// Where you are in the note: how far it is scrolled and where the caret is.
     public struct Place {
-        var scroll: CGFloat
+        /// The top of what you saw, under the toolbar, in the text view's coordinates.
+        var top: CGFloat
         var selection: NSRange
     }
 
     public var place: Place {
-        Place(scroll: scrollView.contentView.bounds.minY, selection: textView.selectedRange())
+        Place(top: visibleTop, selection: selection)
     }
 
     /// Comes back to a place in the note, as Back and Forward do: the same caret, scrolled to the same spot.
     public func restore(_ place: Place) {
         guard place.selection.upperBound <= storage.length else { return }
-        textView.setSelectedRange(place.selection)
-        let clip = scrollView.contentView
-        layoutManager.ensureLayout(forBoundingRect: NSRect(x: 0, y: 0, width: container.size.width, height: place.scroll + clip.bounds.height), in: container)
-        let top = -scrollView.contentInsets.top
-        let bottom = max(top, textView.frame.height - clip.bounds.height)
-        clip.scroll(to: NSPoint(x: clip.bounds.minX, y: min(max(top, place.scroll), bottom)))
-        scrollView.reflectScrolledClipView(clip)
+        setSelection(place.selection)
+        scroll(to: place)
+        #if os(iOS)
+        // The note may be on its way to another screen, whose bars come later and move it: it goes back there
+        // once they have.
+        pendingPlace = place
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in self?.pendingPlace = nil }
+        #endif
+    }
+
+    func scroll(to place: Place) {
+        layoutManager.ensureLayout(forBoundingRect: NSRect(x: 0, y: 0, width: container.size.width, height: place.top + visibleRect.height), in: container)
+        let top = -topInset
+        setScrollTop(min(max(top, place.top - topInset), maxScrollTop))
         updatePosition()
     }
 
     /// Scrolls a heading up to just below the toolbar, or to the title for `nil`. The caret stays where it is.
     public func scroll(to heading: OutlineHeading?, animated: Bool = true) {
-        let clip = scrollView.contentView
-        let top = -scrollView.contentInsets.top
+        let top = -topInset
         var y = top
         if let heading, heading.location < storage.length {
             layoutManager.ensureLayout(forCharacterRange: NSRange(location: 0, length: heading.location + 1))
             y = yPosition(of: heading.location) + top - 18
         }
-        let bottom = max(top, textView.frame.height - clip.bounds.height)
-        let origin = NSPoint(x: clip.bounds.minX, y: min(max(top, y), bottom))
-        jump = (heading?.id, origin.y)
+        let target = min(max(top, y), maxScrollTop)
+        jump = (heading?.id, target)
         guard animated else {
-            clip.scroll(to: origin)
-            scrollView.reflectScrolledClipView(clip)
+            setScrollTop(target)
             updatePosition()
             return
         }
         isJumping = true
         updatePosition()
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.32
-            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            clip.animator().setBoundsOrigin(origin)
-        } completionHandler: { [weak self] in
-            MainActor.assumeIsolated {
-                self?.isJumping = false
-                self?.scrollView.reflectScrolledClipView(clip)
-                self?.updatePosition()
-            }
+        animateScrollTop(to: target) { [weak self] in
+            self?.isJumping = false
+            self?.updatePosition()
         }
     }
 }

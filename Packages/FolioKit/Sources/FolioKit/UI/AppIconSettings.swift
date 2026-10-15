@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import SwiftUI
 import TipKit
@@ -144,3 +145,4 @@ struct AppIconTipView: View {
         .padding(10)
     }
 }
+#endif

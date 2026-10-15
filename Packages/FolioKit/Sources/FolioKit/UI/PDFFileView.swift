@@ -20,6 +20,7 @@ struct PDFFileView: View {
     }
 }
 
+#if os(macOS)
 /// PDFKit's view, set up like Preview's continuous scroll: the pages fit the width, with page breaks and shadows.
 /// It keeps where you were in each PDF, so going back to one (or swiping to it) shows the page you left.
 private struct PDFKitView: NSViewRepresentable {
@@ -61,3 +62,45 @@ private struct PDFKitView: NSViewRepresentable {
         places[url] = (clip.bounds.origin, view.autoScales ? nil : view.scaleFactor)
     }
 }
+#else
+/// PDFKit's view, as Files and Books show a PDF: the pages one under the other, fitted to the width, with shadows.
+/// It keeps where you were in each PDF, so going back to one shows the page you left.
+private struct PDFKitView: UIViewRepresentable {
+    let url: URL
+    let document: PDFDocument?
+
+    /// Where each PDF was left: the page and the point on it at the top of the view, and its zoom unless it fit.
+    @MainActor private static var places: [URL: (destination: PDFDestination, scale: CGFloat?)] = [:]
+
+    func makeCoordinator() -> URL { url }
+
+    func makeUIView(context: Context) -> PDFView {
+        let view = PDFView()
+        view.displayMode = .singlePageContinuous
+        view.displaysPageBreaks = true
+        view.pageShadowsEnabled = true
+        view.pageBreakMargins = UIEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
+        view.autoScales = true
+        view.backgroundColor = .secondarySystemBackground
+        return view
+    }
+
+    func updateUIView(_ view: PDFView, context: Context) {
+        guard view.document !== document else { return }
+        view.document = document
+        guard document != nil else { return }
+        let place = Self.places[url]
+        if let scale = place?.scale {
+            view.autoScales = false
+            view.scaleFactor = scale
+        }
+        if let destination = place?.destination { view.go(to: destination) }
+    }
+
+    static func dismantleUIView(_ view: PDFView, coordinator url: URL) {
+        guard view.document != nil, let page = view.currentPage else { return }
+        let top = view.convert(CGPoint(x: 0, y: view.safeAreaInsets.top), to: page)
+        places[url] = (PDFDestination(page: page, at: top), view.autoScales ? nil : view.scaleFactor)
+    }
+}
+#endif

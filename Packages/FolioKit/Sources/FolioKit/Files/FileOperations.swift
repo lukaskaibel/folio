@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 
 /// Creating, renaming, moving and deleting files, coordinated so iCloud and other apps see each change whole.
 @MainActor
@@ -83,6 +87,17 @@ enum FileOperations {
         }
         return trashed
     }
+
+    #if os(iOS)
+    /// Deletes for good: for places without a Recently Deleted, after asking.
+    static func delete(_ url: URL) -> Bool {
+        var deleted = false
+        NSFileCoordinator().coordinate(writingItemAt: url, options: .forDeleting, error: nil) { url in
+            deleted = (try? FileManager.default.removeItem(at: url)) != nil
+        }
+        return deleted
+    }
+    #endif
 
     static func duplicate(_ url: URL) -> URL? {
         let base = url.deletingPathExtension().lastPathComponent

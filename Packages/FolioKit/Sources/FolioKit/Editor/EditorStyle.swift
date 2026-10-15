@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 
 extension NSAttributedString.Key {
     /// Markdown punctuation that isn't drawn. `HiddenMode.untilRevealed` comes back next to the caret,
@@ -49,7 +53,11 @@ enum EditorStyle {
     static func face(_ size: CGFloat, weight: NSFont.Weight = .regular) -> NSFont {
         let font = NSFont.systemFont(ofSize: size, weight: weight)
         guard let design = typography.face.design, let descriptor = font.fontDescriptor.withDesign(design) else { return font }
+        #if os(macOS)
         return NSFont(descriptor: descriptor, size: size) ?? font
+        #else
+        return UIFont(descriptor: descriptor, size: size)
+        #endif
     }
 
     /// Heading sizes keep their proportion to the text.
@@ -144,8 +152,13 @@ enum EditorStyle {
             }
         }
         if italic {
+            #if os(macOS)
             let traits = result.fontDescriptor.symbolicTraits.union(.italic)
             result = NSFont(descriptor: result.fontDescriptor.withSymbolicTraits(traits), size: result.pointSize) ?? result
+            #else
+            let traits = result.fontDescriptor.symbolicTraits.union(.traitItalic)
+            if let descriptor = result.fontDescriptor.withSymbolicTraits(traits) { result = UIFont(descriptor: descriptor, size: result.pointSize) }
+            #endif
         }
         return result
     }

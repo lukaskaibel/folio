@@ -1,11 +1,6 @@
+#if os(macOS)
 import AppKit
 import SwiftUI
-
-/// What a search suggestion opens.
-enum SearchResult: Hashable {
-    case file(URL)
-    case newNote(String)
-}
 
 /// The search field in the toolbar: the system's search field with the system's suggestions menu below it. It finds
 /// files by name, then text in notes and PDFs; ⌘F puts the caret in it, arrow keys and Return pick a result.
@@ -58,42 +53,28 @@ final class SearchController: NSObject, NSTextSuggestionsDelegate, NSSearchField
     }
 
     func sections(for text: String) -> [ItemSection] {
-        let query = text.trimmingCharacters(in: .whitespaces)
-        let index = workspace.index
-        guard !query.isEmpty else {
-            let recent = workspace.recentURLs.prefix(6).map { url in
-                item(.file(url), title: displayName(url), detail: index.entry(for: url)?.place, kind: FileKind(url: url, isDirectory: false))
-            }
-            return recent.isEmpty ? [] : [ItemSection(title: "Recent", items: Array(recent))]
-        }
-        var sections: [ItemSection] = []
-        let files = index.files(matching: query, limit: 6)
-        if !files.isEmpty {
-            sections.append(ItemSection(title: "Files", items: files.map { entry in
-                item(.file(entry.url), title: entry.name, detail: entry.place, kind: entry.kind, inCloud: entry.isInCloud)
-            }))
-        }
-        let named = Set(files.map(\.url))
-        let hits = index.textHits(query, limit: 6).filter { !named.contains($0.entry.url) }
-        if !hits.isEmpty {
-            sections.append(ItemSection(title: "In Notes and PDFs", items: hits.map { hit in
-                var result = item(.file(hit.entry.url), title: hit.entry.kind == .note ? hit.entry.name : hit.entry.url.lastPathComponent,
-                                  detail: nil, kind: hit.entry.kind)
-                if let page = hit.page { result.title += " – page \(page)" }
-                // The words you searched for in bold.
-                let snippet = NSMutableAttributedString(string: hit.snippet)
-                if let match = hit.match {
-                    snippet.addAttribute(.font, value: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold), range: NSRange(match, in: hit.snippet))
+        SearchSection.sections(for: text, in: workspace).map { section in
+            let items = section.items.map { found -> Item in
+                guard let kind = found.kind else {
+                    var create = NSSuggestionItem(representedValue: found.result, title: found.title)
+                    create.image = NSImage(systemSymbolName: "square.and.pencil", accessibilityDescription: nil)
+                    return create
                 }
-                result.attributedSecondaryTitle = try? AttributedString(snippet, including: \.appKit)
-                result.toolTip = hit.entry.place
+                guard let snippet = found.snippet else {
+                    return item(found.result, title: found.title, detail: found.place, kind: kind, inCloud: found.isInCloud)
+                }
+                var result = item(found.result, title: found.title, detail: nil, kind: kind)
+                // The words you searched for in bold.
+                let text = NSMutableAttributedString(string: snippet)
+                if let match = found.match {
+                    text.addAttribute(.font, value: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold), range: NSRange(match, in: snippet))
+                }
+                result.attributedSecondaryTitle = try? AttributedString(text, including: \.appKit)
+                result.toolTip = found.place
                 return result
-            }))
+            }
+            return section.title.map { ItemSection(title: $0, items: items) } ?? ItemSection(items: items)
         }
-        var create = NSSuggestionItem(representedValue: SearchResult.newNote(query), title: "New Note “\(query)”")
-        create.image = NSImage(systemSymbolName: "square.and.pencil", accessibilityDescription: nil)
-        sections.append(ItemSection(items: [create]))
-        return sections
     }
 
     private func item(_ result: SearchResult, title: String, detail: String?, kind: FileKind, inCloud: Bool = false) -> Item {
@@ -104,10 +85,6 @@ final class SearchController: NSObject, NSTextSuggestionsDelegate, NSSearchField
         item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
             .withSymbolConfiguration(NSImage.SymbolConfiguration(paletteColors: [tint]))
         return item
-    }
-
-    private func displayName(_ url: URL) -> String {
-        FileKind(url: url, isDirectory: false) == .note ? url.deletingPathExtension().lastPathComponent : url.lastPathComponent
     }
 
     // MARK: - Picking
@@ -189,3 +166,4 @@ struct SearchFieldItem: NSViewRepresentable {
         CGSize(width: proposal.width ?? 190, height: proposal.height ?? nsView.intrinsicContentSize.height)
     }
 }
+#endif

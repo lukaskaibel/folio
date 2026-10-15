@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 import PDFKit
 
 /// Every file in the locations, with the text of every note (and of PDFs), for search, `[[` and resolving links. Built in

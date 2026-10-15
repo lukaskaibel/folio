@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 import Synchronization
 
 /// An open note: its text, saved shortly after you stop typing, and kept in step with the file when something else

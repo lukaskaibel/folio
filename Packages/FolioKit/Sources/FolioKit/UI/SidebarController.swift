@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import SwiftUI
 
@@ -99,12 +100,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
 
     func visibleChildren(of node: FileNode) -> [FileNode] {
         if let cached = visible[ObjectIdentifier(node)] { return cached }
-        let settings = FolioSettings.shared
-        var children = node.loadedChildren()
-        if settings.showsOnlyNotes { children = children.filter { $0.isFolder || $0.kind == .note } }
-        if !settings.foldersFirst {
-            children.sort { $0.sortName.localizedStandardCompare($1.sortName) == .orderedAscending }
-        }
+        let children = node.visibleChildren()
         visible[ObjectIdentifier(node)] = children
         return children
     }
@@ -685,3 +681,4 @@ struct SidebarOutline: NSViewRepresentable {
 
     func updateNSView(_ view: NSScrollView, context: Context) {}
 }
+#endif

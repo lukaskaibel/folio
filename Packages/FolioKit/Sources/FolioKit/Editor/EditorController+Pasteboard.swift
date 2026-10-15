@@ -1,16 +1,19 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 import UniformTypeIdentifiers
 
 /// Copy and paste as in Notes: a copied picture comes along as a picture, Markdown keeps its formatting, and pictures
 /// and files dropped or pasted in are stored next to the note in `.assets`, hidden from the Finder.
 extension EditorController {
-    static let fragmentType = NSPasteboard.PasteboardType("com.lukaskbl.folio.fragment")
+    static let fragmentIdentifier = "com.lukaskbl.folio.fragment"
 
-    /// Copies the selection as Markdown (and, for a single picture, as that file). Returns false when there is
-    /// nothing selected.
-    @discardableResult
-    func copySelection(cut: Bool) -> Bool {
-        var range = expandSelection(textView.selectedRange())
+    /// What copying the selection puts on the pasteboard: its Markdown, Folio's own fragment (the Markdown and the
+    /// folder its pictures are in) and, for a single picture or file, the file. Nil when nothing is selected.
+    func clipping(cut: Bool) -> (range: NSRange, markdown: String, fragment: Data?, file: URL?)? {
+        var range = expandSelection(selection)
         // A whole heading copies as a heading: its hidden #s come along.
         if !cut, range.length > 0, !document.lines.isEmpty {
             let line = document.lines[document.lineIndex(containing: range.location)]
@@ -18,59 +21,50 @@ extension EditorController {
                 range = NSRange(location: marker.location, length: range.upperBound - marker.location)
             }
         }
-        guard range.length > 0 else { return false }
+        guard range.length > 0 else { return nil }
         let markdown = nsText.substring(with: range)
-        let item = NSPasteboardItem()
-        item.setString(markdown, forType: .string)
-        let fragment: [String: String] = ["markdown": markdown, "folder": folder?.path ?? ""]
-        if let data = try? JSONSerialization.data(withJSONObject: fragment) { item.setData(data, forType: Self.fragmentType) }
+        let fragment = try? JSONSerialization.data(withJSONObject: ["markdown": markdown, "folder": folder?.path ?? ""])
+        var file: URL?
         if let object = layoutManager.object(at: range.location), object.range(at: range.location) == range {
             switch object.kind {
             case .image(let url, _, _), .fileCard(let url, _):
-                if let url { item.setString(url.absoluteString, forType: .fileURL) }
+                file = url
             default:
                 break
             }
         }
+        return (range, markdown, fragment, file)
+    }
+
+    #if os(macOS)
+    static let fragmentType = NSPasteboard.PasteboardType(fragmentIdentifier)
+
+    /// Copies the selection as Markdown (and, for a single picture, as that file). Returns false when there is
+    /// nothing selected.
+    @discardableResult
+    func copySelection(cut: Bool) -> Bool {
+        guard let clipping = clipping(cut: cut) else { return false }
+        let item = NSPasteboardItem()
+        item.setString(clipping.markdown, forType: .string)
+        if let data = clipping.fragment { item.setData(data, forType: Self.fragmentType) }
+        if let url = clipping.file { item.setString(url.absoluteString, forType: .fileURL) }
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.writeObjects([item])
-        if cut { replace(range, with: "", select: NSRange(location: range.location, length: 0), actionName: "Cut") }
+        if cut { replace(clipping.range, with: "", select: NSRange(location: clipping.range.location, length: 0), actionName: "Cut") }
         return true
     }
 
     /// Pastes or drops at `index` (or over the selection). Returns false to leave it to AppKit.
     @discardableResult
     func paste(from pasteboard: NSPasteboard, at index: Int?) -> Bool {
-        let target = index.map { NSRange(location: $0, length: 0) } ?? textView.selectedRange()
+        let target = index.map { NSRange(location: $0, length: 0) } ?? selection
 
-        // Copied in Folio: Markdown, with its pictures copied along when it goes to a note in another folder.
-        if let data = pasteboard.data(forType: Self.fragmentType),
-           let fragment = try? JSONSerialization.jsonObject(with: data) as? [String: String], let markdown = fragment["markdown"] {
-            let source = fragment["folder"].flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0) }
-            let adjusted = copyAssets(in: markdown, from: source)
-            replace(target, with: adjusted, select: NSRange(location: target.location + (adjusted as NSString).length, length: 0), actionName: "Paste")
-            return true
-        }
+        if let data = pasteboard.data(forType: Self.fragmentType), pasteFragment(data, at: target) { return true }
 
         // Files from the Finder or the sidebar.
         if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL], !urls.isEmpty {
-            var blocks: [String] = []
-            var inline: [String] = []
-            for url in urls {
-                if url.pathExtension.lowercased() == "md", let link = noteLink(for: url) {
-                    inline.append(link)
-                } else if let stored = storeAsset(copying: url) {
-                    let name = url.lastPathComponent
-                    blocks.append(MarkdownStyler.isImageFile(url) ? "![](\(stored))" : "![\(name)](\(stored))")
-                }
-            }
-            if !inline.isEmpty {
-                let text = inline.joined(separator: " ")
-                replace(target, with: text, select: NSRange(location: target.location + (text as NSString).length, length: 0), actionName: "Paste")
-            }
-            if !blocks.isEmpty { insertOnOwnLines(blocks.joined(separator: "\n"), at: inline.isEmpty ? target : textView.selectedRange()) }
-            return !inline.isEmpty || !blocks.isEmpty
+            return pasteFiles(urls, at: target)
         }
 
         // A picture copied from another app.
@@ -82,20 +76,55 @@ extension EditorController {
         }
 
         if let string = pasteboard.string(forType: .string) {
-            let normalized = string.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
-            // A link pasted over selected text links that text.
-            let trimmed = normalized.trimmingCharacters(in: .whitespacesAndNewlines)
-            if target.length > 0, !trimmed.contains(" "), let url = URL(string: trimmed), let scheme = url.scheme, ["http", "https", "mailto"].contains(scheme),
-               !nsText.substring(with: target).contains("\n") {
-                let label = nsText.substring(with: target)
-                let link = "[\(label)](\(trimmed))"
-                replace(target, with: link, select: NSRange(location: target.location + (link as NSString).length, length: 0), actionName: "Add Link")
-                return true
-            }
-            replace(target, with: normalized, select: NSRange(location: target.location + (normalized as NSString).length, length: 0), actionName: "Paste")
+            pasteText(string, at: target)
             return true
         }
         return false
+    }
+    #endif
+
+    /// Copied in Folio: Markdown, with its pictures copied along when it goes to a note in another folder.
+    func pasteFragment(_ data: Data, at target: NSRange) -> Bool {
+        guard let fragment = try? JSONSerialization.jsonObject(with: data) as? [String: String], let markdown = fragment["markdown"] else { return false }
+        let source = fragment["folder"].flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0) }
+        let adjusted = copyAssets(in: markdown, from: source)
+        replace(target, with: adjusted, select: NSRange(location: target.location + (adjusted as NSString).length, length: 0), actionName: "Paste")
+        return true
+    }
+
+    /// Notes become links to them; pictures and other files are copied into `.assets` and shown on lines of their own.
+    func pasteFiles(_ urls: [URL], at target: NSRange) -> Bool {
+        var blocks: [String] = []
+        var inline: [String] = []
+        for url in urls {
+            if url.pathExtension.lowercased() == "md", let link = noteLink(for: url) {
+                inline.append(link)
+            } else if let stored = storeAsset(copying: url) {
+                let name = url.lastPathComponent
+                blocks.append(MarkdownStyler.isImageFile(url) ? "![](\(stored))" : "![\(name)](\(stored))")
+            }
+        }
+        if !inline.isEmpty {
+            let text = inline.joined(separator: " ")
+            replace(target, with: text, select: NSRange(location: target.location + (text as NSString).length, length: 0), actionName: "Paste")
+        }
+        if !blocks.isEmpty { insertOnOwnLines(blocks.joined(separator: "\n"), at: inline.isEmpty ? target : selection) }
+        return !inline.isEmpty || !blocks.isEmpty
+    }
+
+    /// Plain text, with its line breaks made Unix ones.
+    func pasteText(_ string: String, at target: NSRange) {
+        let normalized = string.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+        // A link pasted over selected text links that text.
+        let trimmed = normalized.trimmingCharacters(in: .whitespacesAndNewlines)
+        if target.length > 0, !trimmed.contains(" "), let url = URL(string: trimmed), let scheme = url.scheme, ["http", "https", "mailto"].contains(scheme),
+           !nsText.substring(with: target).contains("\n") {
+            let label = nsText.substring(with: target)
+            let link = "[\(label)](\(trimmed))"
+            replace(target, with: link, select: NSRange(location: target.location + (link as NSString).length, length: 0), actionName: "Add Link")
+            return
+        }
+        replace(target, with: normalized, select: NSRange(location: target.location + (normalized as NSString).length, length: 0), actionName: "Paste")
     }
 
     /// Puts Markdown for a picture or file on lines of its own.
@@ -151,14 +180,22 @@ extension EditorController {
 
     /// Saves a pasted picture into `.assets` as PNG (screenshots, drawings) or JPEG (photos).
     func storeAsset(image: NSImage) -> String? {
+        #if os(macOS)
         guard let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff) else { return nil }
         let isPhoto = bitmap.pixelsWide * bitmap.pixelsHigh > 1_500_000 && !bitmap.hasAlpha
+        let encoded = isPhoto ? bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.85]) : bitmap.representation(using: .png, properties: [:])
+        #else
+        guard let pixels = image.cgImage else { return nil }
+        let alpha = pixels.alphaInfo
+        let hasAlpha = !(alpha == .none || alpha == .noneSkipFirst || alpha == .noneSkipLast)
+        let isPhoto = pixels.width * pixels.height > 1_500_000 && !hasAlpha
+        let encoded = isPhoto ? image.jpegData(compressionQuality: 0.85) : image.pngData()
+        #endif
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss"
         let note = delegate?.editorNoteName(self) ?? "Picture"
         let name = "\(note) \(formatter.string(from: Date())).\(isPhoto ? "jpg" : "png")"
-        guard let destination = uniqueAssetURL(named: name),
-              let data = isPhoto ? bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.85]) : bitmap.representation(using: .png, properties: [:]) else { return nil }
+        guard let destination = uniqueAssetURL(named: name), let data = encoded else { return nil }
         var written = false
         NSFileCoordinator().coordinate(writingItemAt: destination, options: .forReplacing, error: nil) { url in
             written = (try? data.write(to: url)) != nil

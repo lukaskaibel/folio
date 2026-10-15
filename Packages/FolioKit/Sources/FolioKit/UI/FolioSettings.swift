@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 import Observation
 
 /// How notes are set: the typeface, its size, the room between lines and how wide the text runs.

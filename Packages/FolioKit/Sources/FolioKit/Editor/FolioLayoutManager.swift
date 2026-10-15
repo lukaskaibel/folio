@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 
 /// What the layout manager asks the editor while it lays out and draws.
 @MainActor
@@ -408,7 +412,7 @@ final class FolioLayoutManager: NSLayoutManager, @preconcurrency NSLayoutManager
             case .some(.some(let image)):
                 var size = image.size
                 if size.width > rect.width { size = CGSize(width: rect.width, height: size.height * rect.width / size.width) }
-                image.draw(in: NSRect(x: rect.minX, y: rect.minY + 8, width: size.width, height: size.height), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+                image.drawUpright(in: NSRect(x: rect.minX, y: rect.minY + 8, width: size.width, height: size.height))
             case .some(.none):
                 drawPlaceholder("Mermaid diagram couldn't be drawn. Click to edit it.", symbol: "exclamationmark.triangle", in: rect)
             case .none:
@@ -419,7 +423,7 @@ final class FolioLayoutManager: NSLayoutManager, @preconcurrency NSLayoutManager
             if let math = MathStore.render(tex, display: true, size: 19, color: Theme.text.resolved(dark: source?.isDarkAppearance ?? false)) {
                 let size = math.image.size
                 let x = rect.minX + max(0, (rect.width - size.width) / 2)
-                math.image.draw(in: NSRect(x: x, y: rect.minY + 10, width: size.width, height: size.height), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+                math.image.drawUpright(in: NSRect(x: x, y: rect.minY + 10, width: size.width, height: size.height))
             } else {
                 drawPlaceholder("This formula couldn't be read. Click to edit it.", symbol: "function", in: rect)
             }
@@ -427,7 +431,7 @@ final class FolioLayoutManager: NSLayoutManager, @preconcurrency NSLayoutManager
         case .mathInline(let tex):
             if let math = MathStore.render(tex, display: false, size: font.pointSize * 1.08, color: Theme.text.resolved(dark: source?.isDarkAppearance ?? false)) {
                 let size = math.image.size
-                math.image.draw(in: NSRect(x: rect.minX + 1, y: baseline - math.ascent, width: size.width, height: size.height), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+                math.image.drawUpright(in: NSRect(x: rect.minX + 1, y: baseline - math.ascent, width: size.width, height: size.height))
             }
 
         case .callout(let type, let label):
@@ -471,7 +475,7 @@ final class FolioLayoutManager: NSLayoutManager, @preconcurrency NSLayoutManager
         NSGraphicsContext.saveGraphicsState()
         NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).addClip()
         if let image {
-            image.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: [.interpolation: NSImageInterpolation.high])
+            image.drawUpright(in: rect)
         } else {
             Theme.code.setFill()
             rect.fill()
@@ -491,13 +495,13 @@ final class FolioLayoutManager: NSLayoutManager, @preconcurrency NSLayoutManager
             var size = thumb.size
             let scale = min(thumbRect.width / size.width, thumbRect.height / size.height)
             size = CGSize(width: size.width * scale, height: size.height * scale)
-            thumb.draw(in: NSRect(x: thumbRect.midX - size.width / 2, y: thumbRect.midY - size.height / 2, width: size.width, height: size.height), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+            thumb.drawUpright(in: NSRect(x: thumbRect.midX - size.width / 2, y: thumbRect.midY - size.height / 2, width: size.width, height: size.height))
         } else {
             drawSymbol("doc", size: 22, color: url?.pathExtension.lowercased() == "pdf" ? Theme.pdf : Theme.textTertiary, center: CGPoint(x: thumbRect.midX, y: thumbRect.midY))
         }
         let title = NSAttributedString(string: url.map { $0.deletingPathExtension().lastPathComponent } ?? name,
                                        attributes: [.font: NSFont.systemFont(ofSize: 14, weight: .semibold), .foregroundColor: url == nil ? Theme.textTertiary : Theme.text])
-        title.draw(with: NSRect(x: rect.minX + 62, y: rect.minY + 13, width: rect.width - 76, height: 20), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+        title.draw(with: NSRect(x: rect.minX + 62, y: rect.minY + 13, width: rect.width - 76, height: 20), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], context: nil)
         guard let url else {
             NSAttributedString(string: "Not found", attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: Theme.textTertiary])
                 .draw(at: CGPoint(x: rect.minX + 62, y: rect.minY + 37))
@@ -516,7 +520,7 @@ final class FolioLayoutManager: NSLayoutManager, @preconcurrency NSLayoutManager
         if let size = values?.fileSize { details.append(ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)) }
         if let date = values?.contentModificationDate { details.append(date.formatted(date: .abbreviated, time: .omitted)) }
         NSAttributedString(string: details.joined(separator: " · "), attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: Theme.textTertiary])
-            .draw(with: NSRect(x: badge.maxX + 8, y: rect.minY + 37, width: rect.maxX - badge.maxX - 20, height: 18), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+            .draw(with: NSRect(x: badge.maxX + 8, y: rect.minY + 37, width: rect.maxX - badge.maxX - 20, height: 18), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], context: nil)
     }
 
     private func drawNoteEmbed(target: String, url: URL?, in rect: NSRect) {
@@ -528,7 +532,7 @@ final class FolioLayoutManager: NSLayoutManager, @preconcurrency NSLayoutManager
         card.stroke()
         drawSymbol(url == nil ? "doc.badge.plus" : "doc.text", size: 13, color: url == nil ? Theme.textTertiary : Theme.accent, center: CGPoint(x: rect.minX + 22, y: rect.minY + 22))
         NSAttributedString(string: url?.deletingPathExtension().lastPathComponent ?? target, attributes: [.font: NSFont.systemFont(ofSize: 14, weight: .semibold), .foregroundColor: url == nil ? Theme.textTertiary : Theme.text])
-            .draw(with: NSRect(x: rect.minX + 36, y: rect.minY + 13, width: rect.width - 52, height: 20), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+            .draw(with: NSRect(x: rect.minX + 36, y: rect.minY + 13, width: rect.width - 52, height: 20), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], context: nil)
         var excerpt = url == nil ? "This note doesn't exist yet. Click to create it." : ""
         if let url, let text = source?.noteText(for: url) {
             let lines = text.split(separator: "\n", omittingEmptySubsequences: true).prefix(4).map { line -> String in
@@ -539,7 +543,7 @@ final class FolioLayoutManager: NSLayoutManager, @preconcurrency NSLayoutManager
             excerpt = lines.joined(separator: "  ")
         }
         let body = InlineRenderer.render(excerpt, font: NSFont.systemFont(ofSize: 13), color: Theme.textSecondary)
-        body.draw(with: NSRect(x: rect.minX + 16, y: rect.minY + 42, width: rect.width - 32, height: rect.height - 52), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+        body.draw(with: NSRect(x: rect.minX + 16, y: rect.minY + 42, width: rect.width - 32, height: rect.height - 52), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], context: nil)
     }
 
     private func drawPlaceholder(_ text: String, symbol: String, in rect: NSRect) {
@@ -547,14 +551,13 @@ final class FolioLayoutManager: NSLayoutManager, @preconcurrency NSLayoutManager
         NSBezierPath(roundedRect: rect, xRadius: 8, yRadius: 8).fill()
         drawSymbol(symbol, size: 15, color: Theme.textTertiary, center: CGPoint(x: rect.minX + 22, y: rect.midY))
         NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: Theme.textTertiary])
-            .draw(with: NSRect(x: rect.minX + 40, y: rect.midY - 9, width: rect.width - 52, height: 18), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+            .draw(with: NSRect(x: rect.minX + 40, y: rect.midY - 9, width: rect.width - 52, height: 18), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], context: nil)
     }
 
     private func drawSymbol(_ name: String, size: CGFloat, color: NSColor, center: CGPoint, weight: NSFont.Weight = .medium) {
         guard let image = Self.symbol(name, size: size, color: color, weight: weight) else { return }
         let imageSize = image.size
-        image.draw(in: NSRect(x: center.x - imageSize.width / 2, y: center.y - imageSize.height / 2, width: imageSize.width, height: imageSize.height),
-                   from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+        image.drawUpright(in: NSRect(x: center.x - imageSize.width / 2, y: center.y - imageSize.height / 2, width: imageSize.width, height: imageSize.height))
     }
 
     private static var symbols: [String: NSImage] = [:]
@@ -562,9 +565,25 @@ final class FolioLayoutManager: NSLayoutManager, @preconcurrency NSLayoutManager
     /// A symbol drawn into pixels once (at three times its size), so it looks the same on screen, in a PNG and in a
     /// PDF, where a coloured symbol drawn as such comes out as a filled box.
     static func symbol(_ name: String, size: CGFloat, color: NSColor, weight: NSFont.Weight) -> NSImage? {
+        #if os(macOS)
         let rgb = color.usingColorSpace(.sRGB) ?? color
-        let key = "\(name)|\(size)|\(weight.rawValue)|\(rgb.redComponent)|\(rgb.greenComponent)|\(rgb.blueComponent)|\(rgb.alphaComponent)"
+        #else
+        let rgb = color.resolvedColor(with: UITraitCollection.current)
+        #endif
+        let components = rgb.rgba
+        let key = "\(name)|\(size)|\(weight.rawValue)|\(components.red)|\(components.green)|\(components.blue)|\(components.alpha)"
         if let cached = symbols[key] { return cached }
+        #if os(iOS)
+        let symbolWeight: UIImage.SymbolWeight = weight.rawValue >= NSFont.Weight.semibold.rawValue ? .semibold : weight.rawValue >= NSFont.Weight.medium.rawValue ? .medium : .regular
+        let configuration = UIImage.SymbolConfiguration(pointSize: size, weight: symbolWeight).applying(UIImage.SymbolConfiguration(paletteColors: [rgb]))
+        guard let vector = UIImage(systemName: name, withConfiguration: configuration) else { return nil }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 3
+        let image = UIGraphicsImageRenderer(size: vector.size, format: format).image { _ in vector.draw(at: .zero) }
+        if symbols.count > 200 { symbols.removeAll() }
+        symbols[key] = image
+        return image
+        #else
         let configuration = NSImage.SymbolConfiguration(pointSize: size, weight: weight).applying(.init(paletteColors: [rgb]))
         guard let vector = NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(configuration) else { return nil }
         let scale: CGFloat = 3
@@ -580,6 +599,7 @@ final class FolioLayoutManager: NSLayoutManager, @preconcurrency NSLayoutManager
         if symbols.count > 200 { symbols.removeAll() }
         symbols[key] = image
         return image
+        #endif
     }
 
     // MARK: - Decorations
@@ -689,12 +709,12 @@ final class FolioLayoutManager: NSLayoutManager, @preconcurrency NSLayoutManager
             if case .some(.some(let image)) = DiagramStore.diagram(diagram, isDark: source?.isDarkAppearance ?? false, ready: { [weak self] in self?.source?.objectNeedsLayout(decorationRange) }) {
                 var size = image.size
                 if size.width > area.width { size = CGSize(width: area.width, height: size.height * area.width / size.width) }
-                image.draw(in: NSRect(x: area.minX, y: area.minY, width: size.width, height: size.height), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+                image.drawUpright(in: NSRect(x: area.minX, y: area.minY, width: size.width, height: size.height))
             }
         case .math(let tex):
             if let math = MathStore.render(tex, display: true, size: 19, color: Theme.text.resolved(dark: source?.isDarkAppearance ?? false)) {
                 let size = math.image.size
-                math.image.draw(in: NSRect(x: area.minX + max(0, (area.width - size.width) / 2), y: area.minY, width: size.width, height: size.height), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+                math.image.drawUpright(in: NSRect(x: area.minX + max(0, (area.width - size.width) / 2), y: area.minY, width: size.width, height: size.height))
             }
         }
     }

@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 
 /// Selection that behaves like Apple Notes: the caret steps around bullets, checkboxes, pictures and links to notes as
 /// if each were one character, and a selection takes such things whole, along with the hidden punctuation of
