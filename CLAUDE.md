@@ -30,3 +30,11 @@ being asked. Before calling such a change done, go through this list and do what
   change together, and the release gets a `v` tag.
 
 In the pull request, say which of these you updated and which you left alone on purpose.
+
+## Planning
+
+Folio is planned in the GitHub project [Folio](https://github.com/users/lukaskaibel/projects/4): milestones are
+versions (0.1.0, 0.2.0, …), larger pieces are issues labelled `epic` with sub-issues as their steps, and Status runs
+Inbox → Backlog → Todo → In Progress → In Review → Done. Work you find but don't do becomes an issue there (Inbox, or
+Backlog when it's clearly wanted). Link pull requests to their issue (`Closes #12`). When a version ships, close its
+milestone with what shipped and the tag in its description.
