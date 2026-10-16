@@ -7,3 +7,9 @@ xcuserdata/
 *.xcuserstate
 Config/Local.xcconfig
 Packages/NotebookKit/.build/
+
+# fastlane: local secrets, gems and output
+fastlane/.env.secret
+fastlane/report.xml
+fastlane/Preview.html
+vendor/

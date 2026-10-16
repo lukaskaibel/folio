@@ -421,6 +421,7 @@ Config/                      Build settings, Info.plist and entitlements
 Design/                      The icon, the README pictures and the social preview
 Website/                     The website, published to GitHub Pages by .github/workflows/website.yml
 Tools/                       The app icon and the README pictures
+fastlane/                    Building for the App Store and uploading to TestFlight
 PLAN.md                      The plan: decisions, file format, architecture and milestones (in German)
 ```
 
@@ -467,6 +468,15 @@ such as `remind 2 Personal/Questions for Dr. Weber.md` (in two minutes) and `not
 pictures. `-NotebookSlowFolders 2` makes every folder take two seconds to read, as a slow iCloud might, to see that
 nothing waits for it, and `-NotebookSlowFiles 2` does the same for every note, PDF, picture and video you open. macOS
 shows notifications only from an app in a lasting place, not from one in `/tmp`.
+
+Builds for TestFlight are made and uploaded with [fastlane](https://fastlane.tools), signed in with an App Store
+Connect API key, so Xcode needs no account. Copy `fastlane/.env.secret.example` to `fastlane/.env.secret` (it stays out
+of git) and fill in the key and your team, run `bundle install` once, and then upload the iPhone and iPad app, the Mac
+app or both. Each upload gets the date and time as its build number:
+
+```bash
+bundle exec fastlane ios beta
+```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes.
 
