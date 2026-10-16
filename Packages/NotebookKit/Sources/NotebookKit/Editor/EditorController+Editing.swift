@@ -13,7 +13,7 @@ extension EditorController {
     /// Replaces text the way typing does, so it can be undone, and puts the selection where asked.
     @discardableResult
     func replace(_ range: NSRange, with string: String, select selection: NSRange? = nil, actionName: String? = nil) -> Bool {
-        guard range.upperBound <= storage.length else { return false }
+        guard range.upperBound <= storage.length, !isWaitingForText else { return false }
         isPerformingEdit = true
         defer { isPerformingEdit = false }
         guard performEdit(range, with: string) else { return false }

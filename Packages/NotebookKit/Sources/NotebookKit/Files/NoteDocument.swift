@@ -6,7 +6,8 @@ import UIKit
 import Synchronization
 
 /// An open note: its text, saved shortly after you stop typing, and kept in step with the file when something else
-/// (iCloud, another app) changes it.
+/// (iCloud, another app) changes it. A note that is on this device in full is read at once; one still in iCloud is read
+/// in the background, and until its text is in, nothing is taken in or saved, so nothing is written over.
 @MainActor
 @Observable
 public final class NoteDocument: NSObject, NSFilePresenter {
@@ -20,15 +21,42 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     /// Made with ⌘N and not given a title or text yet; thrown away if left like that.
     var isNew = false
     public private(set) var modified: Date?
+    /// Why the text isn't there yet; nil once it is.
+    public private(set) var pending: Pending?
     /// The file changed elsewhere while there were unsaved edits here (or iCloud has another version).
     var conflict: Conflict?
     /// Called when the file changed on disk and the new text was taken in.
     @ObservationIgnored var onExternalChange: ((String) -> Void)?
     @ObservationIgnored var onMove: ((URL) -> Void)?
     @ObservationIgnored var onDelete: (() -> Void)?
+    /// Called when the text came in, read in the background.
+    @ObservationIgnored var onLoad: ((String) -> Void)?
 
     @ObservationIgnored private var saveTimer: Timer?
     static let saveDelay: TimeInterval = 0.6
+    /// The read in the background, to call off when the note is closed first.
+    @ObservationIgnored private var reader: NSFileCoordinator?
+    @ObservationIgnored private var reads = 0
+    @ObservationIgnored private var changedWhileReading = false
+    @ObservationIgnored private var isClosed = false
+    /// Where notes are read in the background. The coordinated read waits for iCloud without holding a thread.
+    private nonisolated static let readQueue: OperationQueue = {
+        let queue = OperationQueue()
+        queue.name = "Notebook notes"
+        queue.qualityOfService = .userInitiated
+        return queue
+    }()
+
+    public enum Pending: Equatable, Sendable {
+        /// Being read in the background (the debug delay, or after it couldn't be read).
+        case reading
+        /// Coming down from iCloud: the file isn't on this device yet, or iCloud has a newer version of it.
+        case downloading
+        /// It couldn't be read. It is tried again when the file changes.
+        case unreadable
+    }
+
+    public var isLoaded: Bool { pending == nil }
 
     struct Conflict: Equatable {
         var otherText: String
@@ -39,16 +67,21 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     init(url: URL) {
         self.url = url
         presentedURL = Mutex(url)
-        let loaded = Self.read(url) ?? ""
+        let pending = Self.wait(for: url)
+        let loaded = pending == nil ? Self.read(url) ?? "" : ""
         text = loaded
         savedText = loaded
+        self.pending = pending
         modified = Self.modificationDate(url)
         super.init()
         NSFileCoordinator.addFilePresenter(self)
-        checkForConflictVersions()
+        if isLoaded { checkForConflictVersions() } else { readInBackground() }
     }
 
     func close() {
+        isClosed = true
+        reader?.cancel()
+        reader = nil
         saveNow()
         saveTimer?.invalidate()
         NSFileCoordinator.removeFilePresenter(self)
@@ -58,24 +91,80 @@ public final class NoteDocument: NSObject, NSFilePresenter {
 
     // MARK: - Reading and writing
 
+    /// Reads a note in a coordinated read, which waits for iCloud to bring it down: only for a note on this device.
     nonisolated static func read(_ url: URL) -> String? {
         var result: String?
         var error: NSError?
         NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &error) { url in
-            if let data = try? Data(contentsOf: url) {
-                result = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1)
-            }
+            result = (try? Data(contentsOf: url)).flatMap(decode)
         }
         return result
     }
 
-    static func modificationDate(_ url: URL) -> Date? {
+    nonisolated static func decode(_ data: Data) -> String? {
+        String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1)
+    }
+
+    nonisolated static func modificationDate(_ url: URL) -> Date? {
         try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
     }
 
-    /// Takes in what is typed and saves it a moment later.
+    /// What reading a note would wait for: iCloud bringing it down (or a newer version of it), or in Debug builds the
+    /// delay of `-NotebookSlowFiles`. Nil when the note is on this device in full, and is read at once as always.
+    nonisolated static func wait(for url: URL) -> Pending? {
+        #if DEBUG
+        if FileLoading.debugDelay != nil { return .reading }
+        #endif
+        var url = url
+        url.removeAllCachedResourceValues()
+        guard let values = try? url.resourceValues(forKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey]),
+              values.isUbiquitousItem == true, let status = values.ubiquitousItemDownloadingStatus else { return nil }
+        return status == .current ? nil : .downloading
+    }
+
+    /// Reads the text off the main thread and takes it in when it comes. The coordinated read asks iCloud for the file
+    /// and waits for it without keeping a thread waiting.
+    private func readInBackground() {
+        reads += 1
+        let attempt = reads
+        let coordinator = NSFileCoordinator()
+        reader = coordinator
+        let intent = NSFileAccessIntent.readingIntent(with: url, options: [])
+        coordinator.coordinate(with: [intent], queue: Self.readQueue) { error in
+            #if DEBUG
+            if let delay = FileLoading.debugDelay { Thread.sleep(forTimeInterval: delay) }
+            #endif
+            let text = error == nil ? (try? Data(contentsOf: intent.url)).flatMap(Self.decode) : nil
+            let modified = Self.modificationDate(intent.url)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self.finishReading(attempt, text: text, modified: modified) }
+            }
+        }
+    }
+
+    private func finishReading(_ attempt: Int, text loaded: String?, modified: Date?) {
+        guard attempt == reads, !isClosed, !isLoaded else { return }
+        reader = nil
+        guard let loaded else {
+            pending = .unreadable
+            return
+        }
+        text = loaded
+        savedText = loaded
+        if let modified { self.modified = modified }
+        pending = nil
+        onLoad?(loaded)
+        checkForConflictVersions()
+        // It changed while it was being read: take in what it is now.
+        if changedWhileReading {
+            changedWhileReading = false
+            fileChangedOnDisk()
+        }
+    }
+
+    /// Takes in what is typed and saves it a moment later. Nothing is, before the note's own text is in.
     func update(text newText: String) {
-        guard newText != text else { return }
+        guard isLoaded, newText != text else { return }
         text = newText
         if !newText.isEmpty { isNew = false }
         saveTimer?.invalidate()
@@ -87,7 +176,7 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     func saveNow() {
         saveTimer?.invalidate()
         saveTimer = nil
-        guard text != savedText, conflict == nil else { return }
+        guard isLoaded, text != savedText, conflict == nil else { return }
         // Never write over a change made elsewhere since the last save: merge it in, or ask.
         if let disk = Self.read(url), disk != savedText {
             if disk == text {
@@ -185,7 +274,9 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     }
 
     nonisolated public func presentedItemDidGain(_ version: NSFileVersion) {
-        MainActor.assumeIsolated { checkForConflictVersions() }
+        MainActor.assumeIsolated {
+            if isLoaded { checkForConflictVersions() }
+        }
     }
 
     nonisolated public func savePresentedItemChanges(completionHandler: @escaping (Error?) -> Void) {
@@ -194,6 +285,18 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     }
 
     private func fileChangedOnDisk() {
+        switch pending {
+        case nil:
+            break
+        case .unreadable:
+            // iCloud may have it now.
+            pending = .reading
+            readInBackground()
+            return
+        case .reading, .downloading:
+            changedWhileReading = true
+            return
+        }
         guard let disk = Self.read(url), disk != savedText else { return }
         modified = Self.modificationDate(url)
         if text == savedText {
