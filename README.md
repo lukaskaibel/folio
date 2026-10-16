@@ -5,14 +5,15 @@
 <h1 align="center">Folio</h1>
 
 <p align="center">
-  <b>Markdown notes for the Mac that write like Apple Notes</b>, kept as plain files in your own folders.<br>
+  <b>Markdown notes for Mac, iPhone and iPad that write like Apple Notes</b>, kept as plain files in your own folders.<br>
   No database, no import and no sync of its own: iCloud Drive, or any folder you choose, is the library.
 </p>
 
 <p align="center">
   <img alt="Platform: macOS 27 or later" src="https://img.shields.io/badge/macOS-27%2B-111214">
+  <img alt="Platform: iOS and iPadOS 27 or later" src="https://img.shields.io/badge/iOS%20%26%20iPadOS-27%2B-111214">
   <img alt="Apple silicon" src="https://img.shields.io/badge/Apple%20silicon-native-111214">
-  <img alt="Built with Swift, SwiftUI and AppKit" src="https://img.shields.io/badge/Swift-SwiftUI%20%2B%20AppKit-F05138">
+  <img alt="Built with Swift, SwiftUI, AppKit and UIKit" src="https://img.shields.io/badge/Swift-SwiftUI%20%2B%20AppKit%20%2B%20UIKit-F05138">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-111214"></a>
   <a href="CHANGELOG.md"><img alt="Version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-111214"></a>
 </p>
@@ -32,8 +33,8 @@
   <img alt="Folio showing the note Kyoto trip: links to Budget and Flight tickets.pdf, a picture of a torii gate and a packing checklist; the folders of iCloud Drive in the sidebar and the note's outline on the right" src="Design/screenshots/hero-light.webp">
 </picture>
 
-> **Status: early.** Version 0.1.0 is a Mac app you build from source (five minutes, see below). It already covers
-> writing, organising and finding notes day to day. iPhone and iPad versions, quick capture and the App Store come
+> **Status: early.** Version 0.1.0 runs on the Mac, iPhone and iPad, and you build it from source (five minutes, see
+> below). It already covers writing, organising and finding notes day to day. Quick capture and the App Store come
 > later; see [Not there yet](#not-there-yet).
 
 ## Why
@@ -43,7 +44,7 @@ but most of them feel like a code editor or ask you to move everything into a va
 folders you already have, iCloud Drive first, and turns the Markdown files in them into notes that write like Notes.
 Pictures, PDFs and every other file sit right next to them and open in the window: PDFs and pictures as in Preview,
 videos as in QuickTime Player, the rest in Quick Look. What Folio saves is ordinary Markdown that GitHub, Obsidian or
-iA Writer read just the same.
+iA Writer read just the same, and with iCloud Drive the same notes are on your Mac, iPhone and iPad.
 
 ## A quick tour
 
@@ -129,6 +130,26 @@ the size, the line spacing and the line width. The icon is a leather notebook, a
 pick the leather, the elastic band, the ribbon and the background, and the Dock shows your notebook while Folio is
 open.
 
+### On iPhone and iPad
+
+The same notes in the same editor, laid out the way each device works. On the iPhone you go into one folder per
+screen, as in the Files app, and a note opens on a screen of its own; swipe from the edge to go back. The first screen
+has your favourites, what you opened last and the folders of each location. Search and a new note sit at the bottom,
+as in Notes, and search finds names, notes and PDFs as on the Mac. While you write, a bar above the keyboard has the
+text styles and formatting, a checklist, a link, and pictures from the camera, the document scanner, your photos or
+the Files app. Tap a checkbox to tick it, a link to follow it, a picture to look at it. Swipe a file to delete it or
+make it a favourite; touch and hold it for everything else.
+
+The iPad has the Mac's layout: the sidebar with its folders opening in place, the note next to it, and the outline in
+an inspector. In portrait the sidebar steps aside once you have picked a note. With a keyboard, the Mac's shortcuts
+work and the menu bar has New Note, Go and Format. Drag pictures from Photos into a note, or files onto a folder in
+the sidebar. A window as narrow as a phone gets the iPhone's screens.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/devices-dark.webp">
+  <img alt="Folio on an iPad, with the folders of iCloud Drive in the sidebar and the note Kyoto trip next to it, and on an iPhone in front of it, with the same note on a screen of its own and a checklist and attachment button at the bottom" src="Design/screenshots/devices-light.webp">
+</picture>
+
 ## What it does
 
 - **Notes are files.** The title is the file name: rename a note by editing its title, and links to it in other notes
@@ -138,6 +159,10 @@ open.
   folders of apps such as Pages or Obsidian. Create, rename, duplicate and move notes and folders, by drag and drop or
   with Move To; Option-drag copies. Deleting moves to the Trash, never further. Favourites sit at the top of the
   sidebar.
+- **iPhone and iPad.** The same editor, search and file handling, with screens made for each: one folder per screen
+  on the iPhone, the sidebar on the iPad. Pick iCloud Drive or any folder in the Files app's picker, or keep notes on
+  the device, in On My iPhone › Folio. A bar above the keyboard formats, links and adds photos, scans and files.
+  Deleting moves to Recently Deleted; where a place has none, Folio asks before it deletes.
 - **Live preview editor.** Headings, bold, italic, strikethrough, `==highlight==`, inline code, links, checklists,
   bulleted and numbered lists, quotes, callouts, tables, code blocks, maths, Mermaid, footnotes and front matter, which
   folds into a small "properties" pill.
@@ -147,7 +172,7 @@ open.
   QuickTime Player, the rest in Quick Look.
 - **Search** across file names, note text and PDF text.
 - **Saves as you type,** and never overwrites a change made somewhere else (see below).
-- **Export** a note as a PDF or a PNG image, or print it.
+- **Export** a note as a PDF or a PNG image, or print it (on iPhone and iPad: as a PDF to share, or print).
 - **Single files.** Open any Markdown file from the Finder or with ⌘O, and it gets a plain window of its own.
 
 ## How notes are stored
@@ -189,6 +214,7 @@ iCloud show a cloud in the sidebar and download when you open them.
 ### Requirements
 
 - A Mac with Apple silicon and macOS 27 or later
+- An iPhone or iPad with iOS or iPadOS 27 or later, or the Simulator
 - Xcode 27 or later, to build it
 
 ### Build and run
@@ -201,9 +227,10 @@ git clone https://github.com/lukaskaibel/folio.git
 open folio/Folio.xcodeproj
 ```
 
-Choose the **Folio** scheme and press ⌘R. A local build needs no Apple developer account: without a team, Xcode signs
-it to run on your Mac. To sign with your own team, create `Config/Local.xcconfig` with `DEVELOPMENT_TEAM = <your
-team ID>`; it isn't checked in.
+Choose the **Folio** scheme, then **My Mac** or an iPhone or iPad simulator as the destination, and press ⌘R. A local
+build needs no Apple developer account: without a team, Xcode signs it to run on your Mac and in the Simulator. To run
+it on your own iPhone or iPad, or to sign with your own team, create `Config/Local.xcconfig` with `DEVELOPMENT_TEAM =
+<your team ID>`; it isn't checked in.
 
 ### Adding your notes
 
@@ -211,9 +238,14 @@ On first launch, Folio asks for a folder: **Open iCloud Drive**, or **Choose ano
 File › Open… (⌘O), File › Add Location…, Settings › General, or by dropping a folder on Folio in the Dock. Folio works
 on the files in place; nothing is copied or imported.
 
+On iPhone and iPad, **Choose a Folder** opens the Files app's picker: pick iCloud Drive itself to have everything you
+write on the Mac, or any folder in it or on the device. **Keep Notes on This iPhone** (or iPad) uses Folio's own
+folder, which the Files app shows under On My iPhone › Folio. Add more in Settings, from the ⋯ menu.
+
 To look around without your own notes, run a Debug build with the arguments `-FolioLibrary /tmp/FolioSample
 -FolioDemo YES` (Product › Scheme › Edit Scheme › Arguments). It writes a few sample notes, pictures and PDFs to that
-folder and shows only them, for that run.
+folder and shows only them, for that run. In the Simulator, use `-FolioLibrary ~/Documents/Sample`, which is in the
+app's own folder there.
 
 ## Using it
 
@@ -255,18 +287,31 @@ While writing:
 In the sidebar: Return renames, ⌘⌫ moves to the Trash, and Space opens a file in Quick Look. Right-click a file or
 folder for everything else, including Copy Link, which copies a `[[link]]` to it.
 
+On an iPad with a keyboard, ⌘N, ⌘F, ⌘[ and ⌘], ⌃⌘I and the shortcuts for writing work as on the Mac. On iPhone and
+iPad:
+
+| Gesture | Action |
+| --- | --- |
+| Swipe from the left edge | Back to the folder or the note you came from (iPhone) |
+| Swipe a file to the left or right | Delete it, or add it to your favourites |
+| Touch and hold a file or folder | Rename, move, duplicate, copy a link, share and more |
+| Pull a list down | Read the folder again |
+| Tap a checkbox, a link or a picture | Tick it, follow it, or look at it in Quick Look |
+| Tap the heading level in the margin | Title, heading, subheading or body (iPad) |
+| Drag down over a note | Put the keyboard away |
+
 ## Not there yet
 
-Folio is a Mac app today. Planned, and not built yet:
+Planned, and not built yet:
 
-- **iPhone and iPad**, from the same project, with a writing bar above the keyboard, the camera and the document
-  scanner.
 - **Quick capture:** a widget, a control in Control Center and on the Lock Screen, the Action button and a share
   extension, all adding a note to an Inbox folder.
 - **Spotlight,** text recognition in pictures and scans, and a search index that's kept between launches; today it is
   rebuilt at every launch.
 - Links follow a renamed note, but not yet a moved one, a renamed folder or a rename in a single-file window.
   Footnotes are styled but don't jump to their text.
+- On iPhone and iPad there is no Settings › App Icon (iOS only switches between icons built into the app), no PNG
+  export and no window of its own for a single file.
 - Translations: the app is in English only.
 
 The full plan, with what is deliberately left out (tags, backlinks, a database, sync of its own), is in
@@ -275,17 +320,20 @@ The full plan, with what is deliberately left out (tags, backlinks, a database, 
 ## For contributors
 
 ```
-Folio/                       The app target: the entry point and the icon
+Folio/                       The app target (Mac, iPhone and iPad): the entry point and the icon
 Packages/FolioKit/
   Sources/FolioKit/
-    Editor/                  The live-preview editor on TextKit 1: styling, hidden marks, objects, typing, export
+    Editor/                  The live-preview editor on TextKit 1: styling, hidden marks, objects, typing, export;
+                             the Mac's text view, and iPhone's and iPad's in the "+UIKit" files
     Markdown/                Folio's Markdown parser, which keeps every character's position in the file
     Render/                  Tables, maths, diagrams and code highlighting
     Files/                   Locations, the file tree, file operations, saving, watching and the three-way merge
     Index/                   Search over names, note text and PDF text, and how [[links]] resolve
-    UI/                      The window, sidebar, inspector, search field, Settings, file windows, PDFs, pictures,
-                             videos and Quick Look
-    Debug/                   The debug remote and the sample notes (Debug builds only)
+    Platform/                The few names and calls that differ between AppKit and UIKit
+    UI/                      The Mac's window, sidebar, inspector, search field, Settings and file windows; PDFs,
+                             pictures, videos and Quick Look; what both share, such as the outline and search results
+    UI/iOS/                  The iPhone's and iPad's screens: folders, the sidebar, the note, search and Settings
+    Debug/                   The debug remotes and the sample notes (Debug builds only)
   Tests/                     Parser, editor, merge, smoothness and app icon tests
 Config/                      Build settings, Info.plist and entitlements
 Design/                      The icon, the README pictures and the social preview
@@ -296,7 +344,10 @@ PLAN.md                      The plan: decisions, file format, architecture and 
 The editor is the heart of the app. The text view holds the file's Markdown exactly, character for character, and
 everything you see is styling on top: marks are hidden as zero-width glyphs and objects are drawn in place of a
 character, so undo, dictation and spell checking behave as everywhere else on the Mac. Start reading at
-`Editor/EditorController.swift` and `Editor/FolioLayoutManager.swift`.
+`Editor/EditorController.swift` and `Editor/FolioLayoutManager.swift`. On iPhone and iPad the same storage, layout
+manager and styling sit under UIKit's text view; only what talks to the text view differs (`Editor/*+AppKit.swift`
+and `Editor/*+UIKit.swift`), plus an undo history of the editor's own, since UIKit's goes wrong when the editor
+changes the text itself.
 
 Run the tests (they use off-screen windows and temporary folders, and touch none of your files):
 
@@ -305,9 +356,10 @@ cd Packages/FolioKit && swift test
 ```
 
 The pictures in this README are made by a script. It builds the app, runs it in the background on the sample notes,
-takes the scenes in light and dark, and lays them out together with `Design/social-preview.png`. It doesn't take over
-your Mac (only the search suggestions show on screen for a moment) and leaves your own Folio's settings alone. Run it
-again when a change shows in one of them:
+takes the scenes in light and dark, and lays them out together with `Design/social-preview.png`. The iPhone and iPad
+pictures come from two simulators of its own, without the Simulator app's window. It doesn't take over your Mac (only
+the search suggestions show on screen for a moment) and leaves your own Folio's settings alone. Run it again when a
+change shows in one of them (`devices` takes only the iPhone and iPad picture, which works with the screen asleep):
 
 ```bash
 Tools/readme-images.sh
@@ -323,7 +375,9 @@ Tools/AppIcon/make.sh
 
 Debug builds can be driven from a file: launch with `-debugCommandFile <path>` and append commands such as
 `open Travel/Kyoto trip.md`, `type Hello`, `key return` or `snapshot <file>` to it, one per line. The commands are
-listed in `Debug/DebugRemote.swift`.
+listed in `Debug/DebugRemote.swift`, and for iPhone and iPad in `Debug/DebugRemote+UIKit.swift`; in the Simulator the
+file is in the app's own folder (`-debugCommandFile ~/Documents/cmd`), where `xcrun simctl get_app_container` finds it,
+and `xcrun simctl io <device> screenshot` takes the pictures.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes.
 

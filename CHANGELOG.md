@@ -5,6 +5,21 @@ versions follow [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- Folio on iPhone and iPad, with the editor, search and files of the Mac. On the iPhone, one folder per screen as in
+  the Files app, with search and a new note at the bottom as in Notes; on the iPad, the Mac's sidebar, the note and its
+  outline.
+- A bar above the keyboard with the text styles and formatting, a checklist, a link, and pictures from the camera, the
+  document scanner, Photos or the Files app.
+- Swipe actions and menus on touch and hold for files, drag and drop of files and pictures, and the Mac's keyboard
+  shortcuts and menus on an iPad with a keyboard.
+- Notes as a PDF to share, or printed, on iPhone and iPad.
+
+### Fixed
+
+- Links in a note opened while Folio was still reading your folders showed as links to notes that don't exist yet.
+
 ## [0.1.0] – not released yet
 
 The first version: a Mac app for Markdown notes in your own folders.
