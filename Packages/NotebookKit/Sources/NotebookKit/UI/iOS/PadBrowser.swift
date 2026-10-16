@@ -73,6 +73,7 @@ struct PadBrowser: View {
                             }
                             Button { addsLocation = true } label: { Label("Add Location", systemImage: "plus.rectangle.on.folder") }
                             Divider()
+                            ShowHiddenFoldersMenu(workspace: workspace)
                             Button { showsSettings = true } label: { Label("Settings", systemImage: "gearshape") }
                         } label: {
                             Label("More", systemImage: "ellipsis")
@@ -147,7 +148,7 @@ struct PadSidebar: View {
                         Section(isExpanded: sectionBinding(location.id.uuidString)) {
                             FolderTree(workspace: workspace, folder: location.url, expanded: $expanded, newFolderIn: $newFolderIn)
                         } header: {
-                            Text(location.name)
+                            LocationHeader(workspace: workspace, location: location)
                                 .fileDragAndDrop(location.url, isFolder: true, workspace: workspace, canDrag: false)
                                 .contextMenu { FileActions(workspace: workspace, url: location.url) { newFolderIn = $0 } }
                         }

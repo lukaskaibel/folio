@@ -158,7 +158,7 @@ struct HomeScreen: View {
                             Text("Empty").foregroundStyle(.secondary)
                         }
                     } header: {
-                        Text(location.name)
+                        LocationHeader(workspace: workspace, location: location)
                             .contextMenu { FileActions(workspace: workspace, url: location.url) { newFolderIn = $0 } }
                     }
                 }
@@ -177,6 +177,7 @@ struct HomeScreen: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button { addsLocation = true } label: { Label("Add Location", systemImage: "folder.badge.plus") }
+                    ShowHiddenFoldersMenu(workspace: workspace)
                     Button { showsSettings = true } label: { Label("Settings", systemImage: "gearshape") }
                 } label: {
                     Label("More", systemImage: "ellipsis")
@@ -262,6 +263,10 @@ struct FolderScreen: View {
                             Label(favorite ? "Unfavorite" : "Favorite", systemImage: favorite ? "star.slash" : "star")
                         }
                         .tint(.orange)
+                        if node.isFolder, workspace.canHide(node.url) {
+                            HideFolderButton(workspace: workspace, url: node.url, isShort: true)
+                                .tint(.gray)
+                        }
                     }
                 }
             }
@@ -302,6 +307,9 @@ struct FolderScreen: View {
                     Section {
                         Toggle(isOn: $settings.showsOnlyNotes) { Label("Show Only Notes", systemImage: "doc.text") }
                         Toggle(isOn: $settings.foldersFirst) { Label("Keep Folders on Top", systemImage: "folder") }
+                        if let location = workspace.location(containing: page.url), workspace.hasHiddenFolders(in: location) {
+                            ShowHiddenFoldersToggle(workspace: workspace, location: location)
+                        }
                     }
                     Section {
                         let favorite = workspace.isFavorite(page.url)

@@ -169,8 +169,9 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
   photos, scans and files; Aa opens the Format panel as in Notes.
   Deleting moves to Recently Deleted; where a place has none, Notebook asks before it deletes.
 - **Hidden folders.** Right-click a folder you don't want to see, such as one another app keeps in iCloud Drive, and
-  choose Hide Folder. It leaves the sidebar, search and Move To, and stays hidden on your other Macs through iCloud.
-  The eye next to the location's name, or ⇧⌘., shows hidden folders again, dimmed, until you click it again.
+  choose Hide Folder, or on iPhone and iPad touch and hold it. It leaves the sidebar, search and Move To, and stays
+  hidden on your other Macs, iPhones and iPads through iCloud. The eye next to the location's name, or ⇧⌘., shows
+  hidden folders again, dimmed, until you click it again; on iPhone and iPad, Show Hidden Folders is in the ⋯ menu.
 - **Live preview editor.** Headings, bold, italic, strikethrough, `==highlight==`, inline code, links, checklists,
   bulleted and numbered lists, quotes, callouts, tables, code blocks, maths, Mermaid, footnotes and front matter, which
   folds into a small "properties" pill.
@@ -298,14 +299,14 @@ In the sidebar: Return renames, ⌘⌫ moves to the Trash, and Space opens a fil
 folder for everything else, including Copy Link, which copies a `[[link]]` to it, and Hide Folder. When a location has
 hidden folders, an eye comes up next to its name as you point at it.
 
-On an iPad with a keyboard, ⌘N, ⌘F, ⌘[ and ⌘], ⌃⌘I and the shortcuts for writing work as on the Mac. On iPhone
+On an iPad with a keyboard, ⌘N, ⌘F, ⌘[ and ⌘], ⌃⌘I, ⇧⌘. and the shortcuts for writing work as on the Mac. On iPhone
 and iPad:
 
 | Gesture | Action |
 | --- | --- |
 | Swipe from the left edge | Back to the folder or the note you came from (iPhone) |
-| Swipe a file to the left or right | Move or delete it, or add it to your favourites |
-| Touch and hold a file or folder | Rename, move, duplicate, copy a link, share and more |
+| Swipe a file to the left or right | Move or delete it, add it to your favourites, or hide a folder |
+| Touch and hold a file or folder | Rename, move, duplicate, copy a link, hide a folder, share and more |
 | Pull a list down | Read the folder again |
 | Tap a checkbox, a link or a picture | Tick it, follow it, or look at it in Quick Look |
 | Touch and hold a picture or file in a note, then drag | Move it to another place in the note, or into another app |

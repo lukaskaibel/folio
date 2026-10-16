@@ -14,9 +14,12 @@ struct FileRow: View {
     var symbol: String?
     /// Shows the date and the start of a note, or the date and size of a file, under the name.
     var showsDetail = false
+    /// A hidden folder, there while its location shows hidden folders.
+    var isHidden = false
 
     var body: some View {
-        let dimmed = NotebookSettings.shared.dimsOtherFiles && kind != .folder && kind != .note
+        // Hidden folders show dimmed, as hidden files in the Files app and the Finder.
+        let dimmed = NotebookSettings.shared.dimsOtherFiles && kind != .folder && kind != .note || isHidden
         Label {
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
@@ -36,7 +39,7 @@ struct FileRow: View {
                 .opacity(dimmed ? 0.5 : 1)
         }
         .badge(isInCloud ? Text(Image(systemName: "icloud.and.arrow.down")) : nil)
-        .accessibilityLabel(isInCloud ? "\(name), in iCloud" : name)
+        .accessibilityLabel(isHidden ? "\(name), hidden" : isInCloud ? "\(name), in iCloud" : name)
     }
 
     private var tint: Color {
@@ -89,13 +92,13 @@ extension FileNode {
     @MainActor
     func row(in workspace: Workspace, showsDetail: Bool = false) -> FileRow {
         FileRow(workspace: workspace, url: url, name: isLinked ? name : (kind == .folder ? workspace.folderName(url) : name), kind: kind,
-                isInCloud: isInCloud, showsDetail: showsDetail)
+                isInCloud: isInCloud, showsDetail: showsDetail, isHidden: isFolder && workspace.isHidden(url))
     }
 }
 
 extension Workspace {
-    /// What a folder shows, read when first asked for and again whenever files change in it. Folders hidden on the
-    /// Mac stay out, as they do there.
+    /// What a folder shows, read when first asked for and again whenever files change in it. Hidden folders stay out
+    /// unless their location shows them.
     func visibleChildren(of folder: URL) -> [FileNode] {
         _ = treeVersion
         return node(for: folder).map { shownChildren(of: $0, in: location(containing: folder)) } ?? []
@@ -183,6 +186,9 @@ struct FileActions: View {
             Button { withAnimation { workspace.toggleFavorite(url) } } label: {
                 Label(favorite ? "Remove from Favorites" : "Add to Favorites", systemImage: favorite ? "star.slash" : "star")
             }
+            if isFolder, workspace.canHide(url) {
+                HideFolderButton(workspace: workspace, url: url)
+            }
         }
         Section {
             if !isFolder {
@@ -191,6 +197,9 @@ struct FileActions: View {
             ShareLink(item: url) { Label("Share", systemImage: "square.and.arrow.up") }
         }
         if isLocation, let location = workspace.locations.first(where: { $0.url == url.standardizedFileURL }) {
+            if workspace.hasHiddenFolders(in: location) {
+                Section { ShowHiddenFoldersToggle(workspace: workspace, location: location) }
+            }
             Section {
                 Button(role: .destructive) { workspace.removeLocation(location.id) } label: { Label("Remove from Notebook", systemImage: "minus.circle") }
             }
