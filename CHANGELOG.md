@@ -42,6 +42,10 @@ versions follow [semantic versioning](https://semver.org).
 - Giving a new note its name could stop Notebook for a long time in a large folder in iCloud Drive. Renaming a note
   still updates the links to it in other notes, now in the background.
 - Adding iCloud Drive as a location kept Notebook busy for a few seconds.
+- Opening a note that was only in iCloud, not yet downloaded, stopped Notebook until iCloud had brought it down, on the
+  Mac, iPhone and iPad. The note now opens at once with its title, and its text fades in when it has come, with
+  "Downloading from iCloud…" if that takes a moment. Nothing can be typed into it before then, so nothing is lost or
+  saved over it.
 
 ## [0.1.0] – not released yet
 

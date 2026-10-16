@@ -101,6 +101,25 @@ extension EditorController: NSTextViewDelegate, NSTextFieldDelegate {
         set { textView.metaLabel.stringValue = newValue }
     }
 
+    /// Nothing can be selected or typed while the note's text is on its way, in the note or its title.
+    func updateEditability() {
+        let editable = !isWaitingForText
+        textView.isEditable = editable
+        textView.isSelectable = editable
+        textView.titleField.isEditable = editable
+        textView.titleField.isSelectable = editable
+    }
+
+    /// The next change to the note fades in, as a file read in the background does (`FileLoadingView`): above all the
+    /// text arriving under its title, which stays as it is.
+    func fadeInNextChange() {
+        let fade = CATransition()
+        fade.type = .fade
+        fade.duration = 0.2
+        fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        scrollView.layer?.add(fade, forKey: "textArrived")
+    }
+
     func makeTextFirstResponder() { textView.window?.makeFirstResponder(textView) }
     func makeTitleFirstResponder() { textView.window?.makeFirstResponder(textView.titleField) }
 

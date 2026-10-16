@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import SwiftUI
 
 /// A Markdown file opened on its own (from the Finder, File › Open, or dropped on the Dock icon): just the note in a
 /// plain window, no sidebar, no toolbar, the way Lettera opens a single file. Windows of this kind join the system's
@@ -83,7 +84,18 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
         note.onExternalChange = { [weak self] text in self?.editor.reload(text: text) }
         note.onMove = { [weak self] url in self?.moved(to: url) }
         note.onDelete = { [weak self] in self?.window?.close() }
-        editor.load(text: note.text, folder: url.deletingLastPathComponent(), title: window.title, meta: "")
+        // A note still in iCloud: its title now, its text once it has come down, and the wait in between.
+        note.onLoad = { [weak self] text in
+            guard let self else { return }
+            self.editor.load(text: text, folder: self.url.deletingLastPathComponent(), title: self.url.deletingPathExtension().lastPathComponent, meta: "")
+            self.window?.makeFirstResponder(self.editor.textView)
+        }
+        editor.load(text: note.isLoaded ? note.text : nil, folder: url.deletingLastPathComponent(), title: window.title, meta: "")
+        let waiting = PassThroughHostingView(rootView: NoteWaitingView(note: note))
+        waiting.sizingOptions = []
+        waiting.frame = editor.scrollView.bounds
+        waiting.autoresizingMask = [.width, .height]
+        editor.scrollView.addSubview(waiting, positioned: .above, relativeTo: editor.scrollView.contentView)
         watchConflicts()
     }
 
@@ -198,6 +210,11 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
     func editorNoteName(_ editor: EditorController) -> String {
         url.deletingPathExtension().lastPathComponent
     }
+}
+
+/// SwiftUI over AppKit that clicks and scrolling go through.
+final class PassThroughHostingView<Content: View>: NSHostingView<Content> {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 /// Files opened from the Finder or dropped on the Dock icon open in windows of their own, folders in the sidebar.

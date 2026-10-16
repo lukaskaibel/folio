@@ -216,7 +216,9 @@ writes over a change it hasn't seen. Only when both changed the same lines does 
 other one, or keep both as two files. Conflicts that iCloud Drive reports are handled the same way.
 
 Notes in iCloud Drive that aren't downloaded yet are fetched so that search finds them; other files that live only in
-iCloud show a cloud in the sidebar and download when you open them.
+iCloud show a cloud in the sidebar and download when you open them. A note that isn't on your Mac, iPhone or iPad yet
+opens at once with its title, and its text follows when iCloud has brought it down, with "Downloading from iCloud…" if
+that takes a moment. Until then nothing can be typed into it, so nothing is saved over the note in iCloud.
 
 ## Getting started
 
@@ -396,7 +398,8 @@ Debug builds can be driven from a file: launch with `-debugCommandFile <path>` a
 listed in `Debug/DebugRemote.swift`, and for iPhone and iPad in `Debug/DebugRemote+UIKit.swift`; in the Simulator the
 file is in the app's own folder (`-debugCommandFile ~/Documents/cmd`), where `xcrun simctl get_app_container` finds it,
 and `xcrun simctl io <device> screenshot` takes the pictures. `-NotebookSlowFolders 2` makes every folder take two
-seconds to read, as a slow iCloud might, to see that nothing waits for it.
+seconds to read, as a slow iCloud might, to see that nothing waits for it, and `-NotebookSlowFiles 2` does the same
+for every note, PDF, picture and video you open.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes.
 

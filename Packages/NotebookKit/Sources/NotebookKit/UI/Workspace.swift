@@ -504,7 +504,7 @@ public final class Workspace: NSObject {
         #else
         keepSnapshot()
         #endif
-        if note != nil, let current = currentURL { places[current] = editor.place }
+        keepPlace()
         leaveCurrentNote()
         if (try? target.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]).ubiquitousItemDownloadingStatus) == .notDownloaded {
             try? FileManager.default.startDownloadingUbiquitousItem(at: target)
@@ -512,18 +512,19 @@ public final class Workspace: NSObject {
         currentURL = target
         selectedFolder = nil
         if FileKind(url: target, isDirectory: false) == .note {
+            // A note still in iCloud shows its title at once and its text when it has come down; the window doesn't
+            // wait for it.
             let document = NoteDocument(url: target)
+            let place = recordHistory ? nil : places[target]
             document.onExternalChange = { [weak self] text in self?.editor.reload(text: text) }
             document.onMove = { [weak self] url in self?.noteMoved(to: url) }
             document.onDelete = { [weak self] in self?.currentNoteDeleted() }
+            document.onLoad = { [weak self, weak document] _ in
+                guard let self, let document, self.note === document else { return }
+                self.show(document, focusTitle: focusTitle, place: place)
+            }
             note = document
-            assetsInUse = FileOperations.assetNames(in: document.text)
-            editor.load(text: document.text, folder: target.deletingLastPathComponent(), title: focusTitle ? "" : document.url.deletingPathExtension().lastPathComponent,
-                        meta: meta(for: document), focusTitle: focusTitle)
-            if !recordHistory, let place = places[target] { restore(place) }
-            // The editor only reports changes, and a Quick Look file in between cleared the outline here.
-            editorOutlineDidChange(editor)
-            editorPositionDidChange(editor)
+            show(document, focusTitle: focusTitle, place: place)
         } else {
             note = nil
             outline = []
@@ -547,12 +548,31 @@ public final class Workspace: NSObject {
         reveal(target, select: true)
     }
 
+    /// Puts the open note in the editor: its text, or only its title while the text is on its way. Back and Forward
+    /// come back to `place` once the text is there.
+    private func show(_ document: NoteDocument, focusTitle: Bool, place: EditorController.Place?) {
+        assetsInUse = FileOperations.assetNames(in: document.text)
+        editor.load(text: document.isLoaded ? document.text : nil, folder: document.url.deletingLastPathComponent(),
+                    title: focusTitle ? "" : document.url.deletingPathExtension().lastPathComponent, meta: meta(for: document), focusTitle: focusTitle)
+        if document.isLoaded, let place { restore(place) }
+        // The editor only reports changes, and a Quick Look file in between cleared the outline here.
+        editorOutlineDidChange(editor)
+        editorPositionDidChange(editor)
+    }
+
+    /// Remembers where you are in the note you leave, to come back there. A note whose text hasn't come yet keeps the
+    /// place it had.
+    private func keepPlace() {
+        guard let note, note.isLoaded, let current = currentURL else { return }
+        places[current] = editor.place
+    }
+
     #if os(iOS)
     /// Leaves the file that is open, for the folder it is in: the iPhone's Back.
     public func closeFile() {
-        guard let current = currentURL else { return }
+        guard currentURL != nil else { return }
         keepSnapshot()
-        if note != nil { places[current] = editor.place }
+        keepPlace()
         leaveCurrentNote()
         currentURL = nil
         outline = []
@@ -845,7 +865,7 @@ public final class Workspace: NSObject {
         refreshNow(url.deletingLastPathComponent())
         refreshNow(folder)
         if moved == currentURL, let note {
-            editor.load(text: editor.text, folder: folder, title: moved.deletingPathExtension().lastPathComponent, meta: meta(for: note))
+            editor.load(text: note.isLoaded ? editor.text : nil, folder: folder, title: moved.deletingPathExtension().lastPathComponent, meta: meta(for: note))
         }
         reveal(moved, select: moved == currentURL)
     }
