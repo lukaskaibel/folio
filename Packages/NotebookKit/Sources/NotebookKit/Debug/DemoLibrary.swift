@@ -5,6 +5,9 @@ import PDFKit
 /// Sample notes and files for trying Notebook and for its screenshots and tests, written to a folder of your choice so
 /// your own files are never touched. Launch with `-NotebookLibrary <folder> -NotebookDemo YES`.
 enum DemoLibrary {
+    /// Hidden from the sidebar at first, to show hiding with: the header's eye button brings them back.
+    static let hiddenFolders = ["Archive"]
+
     static func create(at root: URL) {
         let fm = FileManager.default
         if fm.fileExists(atPath: root.appendingPathComponent("Travel/Kyoto trip.md").path) { return }
@@ -17,6 +20,7 @@ enum DemoLibrary {
             try? Data(text.utf8).write(to: root.appendingPathComponent(path))
         }
 
+        _ = folder("Archive/2025")
         _ = folder("Inbox")
         _ = folder("Personal/Cooking")
         _ = folder("Projects/Design")
@@ -24,6 +28,7 @@ enum DemoLibrary {
         _ = folder("Travel/.assets")
         _ = folder("University/Linear algebra")
 
+        write("Archive/2025/Old apartment.md", "# Handover\n\n- [x] Meter readings\n- [x] Keys returned\n- [ ] Deposit back\n")
         write("Inbox/Gift ideas.md", "- [ ] Book for Mia: *The Remains of the Day*\n- [ ] Good olive oil\n- [x] Concert tickets\n")
         write("Inbox/Shared link.md", "https://example.com/an-article-worth-reading\n\nRead this on the train.\n")
 
