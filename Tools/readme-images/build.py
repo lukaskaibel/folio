@@ -101,7 +101,7 @@ for theme in [] if only == "devices" else ["dark", "light"]:
     webp(search(theme), f"search-{theme}")
 
 def devices(theme):
-    """The iPad with its sidebar and the note, and the iPhone with the note, in front of it at the lower right."""
+    """The iPad with the note and its outline, and the iPhone with the note, in front of it at the lower right."""
     ipad = Image.open(f"{raw}/ipad-{theme}.png").convert("RGBA")
     iphone = Image.open(f"{raw}/iphone-{theme}.png").convert("RGBA")
     # The screens' own corners: 18 points on the iPad at 2x, 55 on the iPhone at 3x.

@@ -148,7 +148,7 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/devices-dark.webp">
-  <img alt="Notebook on an iPad, with the folders of iCloud Drive in the sidebar and the note Kyoto trip next to it, and on an iPhone in front of it, with the same note on a screen of its own and a checklist and attachment button at the bottom" src="Design/screenshots/devices-light.webp">
+  <img alt="Notebook on an iPad, with the note Kyoto trip and its outline next to it, and on an iPhone in front of it, with the same note on a screen of its own and a checklist and attachment button at the bottom" src="Design/screenshots/devices-light.webp">
 </picture>
 
 ## What it does

@@ -23,7 +23,9 @@ struct PadBrowser: View {
                 splitView.navigationSplitViewStyle(.prominentDetail)
             }
         }
-        .onGeometryChange(for: Bool.self) { $0.size.width >= 1000 } action: { isWide = $0 }
+        // Room for the sidebar, a column of text and the outline: an iPad in landscape. In portrait, even the 13-inch
+        // one's, the text would get too narrow with all three.
+        .onGeometryChange(for: Bool.self) { $0.size.width >= 1100 } action: { isWide = $0 }
         .modifier(FileAlerts(workspace: workspace, newFolderIn: $newFolderIn))
         .sheet(isPresented: $showsSettings) { TouchSettings(workspace: workspace) }
         .folderImporter(isPresented: $addsLocation, workspace: workspace)

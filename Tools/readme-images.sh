@@ -176,7 +176,7 @@ iphone=$(simulator "Notebook README iPhone" com.apple.CoreSimulator.SimDeviceTyp
 ipad=$(simulator "Notebook README iPad" com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB)
 for theme in dark light; do
   device "$iphone" iphone $theme "wait 2" "open Travel/Kyoto trip.md" "wait 2.5" "done"
-  device "$ipad" ipad $theme "wait 2" "open Travel/Kyoto trip.md" "wait 2.5" "done"
+  device "$ipad" ipad $theme "wait 2" "open Travel/Kyoto trip.md" "outline" "wait 2.5" "done"
 done
 xcrun simctl shutdown "$iphone" "$ipad" 2>/dev/null || true
 
