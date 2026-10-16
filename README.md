@@ -80,6 +80,26 @@ Paste or drop a picture and it's saved next to the note, in a hidden `.assets` f
 apps can show it. Delete it from the note and the file goes to the Trash once you leave the note, unless another note
 in the folder still uses it. Move a note to another folder and its pictures move along.
 
+### Drawings
+
+Click the pencil in the toolbar and draw right in the note, as in Notes. A new drawing goes in below the line you're
+on (at the end of the note if you aren't writing), as wide as the text, and grows as you draw near its lower edge, so
+you can keep going down. Text stays text: you draw in the drawings, never over the words. On iPhone and iPad it is
+PencilKit with Apple's own tool picker, so Apple Pencil with its pressure and tilt, the ruler and the lasso work as
+they do in Notes; one finger draws and two scroll, or, where only Apple Pencil draws, a finger scrolls. On the Mac
+you draw with the mouse, the trackpad or a tablet's pen, with a pen, pencil, marker or eraser from a palette at the
+bottom of the note. Done, Escape or a click in the text puts the drawing back in the text, as tall as what you drew;
+start typing and the text goes on below it. Tap a drawing (double-click it on the Mac) to draw in it again.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/drawing-dark.webp">
+  <img alt="The note Getting to the ryokan open for drawing: a sketch of the way from the station over the river to the ryokan, ringed in red, inside the drawing's frame, and the palette with pen, pencil, marker, eraser, width, colours and Done at the bottom" src="Design/screenshots/drawing-light.webp">
+</picture>
+
+Each drawing is a PNG in `.assets`, which every Markdown app shows, with white behind the ink so it reads in dark
+mode too. Next to it, a `.drawing` file keeps the strokes, so you can go on drawing in it later, on any of your
+devices; the picture is made again from them a moment after every stroke.
+
 ### Tables, diagrams, code and maths
 
 Tables are drawn as tables, Mermaid diagrams as diagrams (natively, without a web view), code with highlighting for
@@ -140,8 +160,9 @@ and search finds names, notes and PDFs as on the Mac. While you write, a bar flo
 checklist, attachments, a link, undo and the formatting, a page of tools at a time; Settings › Writing Bar chooses which
 and in what order. Aa brings up the Format panel in the keyboard's place, as in Notes: the text styles, bold, italic and
 the rest, lists, indenting and quotes. Pictures come from the camera, the document scanner, your photos or the Files
-app. Tap a checkbox to tick it, a link to follow it, a picture to look at it; touch and hold a picture and drag it to
-move it in the note, or let go to copy, share or delete it. Swipe a file to move or delete it, or to make it a
+app. The pencil, at the bottom of the screen or in the bar, draws in the note with Apple's tool picker. Tap a checkbox
+to tick it, a link to follow it, a picture to look at it, a drawing to draw in it; touch and hold a picture and drag it
+to move it in the note, or let go to copy, share or delete it. Swipe a file to move or delete it, or to make it a
 favourite; touch and hold it for everything else.
 
 The iPad has the Mac's layout: the sidebar with its folders opening in place, the note next to it, and the outline in
@@ -176,6 +197,8 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
   folds into a small "properties" pill.
 - **Pictures and files in notes.** Paste or drop them in; `![[embeds]]` of other notes show an excerpt, of files a
   card with a preview.
+- **Drawings in notes,** with PencilKit: Apple Pencil, a finger, the mouse, the trackpad or a tablet. Each is a PNG
+  that other apps show, with its strokes kept next to it so it stays a drawing in Notebook.
 - **PDFs, pictures, videos and other files** open in the window: PDFs and pictures as in Preview, videos as in
   QuickTime Player, the rest in Quick Look.
 - **Search** across file names, note text and PDF text.
@@ -186,12 +209,14 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
 ## How notes are stored
 
 Everything is plain Markdown, so other apps keep reading your notes. Notebook adds no files of its own besides the
-`.assets` folders for pictures and files you add to notes.
+`.assets` folders for pictures and files you add to notes, and in them, next to each drawing's picture, a `.drawing`
+file with its strokes.
 
 | What | In the file | In Notebook |
 | --- | --- | --- |
 | Title | The file name, `Weekend.md` | A large title above the text; editing it renames the file |
 | Picture | `![](.assets/Weekend%202026-10-14%20at%2015.32.10.png)` | The picture, fitted to the width |
+| Drawing | `![Drawing](.assets/Weekend%20drawing%202026-10-16%20at%2010.20.15.png)`, with `Weekend drawing 2026-10-16 at 10.20.15.drawing` next to the picture | The drawing, as wide as the text, to draw in again |
 | Link to a note or file | `[[Recipes]]`, `[[Recipes\|text]]`, `[[Offer.pdf]]` | A link you click; dashed when the target doesn't exist yet |
 | Embed | `![[Recipes]]`, `![[Offer.pdf]]` | An excerpt of the note, or a card for the file |
 | Web link | `[text](https://…)` | The text, with a pencil to edit the address |
@@ -292,6 +317,8 @@ While writing:
 | `*`, `_`, `` ` ``, `~` or `=` with text selected | Wrap the selection in that mark |
 | `[[` | Suggestions for a link; ↑↓ and Return or Tab to pick |
 | Space on a selected picture | Quick Look |
+| Double-click a drawing | Draw in it |
+| Esc, or start typing | Stop drawing; typing goes on below the drawing |
 | ↑ on the first line | Into the title; Return, Tab or ↓ back into the text |
 
 In the sidebar: Return renames, ⌘⌫ moves to the Trash, and Space opens a file in Quick Look. Right-click a file or
@@ -308,6 +335,8 @@ and iPad:
 | Touch and hold a file or folder | Rename, move, duplicate, copy a link, share and more |
 | Pull a list down | Read the folder again |
 | Tap a checkbox, a link or a picture | Tick it, follow it, or look at it in Quick Look |
+| Tap a drawing | Draw in it |
+| While drawing: one finger, two fingers | Draw, scroll (where only Apple Pencil draws, a finger scrolls) |
 | Touch and hold a picture or file in a note, then drag | Move it to another place in the note, or into another app |
 | Touch and hold a picture or file, then let go | Select it: Quick Look, copy, cut, share or delete |
 | Tap the heading level in the margin | Title, heading, subheading or body (iPad) |
@@ -325,6 +354,7 @@ Planned, and not built yet:
   Footnotes are styled but don't jump to their text.
 - On iPhone and iPad there is no Settings › App Icon (iOS only switches between icons built into the app), no PNG
   export and no window of its own for a single file.
+- **Sketches** as files of their own, next to your notes rather than in one, and search in handwriting.
 - Translations: the app is in English only.
 
 The full plan, with what is deliberately left out (tags, backlinks, a database, sync of its own), is in
@@ -340,6 +370,7 @@ Packages/NotebookKit/
                              the Mac's text view, and iPhone's and iPad's in the "+UIKit" files
     Markdown/                Notebook's Markdown parser, which keeps every character's position in the file
     Render/                  Tables, maths, diagrams and code highlighting
+    Drawing/                 Drawings: the strokes file and its picture, and drawing them in notes
     Files/                   Locations, the file tree, file operations, saving, watching and the three-way merge
     Index/                   Search over names, note text and PDF text, and how [[links]] resolve
     Platform/                The few names and calls that differ between AppKit and UIKit
@@ -347,7 +378,7 @@ Packages/NotebookKit/
                              pictures, videos and Quick Look; what both share, such as the outline and search results
     UI/iOS/                  The iPhone's and iPad's screens: folders, the sidebar, the note, search and Settings
     Debug/                   The debug remotes and the sample notes (Debug builds only)
-  Tests/                     Parser, editor, merge, smoothness and app icon tests
+  Tests/                     Parser, editor, merge, smoothness, drawing and app icon tests
 Config/                      Build settings, Info.plist and entitlements
 Design/                      The icon, the README pictures and the social preview
 Website/                     The website, published to GitHub Pages by .github/workflows/website.yml

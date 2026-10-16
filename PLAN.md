@@ -110,6 +110,7 @@ Alles bleibt normales Markdown, damit andere Programme die Dateien weiter lesen 
 | --- | --- | --- |
 | Titel | Dateiname `Wochenende.md` | Große Titelzeile über dem Text, Umbenennen beim Bearbeiten |
 | Bild | `![](.assets/Wochenende%202026-10-14%2015.32.10.jpg)` | Objekt, Größe an Breite angepasst, nie als Text sichtbar |
+| Zeichnung | `![Drawing](.assets/Wochenende%20drawing%202026-10-16%20at%2010.20.15.png)`, daneben `… .drawing` mit den Strichen | So breit wie der Text, mit dem Stift-Knopf oder einem Tippen darauf bemalbar |
 | Link | `[[Rezepte]]`, `[[Rezepte\|Text]]`, `[[Angebot.pdf]]` | Link-Objekt. `[[` öffnet Vorschläge. Ein Ziel, das es nicht gibt, ist blass und bietet „Erstellen“ an. |
 | Einbettung | `![[Rezepte]]`, `![[Angebot.pdf]]` | Notiz: gerendert und nur lesbar. Andere Dateien: Quick-Look-Vorschaubild, ein Klick öffnet Quick Look. |
 | Mathe | `$x^2$`, `$$ … $$` | Gerenderte Formel, Quelltext nur mit Cursor darin |
@@ -134,6 +135,12 @@ werden ersetzt.
   andere Notiz im Ordner sie benutzt. Bis dahin funktioniert ⌘Z.
 - Verschiebt man eine Notiz in Notebook in einen anderen Ordner, wandern ihre Bilder in dessen `.assets` mit, und die
   Pfade werden angepasst. Kopiert man ein Bild in eine Notiz in einem anderen Ordner, wird die Datei kopiert.
+- Zeichnungen (seit Oktober 2026, auf Wunsch): ein PNG in `.assets`, das jede Markdown-App zeigt (Tinte auf Weiß, damit
+  es auch im Dunkelmodus lesbar ist), daneben eine gleichnamige `.drawing`-Datei mit den PencilKit-Strichen (Property
+  List: Format, Breite, Höhe, `PKDrawing`-Daten). Notebook malt aus den Strichen und schreibt das PNG nach jeder
+  Änderung neu. Beide wandern beim Verschieben, Kopieren und Aufräumen zusammen. iPhone und iPad zeichnen mit
+  `PKCanvasView` und `PKToolPicker`; der Mac hat in PencilKit keine Zeichenfläche, dort erzeugt eine eigene Fläche
+  PencilKit-Striche aus Maus, Trackpad oder Grafiktablett.
 
 ## 5. Architektur
 
@@ -299,7 +306,7 @@ geht (Übersetzungen, Onboarding, Website, Screenshots wie bei Issues).
 ## 7. Bewusst nicht drin
 
 Tags, Backlinks, eigene Tabs und Split View, Eigenschaftsleiste für Frontmatter, eigene Viewer für PDF, Bild und Video,
-PDFs markieren, Zeichnen und Handschrift, Audio und Transkription, Bearbeiten von Text- und Code-Dateien, Schnellnotiz-
+PDFs markieren, Handschrifterkennung, Audio und Transkription, Bearbeiten von Text- und Code-Dateien, Schnellnotiz-
 Fenster am Mac, eigene Kurzbefehle- und Siri-Aktionen, Notizen sperren, Zusammenarbeit, Plugins, eigener Sync.
 
 Das meiste davon lässt sich später ergänzen, ohne das Dateiformat zu ändern.

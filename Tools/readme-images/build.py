@@ -38,6 +38,8 @@ TYPING_BOX = (500, 104, 2140, 1080)
 MATH_BOX = (500, 104, 2140, 960)
 # The trip further down, from the plan to the PDF, without what scrolled under the toolbar.
 OBJECTS_BOX = (500, 150, 2140, 1400)
+# A note open for drawing, down to the palette at the bottom of the window.
+DRAWING_BOX = (500, 104, 2140, 1640)
 
 
 def typing_animation(theme):
@@ -97,6 +99,8 @@ for theme in [] if only == "devices" else ["dark", "light"]:
     webp(place(crop_card(window(f"math-{theme}"), MATH_BOX, theme), theme, (110, 90), 1400, rim=False), f"math-{theme}")
     webp(place(crop_card(window(f"objects-{theme}"), OBJECTS_BOX, theme), theme, (110, 90), 1400, rim=False),
          f"objects-{theme}")
+    webp(place(crop_card(window(f"drawing-{theme}"), DRAWING_BOX, theme), theme, (110, 90), 1400, rim=False),
+         f"drawing-{theme}")
     webp(place(window(f"quicklook-{theme}"), theme, (130, 110), 1800), f"quicklook-{theme}")
     webp(search(theme), f"search-{theme}")
 
