@@ -29,5 +29,6 @@ pictures. They are made up, and nothing about them is sent anywhere.
 
 ## Questions
 
-Open an issue in the [repository](https://github.com/lukaskaibel/notebook/issues). Security problems are best reported
-privately, as described in [SECURITY.md](SECURITY.md).
+Write to [notebook.app@icloud.com](mailto:notebook.app@icloud.com) or open an issue in the
+[repository](https://github.com/lukaskaibel/notebook/issues). Security problems are best reported privately, as described
+in [SECURITY.md](SECURITY.md).
