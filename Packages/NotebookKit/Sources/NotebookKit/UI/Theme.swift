@@ -1,12 +1,22 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 
 /// Design tokens, the same as in Issues. Every colour has a light and a dark value.
 public enum Theme {
+    #if os(macOS)
     /// The page a note is written on: the system's text background, white or dark grey.
     static let panel = NSColor.textBackgroundColor
-    static let panelBorder = NSColor(light: 0xE3E4E8, dark: 0x343437)
     static let separator = NSColor.separatorColor
+    #else
+    /// The page a note is written on: white, or black in the dark, as in Notes.
+    static let panel = UIColor.systemBackground
+    static let separator = UIColor.separator
+    #endif
+    static let panelBorder = NSColor(light: 0xE3E4E8, dark: 0x343437)
     static let card = NSColor(light: 0xFFFFFF, dark: 0x262628)
     static let cardBorder = NSColor(light: 0xE6E7EB, dark: 0x343437)
     static let hover = NSColor(light: 0xE8E9ED, dark: 0x2A2A2D)
@@ -24,8 +34,14 @@ public enum Theme {
     /// Markdown punctuation shown next to the caret.
     static let faint = NSColor(light: 0xA3A7AF, dark: 0x5A5E66)
 
+    #if os(macOS)
     /// The accent colour chosen in System Settings, or Notebook's ink blue (`AccentColor`) when it is set to Multicolour.
     static let accent = NSColor.controlAccentColor
+    #else
+    /// Notebook's ink blue (`AccentColor`), the app's accent colour (the system has no accent of its own to choose on
+    /// iPhone and iPad).
+    static let accent = UIColor(named: "AccentColor") ?? NSColor(light: 0x34508F, dark: 0x93ABE3)
+    #endif
     static let positive = NSColor(light: 0x2F9B67, dark: 0x4CB782)
     static let warning = NSColor(light: 0xB8791C, dark: 0xE5A84B)
     static let red = NSColor(light: 0xD64545, dark: 0xEB6A6A)
@@ -42,7 +58,7 @@ public enum Theme {
     static let tableStripe = NSColor(light: 0xF4F5F8, dark: 0x2A2A2D)
     /// Behind `==highlighted==` text.
     static let highlight = NSColor(light: 0xFCEFA1, dark: 0x6B5A12)
-    static let searchMark = NSColor(srgbRed: 240 / 255, green: 180 / 255, blue: 41 / 255, alpha: 0.38)
+    static let searchMark = NSColor(hex: 0xF0B429, alpha: 0.38)
 
 
     static let spring = Animation.spring(response: 0.3, dampingFraction: 0.82)
@@ -52,26 +68,49 @@ public enum Theme {
 extension NSColor {
     /// A colour that follows the appearance it is drawn in.
     convenience init(light: UInt32, dark: UInt32) {
+        #if os(macOS)
         self.init(name: nil) { appearance in
             let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
             return NSColor(hex: isDark ? dark : light)
         }
+        #else
+        self.init { traits in
+            UIColor(hex: traits.userInterfaceStyle == .dark ? dark : light)
+        }
+        #endif
     }
 
     convenience init(hex: UInt32, alpha: CGFloat = 1) {
+        #if os(macOS)
         self.init(
             srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
             green: CGFloat((hex >> 8) & 0xFF) / 255,
             blue: CGFloat(hex & 0xFF) / 255,
             alpha: alpha
         )
+        #else
+        self.init(
+            red: CGFloat((hex >> 16) & 0xFF) / 255,
+            green: CGFloat((hex >> 8) & 0xFF) / 255,
+            blue: CGFloat(hex & 0xFF) / 255,
+            alpha: alpha
+        )
+        #endif
     }
 
+    #if os(macOS)
     var swiftUI: Color { Color(nsColor: self) }
+    #else
+    var swiftUI: Color { Color(uiColor: self) }
+    #endif
 }
 
 extension Color {
+    #if os(macOS)
     static func theme(_ color: NSColor) -> Color { Color(nsColor: color) }
+    #else
+    static func theme(_ color: NSColor) -> Color { Color(uiColor: color) }
+    #endif
 }
 
 extension Font {

@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 import UniformTypeIdentifiers
 
 /// What a file is, for its icon and for what opening it does.
@@ -79,6 +83,18 @@ public final class FileNode: NSObject {
     }
 
     var hasLoadedChildren: Bool { children != nil }
+
+    /// The folder's contents as the sidebar and the lists show them: only notes and folders if you chose so, and
+    /// folders on top or sorted in with the files.
+    func visibleChildren() -> [FileNode] {
+        let settings = NotebookSettings.shared
+        var children = loadedChildren()
+        if settings.showsOnlyNotes { children = children.filter { $0.isFolder || $0.kind == .note } }
+        if !settings.foldersFirst {
+            children.sort { $0.sortName.localizedStandardCompare($1.sortName) == .orderedAscending }
+        }
+        return children
+    }
 
     /// Reads the folder again, keeping the nodes of files that are still there (so open folders stay open).
     @discardableResult

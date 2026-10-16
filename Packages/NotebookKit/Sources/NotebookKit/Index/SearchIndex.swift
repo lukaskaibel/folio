@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 import PDFKit
 
 /// Every file in the locations, with the text of every note (and of PDFs), for search, `[[` and resolving links. Built in
@@ -33,6 +37,8 @@ public final class SearchIndex {
 
     public private(set) var entries: [Entry] = []
     public private(set) var isBuilding = false
+    /// Called when the index has been built: links in a note opened before resolve now.
+    @ObservationIgnored var onBuilt: (() -> Void)?
     /// Folders hidden from the sidebar: what is in them stays out of search, `[[` and Move To, but links still find it.
     @ObservationIgnored var hiddenPaths: [String] = []
     private var byPath: [String: Int] = [:]
@@ -60,6 +66,7 @@ public final class SearchIndex {
                 self.entries = found
                 self.reindex()
                 self.isBuilding = false
+                self.onBuilt?()
                 self.indexPDFs()
             }
         }

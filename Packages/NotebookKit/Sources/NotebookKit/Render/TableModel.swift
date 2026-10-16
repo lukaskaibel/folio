@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 
 /// A Markdown table, ready to draw: the cells as styled text and, for each, where its Markdown is, so a click on a
 /// cell can put the caret in it.
@@ -57,7 +61,7 @@ final class TableModel {
         var natural = Array(repeating: CGFloat(40), count: columns)
         for row in rows {
             for (index, cell) in row.enumerated() where index < columns {
-                let width = ceil(cell.boundingRect(with: CGSize(width: 10_000, height: 1_000), options: [.usesLineFragmentOrigin]).width)
+                let width = ceil(cell.boundingRect(with: CGSize(width: 10_000, height: 1_000), options: [.usesLineFragmentOrigin], context: nil).width)
                 natural[index] = max(natural[index], width + Self.padding.width * 2)
             }
         }
@@ -82,7 +86,7 @@ final class TableModel {
             var height: CGFloat = 0
             for (index, cell) in row.enumerated() where index < columns {
                 let textWidth = widths[index] - Self.padding.width * 2
-                let rect = cell.boundingRect(with: CGSize(width: max(10, textWidth), height: 10_000), options: [.usesLineFragmentOrigin, .usesFontLeading])
+                let rect = cell.boundingRect(with: CGSize(width: max(10, textWidth), height: 10_000), options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
                 height = max(height, ceil(rect.height))
             }
             heights.append(max(height, 18) + Self.padding.height * 2)
@@ -127,7 +131,7 @@ final class TableModel {
             for (index, cell) in row.enumerated() where index < layout.columnWidths.count {
                 let width = layout.columnWidths[index]
                 let textWidth = width - Self.padding.width * 2
-                let size = cell.boundingRect(with: CGSize(width: max(10, textWidth), height: 10_000), options: [.usesLineFragmentOrigin, .usesFontLeading]).size
+                let size = cell.boundingRect(with: CGSize(width: max(10, textWidth), height: 10_000), options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil).size
                 var originX = x + Self.padding.width
                 switch alignments[index] {
                 case .center: originX = x + (width - min(size.width, textWidth)) / 2
@@ -135,7 +139,7 @@ final class TableModel {
                 case .leading: break
                 }
                 cell.draw(with: CGRect(x: originX, y: y + Self.padding.height, width: textWidth, height: height - Self.padding.height * 2),
-                          options: [.usesLineFragmentOrigin, .usesFontLeading])
+                          options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
                 x += width
             }
             y += height

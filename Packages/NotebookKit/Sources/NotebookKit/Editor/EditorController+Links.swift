@@ -1,9 +1,14 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 
 /// A link's address is never part of the text you see: the pencil after it opens this popover to change it, open it
 /// or take the link off. The heading tag in the margin opens a menu of heading levels.
 extension EditorController {
+    #if os(macOS)
     /// `range` is the whole link, `[text](address)`, as it is now.
     func editLink(at range: NSRange, isNew: Bool = false) {
         guard let link = linkSpan(at: range.location) else { return }
@@ -36,8 +41,9 @@ extension EditorController {
             MainActor.assumeIsolated { finish(.save(model.address)) }
         }
     }
+    #endif
 
-    private func linkSpan(at location: Int) -> InlineSpan? {
+    func linkSpan(at location: Int) -> InlineSpan? {
         guard !document.lines.isEmpty, location < storage.length else { return nil }
         return document.lines[document.lineIndex(containing: location)].spans.first {
             if case .link = $0.kind { return $0.range.location == location }
@@ -46,12 +52,12 @@ extension EditorController {
     }
 
     /// Between `](` and `)`.
-    private func destinationRange(of link: InlineSpan) -> NSRange {
+    func destinationRange(of link: InlineSpan) -> NSRange {
         let close = link.markers.last ?? NSRange(location: link.range.upperBound, length: 0)
         return NSRange(location: close.location + 2, length: max(0, close.length - 3))
     }
 
-    private func finishEditingLink(at location: Int, outcome: LinkEditorModel.Outcome, isNew: Bool) {
+    func finishEditingLink(at location: Int, outcome: LinkEditorModel.Outcome, isNew: Bool) {
         guard let link = linkSpan(at: location) else { return }
         let text = nsText.substring(with: link.content)
         switch outcome {
@@ -64,19 +70,26 @@ extension EditorController {
                 replace(destinationRange(of: link), with: encoded, select: NSRange(location: link.content.upperBound, length: 0), actionName: "Edit Link")
             }
         case .open(let address):
-            if let url = URL(string: address.trimmingCharacters(in: .whitespaces)), url.scheme != nil { NSWorkspace.shared.open(url) }
+            if let url = URL(string: address.trimmingCharacters(in: .whitespaces)), url.scheme != nil { openExternally(url) }
         case .remove:
             replace(link.range, with: text, select: NSRange(location: link.range.location + (text as NSString).length, length: 0), actionName: "Remove Link")
         }
-        textView.window?.makeFirstResponder(textView)
+        makeTextFirstResponder()
     }
 
+    /// The level of the heading the caret is on, while the caret rests on a heading whose level shows in the margin.
+    var headingMarkLevel: (level: Int, marker: NSRange)? {
+        guard isFocused, !document.lines.isEmpty, selection.length == 0 else { return nil }
+        let line = document.lines[document.lineIndex(containing: selection.location)]
+        guard case .heading(let level, let marker) = line.kind, isRevealed(marker.location),
+              storage.attribute(.notebookHeading, at: marker.location, effectiveRange: nil) != nil else { return nil }
+        return (level, marker)
+    }
+
+    #if os(macOS)
     /// The level of the heading the caret is on, in the margin next to it.
     func drawMarginMarks(in dirtyRect: NSRect) {
-        guard isFocused, !document.lines.isEmpty, textView.selectedRange().length == 0 else { return }
-        let line = document.lines[document.lineIndex(containing: textView.selectedRange().location)]
-        guard case .heading(let level, let marker) = line.kind, isRevealed(marker.location),
-              storage.attribute(.notebookHeading, at: marker.location, effectiveRange: nil) != nil,
+        guard let (level, marker) = headingMarkLevel,
               let rect = layoutManager.headingMarkRect(at: marker.location, origin: textView.textContainerOrigin),
               rect.intersects(dirtyRect) else { return }
         layoutManager.drawHeadingMark(level, in: rect)
@@ -84,7 +97,7 @@ extension EditorController {
 
     /// Title, Heading, Subheading or Body, for the heading the caret is on.
     func showHeadingMenu(at point: NSPoint) {
-        let line = document.lines[document.lineIndex(containing: textView.selectedRange().location)]
+        let line = document.lines[document.lineIndex(containing: selection.location)]
         guard case .heading(let level, _) = line.kind else { return }
         let menu = NSMenu()
         let items: [(String, Selector, Int)] = [
@@ -101,6 +114,7 @@ extension EditorController {
         }
         menu.popUp(positioning: nil, at: NSPoint(x: point.x, y: point.y + 12), in: textView)
     }
+    #endif
 }
 
 @MainActor
@@ -124,6 +138,7 @@ final class LinkEditorModel {
     }
 }
 
+#if os(macOS)
 /// The popover: the address, and buttons to open it or take the link off.
 private struct LinkEditor: View {
     @Bindable var model: LinkEditorModel
@@ -150,3 +165,4 @@ private struct LinkEditor: View {
         .onAppear { focused = true }
     }
 }
+#endif

@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import SwiftUI
 
@@ -99,15 +100,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
 
     func visibleChildren(of node: FileNode) -> [FileNode] {
         if let cached = visible[ObjectIdentifier(node)] { return cached }
-        let settings = NotebookSettings.shared
-        var children = node.loadedChildren()
-        if settings.showsOnlyNotes { children = children.filter { $0.isFolder || $0.kind == .note } }
-        if !workspace.hidden.keys.isEmpty, let location = location(of: node), !workspace.showsHiddenFolders(in: location) {
-            children = children.filter { !($0.isFolder && workspace.isHidden($0.url)) }
-        }
-        if !settings.foldersFirst {
-            children.sort { $0.sortName.localizedStandardCompare($1.sortName) == .orderedAscending }
-        }
+        let children = workspace.shownChildren(of: node, in: location(of: node))
         visible[ObjectIdentifier(node)] = children
         return children
     }
@@ -541,16 +534,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     func outlineView(_ outlineView: NSOutlineView, acceptDrop info: NSDraggingInfo, item: Any?, childIndex index: Int) -> Bool {
         guard let folder = dropFolder(for: item) else { return false }
         let urls = info.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
-        let copy = NSEvent.modifierFlags.contains(.option)
-        for url in urls {
-            if workspace.location(containing: url) != nil, !copy {
-                if url.deletingLastPathComponent().standardizedFileURL != folder.standardizedFileURL { workspace.move(url, into: folder) }
-            } else {
-                let destination = FileOperations.uniqueURL(in: folder, name: url.deletingPathExtension().lastPathComponent, extension: url.pathExtension.isEmpty ? nil : url.pathExtension)
-                try? FileManager.default.copyItem(at: url, to: destination)
-            }
-        }
-        workspace.refreshNow(folder)
+        workspace.drop(urls, into: folder, copying: NSEvent.modifierFlags.contains(.option))
         return true
     }
 
@@ -783,3 +767,4 @@ struct SidebarOutline: NSViewRepresentable {
 
     func updateNSView(_ view: NSScrollView, context: Context) {}
 }
+#endif

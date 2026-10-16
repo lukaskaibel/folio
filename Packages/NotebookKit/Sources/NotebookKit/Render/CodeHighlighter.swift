@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 
 /// Colours for code blocks: comments, strings, numbers, keywords and type names, from one regular expression per
 /// language family. Light on purpose; it only has to make code easier to read, not to understand it.

@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import Quartz
 import SwiftUI
@@ -43,3 +44,4 @@ final class QuickLookPanel: NSObject, @preconcurrency QLPreviewPanelDataSource, 
         url as NSURL?
     }
 }
+#endif

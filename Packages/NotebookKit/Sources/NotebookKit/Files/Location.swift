@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 
 /// A folder Notebook shows in the sidebar: iCloud Drive or any folder you add. In the sandboxed build the app can only
 /// reach it through the security-scoped bookmark made when you picked it.
@@ -22,7 +26,12 @@ public struct Location: Identifiable, Codable, Equatable, Sendable {
     /// Standardized, as every address in the app is, so "/private/tmp" and "/tmp" compare equal.
     public var url: URL { URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL }
 
-    public var isICloudDrive: Bool { path == Location.iCloudDrivePath }
+    public var isICloudDrive: Bool { path == Location.iCloudDrivePath || Location.isICloudDriveRoot(url) }
+
+    /// iCloud Drive's own folder, wherever the system keeps it (on iOS it isn't in the app's home).
+    static func isICloudDriveRoot(_ url: URL) -> Bool {
+        url.lastPathComponent == "com~apple~CloudDocs" && url.deletingLastPathComponent().lastPathComponent == "Mobile Documents"
+    }
 
     /// Where iCloud Drive is, worked out from the real home folder (the sandbox gives the app another one).
     public static var iCloudDrivePath: String {
@@ -46,6 +55,23 @@ public struct Location: Identifiable, Codable, Equatable, Sendable {
     var folders: [(url: URL, place: String, linked: LinkedFolder?)] {
         [(url, name, nil)] + linked.map { ($0.url, name + " › " + $0.name, $0) }
     }
+
+    #if os(iOS)
+    /// Where the folder is, as the Files app names the places: "iCloud Drive › Notes", "On My iPhone › Notebook".
+    @MainActor
+    var place: String {
+        let path = url.path
+        if let range = path.range(of: "/Mobile Documents/com~apple~CloudDocs") {
+            return (["iCloud Drive"] + path[range.upperBound...].split(separator: "/").map(String.init)).joined(separator: " › ")
+        }
+        let documents = Workspace.onDeviceFolder.standardizedFileURL.path
+        if path == documents || path.hasPrefix(documents + "/") {
+            let device = UIDevice.current.userInterfaceIdiom == .pad ? "On My iPad" : "On My iPhone"
+            return ([device, "Notebook"] + path.dropFirst(documents.count).split(separator: "/").map(String.init)).joined(separator: " › ")
+        }
+        return url.pathComponents.suffix(2).joined(separator: " › ")
+    }
+    #endif
 
     func contains(_ url: URL) -> Bool {
         folder(containing: url.standardizedFileURL.path) != nil
@@ -111,16 +137,25 @@ enum LocationStore {
     private static let key = "locations"
     private static var accessing: Set<String> = []
 
+    #if os(macOS)
+    private static let resolving: URL.BookmarkResolutionOptions = [.withSecurityScope]
+    private static let creating: URL.BookmarkCreationOptions = [.withSecurityScope]
+    #else
+    // On iOS a bookmark made from a URL the document picker gave carries its access along.
+    private static let resolving: URL.BookmarkResolutionOptions = []
+    private static let creating: URL.BookmarkCreationOptions = []
+    #endif
+
     static func load() -> [Location] {
         guard let data = UserDefaults.standard.data(forKey: key),
               var locations = try? JSONDecoder().decode([Location].self, from: data) else { return [] }
         for index in locations.indices {
             if let bookmark = locations[index].bookmark {
                 var stale = false
-                if let url = try? URL(resolvingBookmarkData: bookmark, options: [.withSecurityScope], bookmarkDataIsStale: &stale) {
+                if let url = try? URL(resolvingBookmarkData: bookmark, options: resolving, bookmarkDataIsStale: &stale) {
                     locations[index].path = url.standardizedFileURL.path
                     startAccessing(url)
-                    if stale, let fresh = try? url.bookmarkData(options: [.withSecurityScope], includingResourceValuesForKeys: nil, relativeTo: nil) {
+                    if stale, let fresh = try? url.bookmarkData(options: creating, includingResourceValuesForKeys: nil, relativeTo: nil) {
                         locations[index].bookmark = fresh
                     }
                 }
@@ -135,8 +170,8 @@ enum LocationStore {
 
     static func make(for url: URL) -> Location {
         startAccessing(url)
-        let bookmark = try? url.bookmarkData(options: [.withSecurityScope], includingResourceValuesForKeys: nil, relativeTo: nil)
-        let name = url.path == Location.iCloudDrivePath ? "iCloud Drive" : FileManager.default.displayName(atPath: url.path)
+        let bookmark = try? url.bookmarkData(options: creating, includingResourceValuesForKeys: nil, relativeTo: nil)
+        let name = url.path == Location.iCloudDrivePath || Location.isICloudDriveRoot(url) ? "iCloud Drive" : FileManager.default.displayName(atPath: url.path)
         return Location(id: UUID(), name: name, path: url.standardizedFileURL.path, bookmark: bookmark)
     }
 
@@ -145,6 +180,7 @@ enum LocationStore {
         if url.startAccessingSecurityScopedResource() { accessing.insert(url.path) }
     }
 
+    #if os(macOS)
     /// Asks for a folder, starting in iCloud Drive or wherever `directory` says.
     static func choose(startingIn directory: URL? = nil, message: String? = nil) -> URL? {
         let panel = NSOpenPanel()
@@ -157,4 +193,5 @@ enum LocationStore {
         panel.directoryURL = directory ?? URL(fileURLWithPath: Location.iCloudDrivePath, isDirectory: true)
         return panel.runModal() == .OK ? panel.url : nil
     }
+    #endif
 }

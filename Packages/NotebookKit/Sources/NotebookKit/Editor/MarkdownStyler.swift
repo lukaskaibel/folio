@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 
 /// What the styler needs to know beyond the text.
 struct StyleEnvironment {
@@ -189,7 +193,7 @@ enum MarkdownStyler {
         if let checkbox = item.checkbox {
             s.addAttribute(.notebookObject, value: EditorObject(.checkbox(checked: item.checked), range: item.prefix, at: checkbox.location), range: NSRange(location: checkbox.location, length: 1))
             hide(s, NSRange(location: checkbox.location + 1, length: item.prefix.upperBound - checkbox.location - 1), .always)
-            prefixWidth = 28
+            prefixWidth = EditorStyle.checkboxWidth
             if item.checked {
                 // Done: greyed out, as in Reminders, without striking it through.
                 s.addAttribute(.foregroundColor, value: Theme.textTertiary, range: line.content)
@@ -391,7 +395,10 @@ enum MarkdownStyler {
                 markers(s, span)
             case .link(let destination):
                 // The text reads and edits like text; the address stays behind a pencil after it, as in Lettera.
-                s.addAttributes([.foregroundColor: Theme.accent, .toolTip: destination], range: span.content)
+                s.addAttribute(.foregroundColor, value: Theme.accent, range: span.content)
+                #if os(macOS)
+                s.addAttribute(.toolTip, value: destination, range: span.content)
+                #endif
                 s.addAttribute(.notebookLink, value: LinkTarget(linkKind(destination, env: env)), range: span.content)
                 if let open = span.markers.first { hide(s, open, .always) }
                 if span.markers.count > 1, let close = span.markers.last, close.length > 0 {
@@ -534,6 +541,10 @@ enum MarkdownStyler {
 
 extension NSFont {
     var withItalic: NSFont {
+        #if os(macOS)
         NSFont(descriptor: fontDescriptor.withSymbolicTraits(fontDescriptor.symbolicTraits.union(.italic)), size: pointSize) ?? self
+        #else
+        fontDescriptor.withSymbolicTraits(fontDescriptor.symbolicTraits.union(.traitItalic)).map { UIFont(descriptor: $0, size: pointSize) } ?? self
+        #endif
     }
 }

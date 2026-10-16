@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 
 /// A suggestion for the `[[` link popup.
 public struct LinkSuggestion: Equatable, Sendable {
@@ -32,24 +36,31 @@ public protocol EditorControllerDelegate: AnyObject {
     func editorOutlineDidChange(_ editor: EditorController)
     /// You scrolled: into another section, or the title out of view.
     func editorPositionDidChange(_ editor: EditorController)
+    /// Typing started or stopped, in the note or its title (on iPhone and iPad: the keyboard came up or went).
+    func editorEditingDidChange(_ editor: EditorController)
 }
 
 public extension EditorControllerDelegate {
     func editorOutlineDidChange(_ editor: EditorController) {}
     func editorPositionDidChange(_ editor: EditorController) {}
+    func editorEditingDidChange(_ editor: EditorController) {}
 }
 
 /// Notebook's editor: a TextKit 1 text view whose storage holds the note's Markdown exactly, styled so that it reads as
 /// a finished document. Markdown punctuation shows only right next to a resting caret; while you select, nothing moves.
 @MainActor
-public final class EditorController: NSObject, NSTextViewDelegate, @preconcurrency NSTextStorageDelegate, NSTextFieldDelegate, EditorLayoutSource {
+public final class EditorController: NSObject, @preconcurrency NSTextStorageDelegate, EditorLayoutSource {
     public weak var delegate: EditorControllerDelegate?
 
-    let storage = NSTextStorage()
-    let layoutManager = NotebookLayoutManager()
-    let container = NSTextContainer(size: NSSize(width: EditorStyle.contentWidth, height: CGFloat.greatestFiniteMagnitude))
+    let storage: NSTextStorage
+    let layoutManager: NotebookLayoutManager
+    let container: NSTextContainer
+    /// The text view: AppKit's on the Mac, UIKit's on iPhone and iPad (`EditorController+AppKit`, `+UIKit`), both
+    /// on TextKit 1 with the same storage, layout manager and container.
     let textView: MarkdownTextView
+    #if os(macOS)
     public let scrollView = NSScrollView()
+    #endif
 
     private(set) var document = MarkdownParser.parse("")
     private var lineSignatures: [Int] = []
@@ -57,7 +68,7 @@ public final class EditorController: NSObject, NSTextViewDelegate, @preconcurren
     private(set) var revealed: [NSRange] = []
     /// The block the caret is in, if it shows its Markdown then (tables, math, diagrams, frontmatter).
     private(set) var activeBlock: Int?
-    private var isLoading = false
+    private(set) var isLoading = false
     private var isApplyingStyle = false
     /// True while the editor changes the text itself, so its own changes aren't taken for typing.
     var isPerformingEdit = false
@@ -78,6 +89,35 @@ public final class EditorController: NSObject, NSTextViewDelegate, @preconcurren
     /// even when the note ends too soon to bring it to the top.
     var jump: (heading: Int?, y: CGFloat)?
     var isJumping = false
+    #if os(iOS)
+    /// The selection before the last change, which tells where the caret came from.
+    var previousSelection = NSRange(location: 0, length: 0)
+    /// True while the editor moves the selection itself, so it isn't corrected again.
+    var isSettingSelection = false
+    var isWaitingForTracking = false
+    /// A place restored while the note moves to another screen, kept for when it gets there.
+    var pendingPlace: Place?
+    enum Focus { case title, text }
+    var pendingFocus: Focus?
+    var requestedFocus: (Focus, Date)?
+    var isMoving = false
+    /// Counts the notes loaded, so pictures that finish loading late go only into the note they were meant for.
+    var loadCount = 0
+    /// The editor's own record of changes, for undo (`EditorUndo+UIKit`).
+    let undoStack = EditorUndoManager()
+    var openStep: UndoStep?
+    var isReplayingUndo = false
+    /// The text as it was before the last change, which tells what a change removed.
+    var shadowText = NSMutableString()
+    /// What the Format panel shows: the style of the caret's line and the formatting it is in.
+    let formatState = FormatState()
+    /// The Format panel in place of the keyboard, made the first time Aa is tapped.
+    var formatInput: UIView?
+    /// The bar above the keyboard.
+    var writingBar: UIView?
+    /// Touching and holding pictures, and dragging them.
+    var pictureInteractions: PictureInteractions?
+    #endif
     /// Where the `[[` the popup completes starts (just after the brackets). While it is set, that link is drawn as
     /// the text being typed rather than as a finished link.
     var suggestionAnchor: Int? {
@@ -90,67 +130,33 @@ public final class EditorController: NSObject, NSTextViewDelegate, @preconcurren
 
     public override init() {
         _ = NotebookSettings.shared
-        textView = MarkdownTextView(frame: NSRect(x: 0, y: 0, width: 800, height: 600), textContainer: nil)
-        super.init()
+        let storage = NSTextStorage()
+        let layoutManager = NotebookLayoutManager()
+        let container = NSTextContainer(size: NSSize(width: EditorStyle.contentWidth, height: CGFloat.greatestFiniteMagnitude))
         storage.addLayoutManager(layoutManager)
         container.widthTracksTextView = true
         container.lineFragmentPadding = 0
         layoutManager.addTextContainer(container)
+        self.storage = storage
+        self.layoutManager = layoutManager
+        self.container = container
+        #if os(macOS)
+        textView = MarkdownTextView(frame: NSRect(x: 0, y: 0, width: 800, height: 600), textContainer: nil)
+        #else
+        textView = MarkdownTextView(frame: CGRect(x: 0, y: 0, width: 400, height: 600), textContainer: container)
+        #endif
+        super.init()
+        #if os(macOS)
         textView.replaceTextContainer(container)
+        #endif
         configureTextView()
         storage.delegate = self
         layoutManager.source = self
         textView.controller = self
-        textView.delegate = self
-        textView.titleField.delegate = self
-
-        scrollView.documentView = textView
-        scrollView.hasVerticalScroller = true
-        scrollView.autohidesScrollers = true
-        scrollView.drawsBackground = false
-        scrollView.borderType = .noBorder
-        scrollView.scrollerStyle = .overlay
-        // Room for the toolbar, which the note scrolls under.
-        scrollView.automaticallyAdjustsContentInsets = true
-        scrollView.contentView.postsBoundsChangedNotifications = true
-        NotificationCenter.default.addObserver(self, selector: #selector(scrolled), name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
         NotificationCenter.default.addObserver(self, selector: #selector(typographyChanged), name: .notebookTypographyChanged, object: nil)
         suggestions.onPick = { [weak self] suggestion in self?.acceptSuggestion(suggestion) }
     }
 
-    private func configureTextView() {
-        let view = textView
-        view.isRichText = false
-        view.importsGraphics = false
-        view.allowsUndo = true
-        view.usesFontPanel = false
-        view.usesFindBar = true
-        view.isIncrementalSearchingEnabled = true
-        view.isAutomaticQuoteSubstitutionEnabled = false
-        view.isAutomaticDashSubstitutionEnabled = false
-        view.isAutomaticTextReplacementEnabled = false
-        view.isAutomaticLinkDetectionEnabled = false
-        view.isAutomaticDataDetectionEnabled = false
-        view.isContinuousSpellCheckingEnabled = true
-        view.isAutomaticSpellingCorrectionEnabled = false
-        view.smartInsertDeleteEnabled = false
-        view.drawsBackground = false
-        view.isVerticallyResizable = true
-        view.isHorizontallyResizable = false
-        view.autoresizingMask = [.width]
-        view.minSize = NSSize(width: 0, height: 0)
-        view.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-        view.insertionPointColor = Theme.accent
-        // The system's selection colour, without changing the colour of the text.
-        view.selectedTextAttributes = [.backgroundColor: NSColor.selectedTextBackgroundColor]
-        view.linkTextAttributes = [:]
-        view.typingAttributes = MarkdownStyler.baseAttributes
-        view.defaultParagraphStyle = EditorStyle.paragraph()
-        view.textContainerInset = NSSize(width: 60, height: MarkdownTextView.headerHeight)
-        view.setAccessibilityLabel("Note")
-    }
-
-    public var view: NSView { scrollView }
     public var text: String { storage.string }
     var nsText: NSString { storage.string as NSString }
 
@@ -165,19 +171,31 @@ public final class EditorController: NSObject, NSTextViewDelegate, @preconcurren
         revealed = []
         activeBlock = nil
         lineSignatures = []
-        textView.titleField.stringValue = title
-        textView.metaLabel.stringValue = meta
+        titleText = title
+        metaText = meta
         updateLayoutMode(for: (text as NSString).length)
         storage.beginEditing()
         storage.replaceCharacters(in: NSRange(location: 0, length: storage.length), with: text)
         storage.endEditing()
-        textView.setSelectedRange(NSRange(location: 0, length: 0))
+        setSelection(NSRange(location: 0, length: 0))
+        #if os(iOS)
+        undoStack.clear()
+        openStep = nil
+        previousSelection = NSRange(location: 0, length: 0)
+        layoutManager.selectedRanges = []
+        loadCount += 1
+        // Another note: the keyboard goes, unless this one asks for it below.
+        pendingFocus = nil
+        requestedFocus = nil
+        if textView.isFirstResponder || textView.titleField.isFirstResponder { textView.endEditing(true) }
+        #else
         textView.undoManager?.removeAllActions()
+        #endif
         isLoading = false
         scrollToTop()
         updateOutline()
         if focusTitle {
-            textView.window?.makeFirstResponder(textView.titleField)
+            self.focusTitle()
         }
     }
 
@@ -194,7 +212,7 @@ public final class EditorController: NSObject, NSTextViewDelegate, @preconcurren
         while suffix < limit - prefix, old.character(at: old.length - 1 - suffix) == new.character(at: new.length - 1 - suffix) { suffix += 1 }
         let range = NSRange(location: prefix, length: old.length - prefix - suffix)
         let replacement = new.substring(with: NSRange(location: prefix, length: new.length - prefix - suffix))
-        let selection = textView.selectedRange()
+        let selection = self.selection
         let delta = (replacement as NSString).length - range.length
         var caret = selection
         if selection.location >= range.upperBound { caret.location += delta } else if selection.location > range.location { caret = NSRange(location: range.location + (replacement as NSString).length, length: 0) }
@@ -212,19 +230,19 @@ public final class EditorController: NSObject, NSTextViewDelegate, @preconcurren
         if layoutManager.allowsNonContiguousLayout != partial { layoutManager.allowsNonContiguousLayout = partial }
     }
 
-    public func setMeta(_ meta: String) { textView.metaLabel.stringValue = meta }
+    public func setMeta(_ meta: String) { metaText = meta }
     public func setTitle(_ title: String) {
-        if textView.window?.firstResponder !== textView.titleField.currentEditor() { textView.titleField.stringValue = title }
+        if !isEditingTitle { titleText = title }
     }
 
     public func focusText(atEnd: Bool = false) {
-        textView.window?.makeFirstResponder(textView)
+        makeTextFirstResponder()
         let location = atEnd ? storage.length : 0
-        textView.setSelectedRange(NSRange(location: location, length: 0))
+        setSelection(NSRange(location: location, length: 0))
     }
 
     public func focusTitle() {
-        textView.window?.makeFirstResponder(textView.titleField)
+        makeTitleFirstResponder()
     }
 
     /// Links and pictures may point somewhere else now (files were added, renamed, deleted): style them again.
@@ -255,10 +273,18 @@ public final class EditorController: NSObject, NSTextViewDelegate, @preconcurren
 
     public func textStorage(_ textStorage: NSTextStorage, didProcessEditing editedMask: NSTextStorageEditActions, range editedRange: NSRange, changeInLength delta: Int) {
         guard editedMask.contains(.editedCharacters), !isApplyingStyle else { return }
+        #if os(iOS)
+        let oldRange = NSRange(location: editedRange.location, length: editedRange.length - delta)
+        let removed = shadowText.substring(with: oldRange)
+        shadowText.replaceCharacters(in: oldRange, with: (textStorage.string as NSString).substring(with: editedRange))
+        recordChange(editedRange, removed: removed)
+        #endif
         updateLayoutMode(for: textStorage.length)
+        #if os(macOS)
         // Like the pointer, the copy button keeps out of the way while you type, and it would be left behind by a
         // block that moved.
         updateCopyButton(at: nil)
+        #endif
         if !isLoading { scheduleOutlineUpdate() }
         let oldDocument = document
         let oldSignatures = lineSignatures
@@ -369,7 +395,9 @@ public final class EditorController: NSObject, NSTextViewDelegate, @preconcurren
     /// you are on where it is.
     @objc func typographyChanged() {
         textView.typingAttributes = MarkdownStyler.baseAttributes
+        #if os(macOS)
         textView.defaultParagraphStyle = EditorStyle.paragraph()
+        #endif
         textView.applyTypography()
         preservingScroll {
             restyle(lines: Array(document.lines.indices))
@@ -408,14 +436,10 @@ public final class EditorController: NSObject, NSTextViewDelegate, @preconcurren
 
     // MARK: - Revealing Markdown next to the caret
 
-    var isFocused: Bool {
-        textView.window?.firstResponder === textView
-    }
-
     /// The punctuation to show and the block to open for the caret where it is: none while text is selected or the
     /// note doesn't have the focus.
     func revealTarget() -> (ranges: [NSRange], block: Int?) {
-        let selection = textView.selectedRange()
+        let selection = self.selection
         guard isFocused, !document.lines.isEmpty else { return ([], nil) }
         // While text is selected nothing appears or disappears, so the selection never moves under the pointer:
         // what showed next to the caret before stays until the caret rests somewhere again.
@@ -467,7 +491,7 @@ public final class EditorController: NSObject, NSTextViewDelegate, @preconcurren
 
     /// Shows the punctuation next to the caret and opens the block it is in, keeping the caret's line still on screen.
     func updateReveal(anchor: Int? = nil) {
-        guard !isLoading, !textView.isTrackingMouse else { return }
+        guard !isLoading, !isTracking else { return }
         let target = revealTarget()
         guard target.ranges != revealed || target.block != activeBlock else { return }
         preservingScroll(anchor: anchor) {
@@ -489,19 +513,17 @@ public final class EditorController: NSObject, NSTextViewDelegate, @preconcurren
             }
         }
         // A heading's level tag is drawn in the margin, outside the text the layout manager invalidates.
-        textView.needsDisplay = true
+        marginNeedsDisplay()
     }
 
     /// Runs a change that may make lines taller or shorter and scrolls so that the caret (or the top line, when the
     /// caret is off screen) stays exactly where it was on screen.
     func preservingScroll(anchor: Int? = nil, _ change: () -> Void) {
-        let clip = scrollView.contentView
-        guard textView.window != nil, storage.length > 0 else { change(); return }
-        let visible = clip.bounds
-        let selection = textView.selectedRange()
+        guard isInWindow, storage.length > 0 else { change(); return }
+        let visible = visibleRect
         var index = anchor ?? selection.location
         var y = yPosition(of: index)
-        if anchor == nil, y < visible.minY + scrollView.contentInsets.top || y > visible.maxY {
+        if anchor == nil, y < visible.minY + topInset || y > visible.maxY {
             index = firstVisibleCharacter()
             y = yPosition(of: index)
         }
@@ -511,8 +533,7 @@ public final class EditorController: NSObject, NSTextViewDelegate, @preconcurren
         let after = yPosition(of: index) - visible.minY
         let delta = after - before
         if abs(delta) > 0.5 {
-            clip.scroll(to: NSPoint(x: visible.minX, y: max(-scrollView.contentInsets.top, visible.minY + delta)))
-            scrollView.reflectScrolledClipView(clip)
+            setScrollTop(max(-topInset, visible.minY + delta))
         }
     }
 
@@ -521,23 +542,19 @@ public final class EditorController: NSObject, NSTextViewDelegate, @preconcurren
         let glyph = layoutManager.glyphIndexForCharacter(at: min(index, storage.length - 1))
         guard glyph < layoutManager.numberOfGlyphs else { return 0 }
         if index >= storage.length, layoutManager.extraLineFragmentTextContainer != nil {
-            return layoutManager.extraLineFragmentRect.minY + textView.textContainerOrigin.y
+            return layoutManager.extraLineFragmentRect.minY + textOrigin.y
         }
-        return layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil).minY + textView.textContainerOrigin.y
+        return layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil).minY + textOrigin.y
     }
 
     private func firstVisibleCharacter() -> Int {
-        let visible = scrollView.contentView.bounds
-        let point = NSPoint(x: visible.minX + 1, y: max(0, visible.minY + scrollView.contentInsets.top - textView.textContainerOrigin.y + 1))
+        let visible = visibleRect
+        let point = NSPoint(x: visible.minX + 1, y: max(0, visible.minY + topInset - textOrigin.y + 1))
         let glyph = layoutManager.glyphIndex(for: point, in: container)
         return layoutManager.characterIndexForGlyph(at: glyph)
     }
 
     // MARK: - EditorLayoutSource
-
-    var isDarkAppearance: Bool {
-        textView.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-    }
 
     func objectNeedsDisplay(_ range: NSRange) {
         guard range.upperBound <= storage.length else { return }
@@ -556,23 +573,24 @@ public final class EditorController: NSObject, NSTextViewDelegate, @preconcurren
         try? String(contentsOf: url, encoding: .utf8)
     }
 
-    // MARK: - NSTextViewDelegate
+    // MARK: - Selection and focus
 
-    public func textViewDidChangeSelection(_ notification: Notification) {
-        layoutManager.selectedRanges = textView.selectedRanges.map(\.rangeValue)
-        if !textView.isTrackingMouse { updateReveal() }
+    /// The selection moved: show the Markdown next to the caret, follow a link being typed.
+    func selectionChanged() {
+        layoutManager.selectedRanges = selectedRanges
+        if !isTracking { updateReveal() }
         updateSuggestions()
-        textView.needsDisplay = true
+        textNeedsDisplay()
     }
 
-    public func textDidChange(_ notification: Notification) {
+    func textChanged() {
         guard !isLoading else { return }
         delegate?.editorTextDidChange(self)
         updateSuggestions()
     }
 
     func mouseTrackingEnded() {
-        layoutManager.selectedRanges = textView.selectedRanges.map(\.rangeValue)
+        layoutManager.selectedRanges = selectedRanges
         updateReveal()
     }
 
@@ -583,65 +601,9 @@ public final class EditorController: NSObject, NSTextViewDelegate, @preconcurren
         }
     }
 
-    public func textView(_ textView: NSTextView, willChangeSelectionFromCharacterRanges oldSelectedCharRanges: [NSValue], toCharacterRanges newSelectedCharRanges: [NSValue]) -> [NSValue] {
-        guard !isLoading, newSelectedCharRanges.count == 1, let old = oldSelectedCharRanges.first?.rangeValue else { return newSelectedCharRanges }
-        let range = newSelectedCharRanges[0].rangeValue
-        if range.length == 0 {
-            return [NSValue(range: NSRange(location: snapCaret(range.location, from: old), length: 0))]
-        }
-        return [NSValue(range: expandSelection(range))]
-    }
-
-    /// No spelling marks in code, math, links, addresses or hidden Markdown: they aren't prose.
-    public func textView(_ textView: NSTextView, shouldSetSpellingState value: Int, range affectedCharRange: NSRange) -> Int {
-        guard value != 0, affectedCharRange.upperBound <= storage.length, !document.lines.isEmpty else { return value }
-        for index in affectedCharRange.location..<affectedCharRange.upperBound {
-            if layoutManager.isHidden(index) || layoutManager.object(at: index) != nil { return 0 }
-            if let font = storage.attribute(.font, at: index, effectiveRange: nil) as? NSFont, font.isFixedPitch { return 0 }
-        }
-        let line = document.lines[document.lineIndex(containing: affectedCharRange.location)]
-        for span in line.spans where NSIntersectionRange(span.range, affectedCharRange).length > 0 {
-            switch span.kind {
-            case .code, .math, .link, .autolink, .wikiLink, .embed, .image: return 0
-            default: break
-            }
-        }
-        if case .code = line.kind { return 0 }
-        return value
-    }
-
-    public func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
-        handleCommand(commandSelector)
-    }
-
-    public func textView(_ textView: NSTextView, shouldChangeTextIn affectedCharRange: NSRange, replacementString: String?) -> Bool {
-        guard !isLoading, let replacement = replacementString else { return true }
-        return shouldInsert(replacement, in: affectedCharRange)
-    }
-
-    // MARK: - Title
-
-    public func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
-        guard control === self.textView.titleField else { return false }
-        switch commandSelector {
-        case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertTab(_:)), #selector(NSResponder.moveDown(_:)):
-            commitTitle()
-            focusText()
-            return true
-        case #selector(NSResponder.cancelOperation(_:)):
-            return false
-        default:
-            return false
-        }
-    }
-
-    public func controlTextDidEndEditing(_ notification: Notification) {
-        guard (notification.object as? NSTextField) === textView.titleField else { return }
-        commitTitle()
-    }
-
-    private func commitTitle() {
-        let title = textView.titleField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// The title field was left: its text becomes the note's name.
+    func commitTitle() {
+        let title = titleText.trimmingCharacters(in: .whitespacesAndNewlines)
         delegate?.editor(self, commitTitle: title)
     }
 
@@ -649,7 +611,7 @@ public final class EditorController: NSObject, NSTextViewDelegate, @preconcurren
 
     /// The caret drawn from the baseline up to the top of the text, rather than over the whole line.
     func caretRect(proposed rect: NSRect) -> NSRect {
-        let selection = textView.selectedRange()
+        let selection = self.selection
         guard selection.length == 0, storage.length > 0 else { return shortCaret(rect, font: EditorStyle.body) }
         let index = selection.location
         let fontIndex = index > 0 && (index >= storage.length || nsText.character(at: index) == 10) ? index - 1 : min(index, storage.length - 1)
@@ -661,7 +623,7 @@ public final class EditorController: NSObject, NSTextViewDelegate, @preconcurren
         let line = layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
         let location = layoutManager.location(forGlyphAt: glyph)
         let offset = (storage.attribute(.baselineOffset, at: index, effectiveRange: nil) as? CGFloat) ?? 0
-        let baseline = textView.textContainerOrigin.y + line.minY + location.y - offset
+        let baseline = textOrigin.y + line.minY + location.y - offset
         let top = baseline - font.ascender - 1
         let height = font.ascender - font.descender + 2
         guard abs(rect.midY - (top + height / 2)) < line.height else { return shortCaret(rect, font: font) }

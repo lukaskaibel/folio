@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 import Observation
 
 /// How notes are set: the typeface, its size, the room between lines and how wide the text runs.
@@ -54,7 +58,12 @@ public struct Typography: Hashable, Codable {
     }
 
     public var face = Face.system
+    #if os(macOS)
     public var size: CGFloat = 15
+    #else
+    /// iOS's size for reading, where the Mac's is smaller.
+    public var size: CGFloat = 17
+    #endif
     public var spacing = Spacing.normal
     public var width = Width.medium
 
@@ -100,6 +109,13 @@ public final class NotebookSettings {
         }
     }
 
+    #if os(iOS)
+    /// The tools in the bar above the keyboard, in their order.
+    var writingBarTools: [WritingTool] {
+        didSet { UserDefaults.standard.set(writingBarTools.map(\.rawValue), forKey: "writingBarTools") }
+    }
+    #endif
+
     private init() {
         let defaults = UserDefaults.standard
         typography = (defaults.data(forKey: "typography")).flatMap { try? JSONDecoder().decode(Typography.self, from: $0) } ?? Typography()
@@ -107,6 +123,9 @@ public final class NotebookSettings {
         dimsOtherFiles = defaults.object(forKey: "dimsOtherFiles") as? Bool ?? true
         foldersFirst = defaults.object(forKey: "foldersFirst") as? Bool ?? true
         headingMarks = HeadingMarks(rawValue: defaults.string(forKey: "headingMarks") ?? "") ?? .margin
+        #if os(iOS)
+        writingBarTools = defaults.stringArray(forKey: "writingBarTools")?.compactMap(WritingTool.init(rawValue:)) ?? WritingTool.standard
+        #endif
         EditorStyle.apply(typography)
     }
 

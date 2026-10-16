@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 
 /// The app's state: the locations, the file that is open, where you have been, and everything you can do with files.
@@ -17,25 +21,36 @@ public final class Workspace: NSObject {
 
     private(set) var history: [URL] = []
     private(set) var historyIndex = -1
-    /// Back and Forward by swiping, and where you were in each note, to come back to.
+    #if os(macOS)
+    /// Back and Forward by swiping.
     @ObservationIgnored let pages = PageSwiper()
+    #endif
+    /// Where you were in each note, to come back to.
     @ObservationIgnored private var places: [URL: EditorController.Place] = [:]
     private(set) var favorites: [String] = []
     private(set) var recents: [String] = []
     /// The folders hidden from the sidebar: kept in iCloud, or only for this run with locations given on the command line.
     private(set) var hidden = HiddenFolders(defaults: nil, cloud: nil)
 
+    #if os(macOS)
     /// The search field in the toolbar.
     @ObservationIgnored lazy var search = SearchController(workspace: self)
+    #endif
     var columnVisibility: NavigationSplitViewVisibility = .all
     var isSidebarVisible: Bool {
         get { columnVisibility != .detailOnly }
         set { columnVisibility = newValue ? .all : .detailOnly }
     }
-    /// The outline of the open note, on the right.
-    var isOutlineVisible = UserDefaults.standard.object(forKey: "showsOutline") as? Bool ?? true {
+    /// The outline of the open note, on the right. On the iPad it starts hidden, leaving the note the room.
+    var isOutlineVisible = UserDefaults.standard.object(forKey: "showsOutline") as? Bool ?? Workspace.showsOutlineAtFirst {
         didSet { UserDefaults.standard.set(isOutlineVisible, forKey: "showsOutline") }
     }
+    #if os(macOS)
+    private static let showsOutlineAtFirst = true
+    #else
+    private static let showsOutlineAtFirst = false
+    #endif
+
     /// The open note's headings and length, and where in it you are.
     private(set) var outline: [OutlineHeading] = []
     private(set) var stats = NoteStats()
@@ -50,7 +65,33 @@ public final class Workspace: NSObject {
     /// Brings the main window up (set by the window, which SwiftUI opens).
     @ObservationIgnored var showWindow: (() -> Void)?
 
+    #if os(macOS)
     @ObservationIgnored weak var sidebar: SidebarController?
+    #else
+    /// Counts changes to the folders that have been read, so the lists showing them read them again.
+    private(set) var treeVersion = 0
+    /// A folder to show, opened from search or a link: the iPhone goes into it, the iPad's sidebar opens down to it.
+    private(set) var folderRequest: (url: URL, id: UUID)?
+    /// A file or folder to show in the sidebar, and to select there.
+    private(set) var revealRequest: (url: URL, select: Bool, id: UUID)?
+    /// A new folder to name, or a file to rename, asked for in an alert.
+    var renaming: URL?
+    /// The file shown in Quick Look over everything.
+    var quickLookURL: URL?
+    /// Something that couldn't be done, for an alert.
+    var problem: Problem?
+    /// Counts ⌘F, which puts the caret in the search field.
+    var searchRequest = 0
+    /// A file to delete for good, once you said so, where there is no Recently Deleted to put it in.
+    var deleting: URL?
+    /// What each note looked like when you went on from it, shown while the screen of the note you go on to slides
+    /// over it, and while you swipe back to it. There is only one editor, and it is on the screen in front.
+    @ObservationIgnored var pageSnapshots: [URL: UIView] = [:]
+    /// True while the keyboard is up for the note or its title.
+    private(set) var isEditing = false
+    #endif
+    /// The last file or folder renamed or moved, so screens showing it follow it to its new place.
+    private(set) var relocation: (from: URL, to: URL, id: UUID)?
     @ObservationIgnored private var watcher: FileWatcher?
     @ObservationIgnored private var pendingFolders = Set<String>()
     @ObservationIgnored private var refreshScheduled = false
@@ -60,7 +101,10 @@ public final class Workspace: NSObject {
     public override init() {
         super.init()
         editor.delegate = self
+        index.onBuilt = { [weak self] in self?.editor.refreshLinks() }
+        #if os(macOS)
         pages.workspace = self
+        #endif
     }
 
     // MARK: - Starting
@@ -121,7 +165,7 @@ public final class Workspace: NSObject {
         }
         updateHiddenPaths()
         index.rebuild(locations)
-        sidebar?.reloadAll()
+        sidebarReloadAll()
     }
 
     public func addLocation(_ url: URL) {
@@ -138,12 +182,14 @@ public final class Workspace: NSObject {
         locationsChanged()
     }
 
+    #if os(macOS)
     /// Asks for iCloud Drive (or another folder) and adds it.
     public func chooseLocation(iCloud: Bool) {
         let start = iCloud ? URL(fileURLWithPath: Location.iCloudDrivePath, isDirectory: true) : FileManager.default.homeDirectoryForCurrentUser
         guard let url = LocationStore.choose(startingIn: start, message: iCloud ? "Click Open to show iCloud Drive in Notebook." : nil) else { return }
         addLocation(url)
     }
+    #endif
 
     /// A folder from File › Open or the Dock icon: shown where it is in the sidebar, or added as a location of its own
     /// (iCloud Drive, say) when no location has it yet.
@@ -232,7 +278,7 @@ public final class Workspace: NSObject {
             indexFolders.append(url)
             if let node = existingNode(for: url), node.hasLoadedChildren, node.reload() { changed.append(node) }
         }
-        if !changed.isEmpty { sidebar?.reload(changed) }
+        if !changed.isEmpty { sidebarReload(changed) }
         index.refresh(folders: indexFolders, locations: locations)
         editor.refreshLinks()
         if let current = currentURL, !FileManager.default.fileExists(atPath: current.path), note == nil {
@@ -254,14 +300,21 @@ public final class Workspace: NSObject {
         guard FileManager.default.fileExists(atPath: target.path, isDirectory: &isDirectory) || target.lastPathComponent.hasSuffix(".icloud") else { return }
         if isDirectory.boolValue, !isPackage(target) {
             selectedFolder = target
-            sidebar?.reveal(target, select: true)
+            reveal(target, select: true)
+            #if os(iOS)
+            folderRequest = (target, UUID())
+            #endif
             return
         }
         if target == currentURL {
             if focusTitle { editor.focusTitle() }
             return
         }
+        #if os(macOS)
         pages.willOpen(target)
+        #else
+        keepSnapshot()
+        #endif
         if note != nil, let current = currentURL { places[current] = editor.place }
         leaveCurrentNote()
         if (try? target.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]).ubiquitousItemDownloadingStatus) == .notDownloaded {
@@ -282,7 +335,6 @@ public final class Workspace: NSObject {
             // The editor only reports changes, and a Quick Look file in between cleared the outline here.
             editorOutlineDidChange(editor)
             editorPositionDidChange(editor)
-            if !focusTitle { DispatchQueue.main.async { [weak self] in self?.focusEditorIfNothingElse() } }
         } else {
             note = nil
             outline = []
@@ -303,22 +355,78 @@ public final class Workspace: NSObject {
             UserDefaults.standard.set(target.path, forKey: "lastOpened")
         }
         // Only the selection moves in the sidebar: nothing above it changes, so nothing jumps.
-        sidebar?.reveal(target, select: true)
+        reveal(target, select: true)
     }
+
+    #if os(iOS)
+    /// Leaves the file that is open, for the folder it is in: the iPhone's Back.
+    public func closeFile() {
+        guard let current = currentURL else { return }
+        keepSnapshot()
+        if note != nil { places[current] = editor.place }
+        leaveCurrentNote()
+        currentURL = nil
+        outline = []
+        stats = NoteStats()
+        currentHeading = nil
+        isTitleScrolledAway = false
+    }
+
+    /// Opens a note again, where you left it: going back to it on the iPhone.
+    public func reopen(_ url: URL) {
+        open(url, recordHistory: false)
+    }
+
+    /// The folder Notebook keeps on this device, shown in the Files app under On My iPhone › Notebook.
+    nonisolated public static var onDeviceFolder: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    }
+
+    /// A file or folder handed over by another app (the Files app's Open With, a share): a folder becomes a location,
+    /// a file opens, from its folder if Notebook shows that.
+    public func openFromOutside(_ url: URL) {
+        start()
+        guard url.isFileURL else { return }
+        _ = url.startAccessingSecurityScopedResource()
+        if (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+            if location(containing: url) == nil { addLocation(url) }
+        }
+        open(url)
+    }
+
+    /// Reads the folders on screen again: when Notebook comes back to the front and when you pull a list down. Pulling
+    /// down (`thoroughly`) reads every folder for search again too.
+    public func refresh(thoroughly: Bool = false) {
+        guard isStarted, !locations.isEmpty else { return }
+        var folders: [URL] = []
+        var changed: [FileNode] = []
+        func visit(_ node: FileNode) {
+            guard node.hasLoadedChildren else { return }
+            folders.append(node.url)
+            if node.reload() { changed.append(node) }
+            node.loadedChildren().filter(\.isFolder).forEach(visit)
+        }
+        roots.values.forEach(visit)
+        if !changed.isEmpty { sidebarReload(changed) }
+        if thoroughly { index.rebuild(locations) } else { index.refresh(folders: folders, locations: locations) }
+        editor.refreshLinks()
+    }
+
+    /// Keeps a picture of the note on screen, for its screen to show once the editor has moved on.
+    private func keepSnapshot() {
+        guard note != nil, let current = currentURL, editor.isInWindow,
+              let snapshot = editor.view.snapshotView(afterScreenUpdates: false) else { return }
+        pageSnapshots[current] = snapshot
+        if pageSnapshots.count > 12, let old = pageSnapshots.keys.first(where: { $0 != current }) { pageSnapshots[old] = nil }
+    }
+    #endif
 
     /// Back and Forward come back to where you were, once the note is in the window again.
     private func restore(_ place: EditorController.Place) {
-        if editor.view.window != nil {
+        if editor.isInWindow {
             editor.restore(place)
         } else {
             DispatchQueue.main.async { [weak self] in self?.editor.restore(place) }
-        }
-    }
-
-    private func focusEditorIfNothingElse() {
-        guard let window = editor.textView.window else { return }
-        if window.firstResponder === window || window.firstResponder == nil || window.firstResponder is NSOutlineView {
-            return
         }
     }
 
@@ -329,13 +437,23 @@ public final class Workspace: NSObject {
     /// Saves the note being left; a new note left empty goes away, and pictures it no longer uses go to the Trash.
     private func leaveCurrentNote() {
         guard let note else { return }
+        #if os(iOS)
+        // Back while typing a new name: the name counts, as it would once the title is left.
+        if editor.isEditingTitle { editor.commitTitle() }
+        #endif
         note.update(text: editor.text)
         note.close()
         let folder = note.url.deletingLastPathComponent()
         let dropped = assetsInUse.subtracting(FileOperations.assetNames(in: note.text))
         if !dropped.isEmpty { FileOperations.cleanUpAssets(in: folder, candidates: dropped) }
         if note.isNew, note.isEmpty, note.url.deletingPathExtension().lastPathComponent.hasPrefix("Untitled") {
+            #if os(iOS)
+            // Where there is no Recently Deleted, an empty note made a moment ago goes for good: nothing is lost.
+            if !FileOperations.trash(note.url) { _ = FileOperations.delete(note.url) }
+            #else
             _ = FileOperations.trash(note.url)
+            #endif
+            refreshNow(folder)
         }
         self.note = nil
     }
@@ -380,9 +498,10 @@ public final class Workspace: NSObject {
     }
 
     private func noteMoved(to url: URL) {
+        if let old = currentURL { relocation = (old, url.standardizedFileURL, UUID()) }
         currentURL = url.standardizedFileURL
         editor.setTitle(url.deletingPathExtension().lastPathComponent)
-        sidebar?.reveal(url, select: true)
+        reveal(url, select: true)
     }
 
     private func currentNoteDeleted() {
@@ -398,7 +517,9 @@ public final class Workspace: NSObject {
         let path = url.standardizedFileURL.path
         if let index = favorites.firstIndex(of: path) { favorites.remove(at: index) } else { favorites.append(path) }
         if !temporaryLocations { UserDefaults.standard.set(favorites, forKey: "favorites") }
+        #if os(macOS)
         sidebar?.reloadSections()
+        #endif
     }
 
     var favoriteURLs: [URL] {
@@ -425,7 +546,11 @@ public final class Workspace: NSObject {
         favorites = favorites.map(fix)
         recents = recents.map(fix)
         history = history.map { URL(fileURLWithPath: fix($0.path)) }
+        relocation = (old.standardizedFileURL, new.standardizedFileURL, UUID())
         if let current = currentURL { currentURL = URL(fileURLWithPath: fix(current.path)) }
+        #if os(iOS)
+        pageSnapshots = Dictionary(pageSnapshots.map { (URL(fileURLWithPath: fix($0.key.path)), $0.value) }, uniquingKeysWith: { a, _ in a })
+        #endif
         if !temporaryLocations {
             UserDefaults.standard.set(favorites, forKey: "favorites")
             UserDefaults.standard.set(recents, forKey: "recents")
@@ -455,31 +580,35 @@ public final class Workspace: NSObject {
         note?.isNew = title == nil
     }
 
-    public func newFolder(in parent: URL? = nil) {
+    /// A new folder, named "New Folder" to be renamed at once, or with the name already chosen.
+    @discardableResult
+    public func newFolder(in parent: URL? = nil, named name: String? = nil) -> URL? {
         guard let parent = parent ?? selectedFolder ?? currentURL?.deletingLastPathComponent() ?? locations.first?.url,
-              let url = FileOperations.createFolder(in: parent) else { return }
+              let url = FileOperations.createFolder(in: parent, name: name.map(FileOperations.fileName(from:)) ?? "New Folder") else { return nil }
         refreshNow(parent)
-        sidebar?.reveal(url, select: true)
+        reveal(url, select: true)
+        #if os(macOS)
         sidebar?.beginRenaming(url)
+        #endif
+        return url
     }
 
     /// Reads a folder again right away, without waiting for the file system to report the change.
     func refreshNow(_ folder: URL) {
-        if let node = existingNode(for: folder), node.hasLoadedChildren, node.reload() { sidebar?.reload([node]) }
+        if let node = existingNode(for: folder), node.hasLoadedChildren, node.reload() { sidebarReload([node]) }
         index.refresh(folders: [folder], locations: locations)
     }
 
+    /// Renames a file or folder. Links to a renamed note in other notes follow it, unless it is a new note getting its
+    /// first name, which nothing links to yet.
     @discardableResult
-    func rename(_ url: URL, to name: String) -> URL? {
-        guard !isLinkedFolder(url) else { NSSound.beep(); return nil }
+    func rename(_ url: URL, to name: String, updatingLinks: Bool = true) -> URL? {
+        guard !isLinkedFolder(url) else { beep(); return nil }
         let isNote = FileKind(url: url, isDirectory: false) == .note
         let oldName = url.deletingPathExtension().lastPathComponent
         if url == currentURL { note?.saveNow() }
         guard let renamed = FileOperations.rename(url, to: name) else {
-            let alert = NSAlert()
-            alert.messageText = "The name “\(name)” is already taken."
-            alert.informativeText = "Please choose a different name."
-            if let window = editor.textView.window ?? NSApp.mainWindow { alert.beginSheetModal(for: window) } else { alert.runModal() }
+            report("The name “\(name)” is already taken.", "Please choose a different name.")
             return nil
         }
         if note?.url.standardizedFileURL == url.standardizedFileURL { note?.moved(to: renamed) }
@@ -488,24 +617,29 @@ public final class Workspace: NSObject {
         if url.standardizedFileURL == note?.url.standardizedFileURL || renamed.standardizedFileURL == currentURL {
             editor.setTitle(renamed.deletingPathExtension().lastPathComponent)
         }
-        if isNote, let location = location(containing: renamed) {
+        if isNote, updatingLinks, let location = location(containing: renamed) {
             let newName = renamed.deletingPathExtension().lastPathComponent
-            for folder in location.folders {
-                _ = FileOperations.updateLinks(from: oldName, to: newName, under: folder.url, skipping: nil)
+            let roots = location.folders.map(\.url)
+            // In the background: it reads every note of the location, which in a large folder in iCloud Drive takes
+            // long (and waits for notes still to download). The notes it changes come back as changes on disk.
+            Task.detached(priority: .utility) {
+                for root in roots {
+                    _ = FileOperations.updateLinks(from: oldName, to: newName, under: root, skipping: nil)
+                }
             }
         }
-        sidebar?.reveal(renamed, select: renamed == currentURL)
+        reveal(renamed, select: renamed == currentURL)
         return renamed
     }
 
     func move(_ url: URL, into folder: URL) {
-        guard !isLinkedFolder(url) else { NSSound.beep(); return }
+        guard !isLinkedFolder(url) else { beep(); return }
         let destination = FileOperations.uniqueURL(in: folder, name: url.deletingPathExtension().lastPathComponent, extension: url.pathExtension.isEmpty ? nil : url.pathExtension)
         if url == currentURL { note?.saveNow() }
         // A note takes the pictures it uses along into the new folder's .assets.
         var text: String?
         if FileKind(url: url, isDirectory: false) == .note { text = NoteDocument.read(url) }
-        guard let moved = FileOperations.move(url, to: destination) else { NSSound.beep(); return }
+        guard let moved = FileOperations.move(url, to: destination) else { beep(); return }
         if note?.url.standardizedFileURL == url.standardizedFileURL { note?.moved(to: moved) }
         if let text, url.deletingLastPathComponent() != folder {
             let assets = FileOperations.assetNames(in: text)
@@ -524,7 +658,23 @@ public final class Workspace: NSObject {
         if moved == currentURL, let note {
             editor.load(text: editor.text, folder: folder, title: moved.deletingPathExtension().lastPathComponent, meta: meta(for: note))
         }
-        sidebar?.reveal(moved, select: moved == currentURL)
+        reveal(moved, select: moved == currentURL)
+    }
+
+    /// Files dropped on a folder: moved there from elsewhere in Notebook's locations, copied from anywhere else (or
+    /// when `copying`, Option on the Mac).
+    func drop(_ urls: [URL], into folder: URL, copying: Bool = false) {
+        for url in urls {
+            if location(containing: url) != nil, !copying {
+                if url.deletingLastPathComponent().standardizedFileURL != folder.standardizedFileURL { move(url, into: folder) }
+            } else {
+                let destination = FileOperations.uniqueURL(in: folder, name: url.deletingPathExtension().lastPathComponent, extension: url.pathExtension.isEmpty ? nil : url.pathExtension)
+                let accessing = url.startAccessingSecurityScopedResource()
+                try? FileManager.default.copyItem(at: url, to: destination)
+                if accessing { url.stopAccessingSecurityScopedResource() }
+            }
+        }
+        refreshNow(folder)
     }
 
     /// Where a file can be moved: every folder of every location, in order, with how deep it is.
@@ -553,37 +703,53 @@ public final class Workspace: NSObject {
         }
     }
 
-    func trash(_ url: URL) {
-        guard !isLinkedFolder(url) else { NSSound.beep(); return }
+    /// Moves a file or folder to the Trash. Returns false when that can't be done (the place has no Trash).
+    @discardableResult
+    func trash(_ url: URL) -> Bool {
+        guard !isLinkedFolder(url) else { beep(); return false }
         let wasCurrent = url == currentURL || (currentURL?.path.hasPrefix(url.path + "/") ?? false)
         if wasCurrent {
             note?.close()
             note = nil
             currentURL = nil
         }
-        guard FileOperations.trash(url) else { NSSound.beep(); return }
+        guard FileOperations.trash(url) else { beep(); return false }
         hiddenFolderMoved(from: url, to: nil)
         refreshNow(url.deletingLastPathComponent())
         favorites.removeAll { $0 == url.path }
+        #if os(macOS)
         if wasCurrent, let previous = history.last(where: { $0 != url && FileManager.default.fileExists(atPath: $0.path) }) {
             open(previous, recordHistory: false)
         }
+        #endif
+        return true
     }
+
+    #if os(iOS)
+    /// Deletes for good, after you agreed to it: only where there is no Recently Deleted.
+    func deleteImmediately(_ url: URL) {
+        if url == currentURL || (currentURL?.path.hasPrefix(url.path + "/") ?? false) { closeFile() }
+        guard FileOperations.delete(url) else { beep(); return }
+        hiddenFolderMoved(from: url, to: nil)
+        refreshNow(url.deletingLastPathComponent())
+        favorites.removeAll { $0 == url.path }
+    }
+    #endif
 
     func duplicate(_ url: URL) {
         guard !isLinkedFolder(url), let copy = FileOperations.duplicate(url) else { return }
         refreshNow(url.deletingLastPathComponent())
-        sidebar?.reveal(copy, select: false)
-    }
-
-    func revealInFinder(_ url: URL) {
-        NSWorkspace.shared.activateFileViewerSelecting([url])
+        reveal(copy, select: false)
     }
 
     func copyLink(_ url: URL) {
         let name = FileKind(url: url, isDirectory: false) == .note ? url.deletingPathExtension().lastPathComponent : url.lastPathComponent
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString("[[\(name)]]", forType: .string)
+        copyToPasteboard("[[\(name)]]")
+    }
+
+    #if os(macOS)
+    func revealInFinder(_ url: URL) {
+        NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
     /// The note in the window you are working in: a file window's, or this window's.
@@ -604,6 +770,7 @@ public final class Workspace: NSObject {
         guard let active = activeEditor() else { NSSound.beep(); return }
         NoteExporter.print(active.editor, title: active.title, from: active.window)
     }
+    #endif
 
     /// The open file's name as you read it: notes without their extension.
     var currentTitle: String {
@@ -627,8 +794,58 @@ public final class Workspace: NSObject {
     // MARK: - Quick Look
 
     func quickLook(_ url: URL) {
+        #if os(macOS)
         QuickLookPanel.shared.show(url)
+        #else
+        quickLookURL = url
+        #endif
     }
+
+    // MARK: - What the window shows
+
+    /// Something that couldn't be done: an alert, on the Mac over the window.
+    func report(_ title: String, _ message: String) {
+        #if os(macOS)
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        if let window = editor.textView.window ?? NSApp.mainWindow { alert.beginSheetModal(for: window) } else { alert.runModal() }
+        #else
+        problem = Problem(title: title, message: message)
+        #endif
+    }
+
+    /// Opens the folders down to a file in the sidebar, and selects it there.
+    func reveal(_ url: URL, select: Bool) {
+        #if os(macOS)
+        sidebar?.reveal(url, select: select)
+        #else
+        revealRequest = (url, select, UUID())
+        #endif
+    }
+
+    func sidebarReloadAll() {
+        #if os(macOS)
+        sidebar?.reloadAll()
+        #else
+        treeVersion += 1
+        #endif
+    }
+
+    private func sidebarReload(_ nodes: [FileNode]) {
+        #if os(macOS)
+        sidebar?.reload(nodes)
+        #else
+        treeVersion += 1
+        #endif
+    }
+}
+
+/// Something that couldn't be done, and why.
+public struct Problem: Identifiable, Equatable {
+    public let id = UUID()
+    public var title: String
+    public var message: String
 }
 
 // MARK: - EditorControllerDelegate
@@ -648,12 +865,22 @@ extension Workspace: EditorControllerDelegate {
         if isTitleScrolledAway != editor.isTitleScrolledAway { isTitleScrolledAway = editor.isTitleScrolledAway }
     }
 
+    public func editorEditingDidChange(_ editor: EditorController) {
+        #if os(iOS)
+        // Asked once the focus has settled, so going from the title to the text doesn't count as stopping.
+        DispatchQueue.main.async { [weak self] in
+            let editing = editor.isFocused || editor.isEditingTitle
+            if self?.isEditing != editing { self?.isEditing = editing }
+        }
+        #endif
+    }
+
     public func editor(_ editor: EditorController, open target: LinkTarget.Kind) {
         switch target {
         case .url(let string):
-            if let url = URL(string: string), url.scheme != nil { NSWorkspace.shared.open(url) }
+            if let url = URL(string: string), url.scheme != nil { openExternally(url) }
         case .file(let url):
-            if FileManager.default.fileExists(atPath: url.path) { open(url) } else { NSSound.beep() }
+            if FileManager.default.fileExists(atPath: url.path) { open(url) } else { beep() }
         case .note(let target):
             if let url = index.resolve(target, from: currentURL) {
                 open(url)
@@ -676,12 +903,14 @@ extension Workspace: EditorControllerDelegate {
     public func editor(_ editor: EditorController, commitTitle title: String) {
         guard let note else { return }
         let current = note.url.deletingPathExtension().lastPathComponent
+        // A new note's title left empty keeps its placeholder, rather than "Untitled" to type over.
+        if title.isEmpty, note.isNew { return }
         let wanted = title.isEmpty ? current : title
         if wanted.isEmpty || FileOperations.fileName(from: wanted) == current {
             editor.setTitle(current)
             return
         }
-        if rename(note.url, to: wanted) == nil { editor.setTitle(current) }
+        if rename(note.url, to: wanted, updatingLinks: !note.isNew) == nil { editor.setTitle(current) }
         note.isNew = false
     }
 
