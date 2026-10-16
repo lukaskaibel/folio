@@ -193,7 +193,7 @@ enum MarkdownStyler {
         if let checkbox = item.checkbox {
             s.addAttribute(.notebookObject, value: EditorObject(.checkbox(checked: item.checked), range: item.prefix, at: checkbox.location), range: NSRange(location: checkbox.location, length: 1))
             hide(s, NSRange(location: checkbox.location + 1, length: item.prefix.upperBound - checkbox.location - 1), .always)
-            prefixWidth = 28
+            prefixWidth = EditorStyle.checkboxWidth
             if item.checked {
                 // Done: greyed out, as in Reminders, without striking it through.
                 s.addAttribute(.foregroundColor, value: Theme.textTertiary, range: line.content)

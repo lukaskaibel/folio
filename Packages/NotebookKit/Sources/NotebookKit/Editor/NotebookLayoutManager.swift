@@ -162,7 +162,7 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
         case .bullet:
             return NSRect(x: 0, y: 0, width: EditorStyle.listIndent, height: 4)
         case .checkbox:
-            return NSRect(x: 0, y: 0, width: 28, height: 4)
+            return NSRect(x: 0, y: 0, width: EditorStyle.checkboxWidth, height: 4)
         case .quoteBar:
             return NSRect(x: 0, y: 0, width: EditorStyle.quoteIndent, height: 4)
         case .chipLead:
@@ -351,27 +351,27 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
             }
 
         case .checkbox(let checked):
-            let side: CGFloat = 16
+            // A circle, as in Notes and Reminders.
+            let side = EditorStyle.checkboxSide
             let box = NSRect(x: rect.minX + 1, y: baseline - font.capHeight / 2 - side / 2, width: side, height: side)
-            let path = NSBezierPath(roundedRect: box.insetBy(dx: 0.75, dy: 0.75), xRadius: 4.5, yRadius: 4.5)
             if checked {
-                // Done: a quiet grey box and tick, like the text next to it.
-                Theme.faint.setStroke()
-                path.lineWidth = 1.5
-                path.stroke()
+                // Done: filled with the accent colour, the tick cut out of it.
+                Theme.accent.setFill()
+                NSBezierPath(ovalIn: box).fill()
                 let check = NSBezierPath()
-                check.move(to: CGPoint(x: box.minX + 4.2, y: box.midY + 0.2))
-                check.line(to: CGPoint(x: box.minX + 7, y: box.midY + 3))
-                check.line(to: CGPoint(x: box.maxX - 3.8, y: box.midY - 3.2))
-                check.lineWidth = 1.8
+                check.move(to: CGPoint(x: box.minX + side * 0.28, y: box.midY + side * 0.01))
+                check.line(to: CGPoint(x: box.minX + side * 0.44, y: box.midY + side * 0.16))
+                check.line(to: CGPoint(x: box.minX + side * 0.73, y: box.midY - side * 0.16))
+                check.lineWidth = max(1.6, side * 0.09)
                 check.lineCapStyle = .round
                 check.lineJoinStyle = .round
-                Theme.textTertiary.setStroke()
+                Theme.panel.setStroke()
                 check.stroke()
             } else {
-                Theme.textTertiary.setStroke()
-                path.lineWidth = 1.5
-                path.stroke()
+                let ring = NSBezierPath(ovalIn: box.insetBy(dx: 0.75, dy: 0.75))
+                ring.lineWidth = 1.5
+                Theme.faint.setStroke()
+                ring.stroke()
             }
 
         case .quoteBar:

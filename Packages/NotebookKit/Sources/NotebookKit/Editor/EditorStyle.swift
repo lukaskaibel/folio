@@ -34,6 +34,17 @@ enum EditorStyle {
     static var codeLineHeight: CGFloat { (codeSize * typography.spacing.factor * 0.96).rounded(.down) }
     static var contentWidth: CGFloat { typography.width.points }
     static let listIndent: CGFloat = 24
+    /// A checklist's circle, as in Notes: big enough for a fingertip on iPhone and iPad, a little smaller next to the
+    /// Mac's text.
+    static var checkboxSide: CGFloat {
+        #if os(iOS)
+        (bodySize * 1.3).rounded()
+        #else
+        (bodySize * 1.15).rounded()
+        #endif
+    }
+    /// The room a checkbox takes before its text.
+    static var checkboxWidth: CGFloat { checkboxSide + 10 }
     static let quoteIndent: CGFloat = 18
     static let codePadding: CGFloat = 14
 
