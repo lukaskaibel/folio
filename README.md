@@ -89,10 +89,11 @@ you draw near its lower edge, so you can keep going down. As in Notes, there's n
 between the lines of text, and at the end of the note anywhere below the text. Text stays text: you draw in the
 drawings, never over the words. On iPhone and iPad it is PencilKit with Apple's own tool picker, so Apple Pencil with
 its pressure and tilt, the ruler and the lasso work as they do in Notes; one finger draws and two scroll, or, where only
-Apple Pencil draws, a finger scrolls. On the Mac you draw with the mouse, the trackpad or a tablet's pen, with a pen,
-pencil, marker or eraser from a palette at the bottom of the note. Done, Escape or a click in the text puts the drawing
-back in the text, as tall as what you drew; start typing and the text goes on below it. Tap a drawing (double-click it
-on the Mac) to draw in it again.
+Apple Pencil draws, a finger scrolls. On the iPhone, Undo is in the bar at the top while you draw, as in Notes; touch
+and hold it for Redo. On the Mac you draw with the mouse, the trackpad or a tablet's pen, with a pen, pencil, marker or
+eraser from a palette at the bottom of the note. Done, Escape or a click in the text puts the drawing back in the text,
+as tall as what you drew; start typing and the text goes on below it. Tap a drawing (double-click it on the Mac) to draw
+in it again.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/drawing-dark.webp">
@@ -369,6 +370,7 @@ and iPad:
 | Tap a checkbox, a link or a picture | Tick it, follow it, or look at it in Quick Look |
 | Tap a drawing | Draw in it |
 | While drawing: one finger, two fingers | Draw, scroll (where only Apple Pencil draws, a finger scrolls) |
+| While drawing on the iPhone: Undo at the top, or touch and hold it | Take back the last stroke, or Redo |
 | Touch and hold a picture or file in a note, then drag | Move it to another place in the note, or into another app |
 | Touch and hold a picture or file, then let go | Select it: Quick Look, copy, cut, share or delete |
 | Tap the heading level in the margin | Title, heading, subheading or body (iPad) |

@@ -136,6 +136,28 @@ extension EditorController {
         if waiting { DrawingFile.writing.sync {} }
     }
 
+    // MARK: - Undo
+
+    /// The canvas drawn in last, whose strokes Undo takes back.
+    private var focusedCanvas: DrawingCanvas? {
+        guard let session = drawingSession, let picture = session.focused else { return nil }
+        return session.canvases[picture]
+    }
+
+    public var canUndoDrawing: Bool { focusedCanvas?.undoManager?.canUndo ?? false }
+    public var canRedoDrawing: Bool { focusedCanvas?.undoManager?.canRedo ?? false }
+
+    /// Takes back the last stroke or erasing in the drawing drawn in last, as the Undo button does in Notes.
+    public func undoDrawing() {
+        focusedCanvas?.undoManager?.undo()
+        delegate?.editorDrawingDidChange(self)
+    }
+
+    public func redoDrawing() {
+        focusedCanvas?.undoManager?.redo()
+        delegate?.editorDrawingDidChange(self)
+    }
+
     func showsCanvas(for picture: URL) -> Bool {
         drawingSession?.canvases[picture] != nil
     }
@@ -358,11 +380,22 @@ extension EditorController {
         DrawingStore.shared.setLive(file, for: canvas.picture)
         if grew { relayoutDrawings([canvas.picture]) }
         scheduleDrawingSave()
+        undoDidChange()
     }
 
-    /// A stroke started in a canvas: it gets the tools.
+    /// A stroke started in a canvas: it gets the tools, and Undo takes back its strokes.
     func canvasDidBeginStroke(_ canvas: DrawingCanvas) {
         drawingSession?.focused = canvas.picture
+        undoDidChange()
+    }
+
+    /// Undo and Redo may have something else to do now. PencilKit registers a stroke's undo after it says the drawing
+    /// changed, so the toolbar hears of it a moment later.
+    private func undoDidChange() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.isDrawing else { return }
+            self.delegate?.editorDrawingDidChange(self)
+        }
     }
 
     /// After drawing, the drawing is as tall as its strokes, so it doesn't leave the room it grew by in the note.

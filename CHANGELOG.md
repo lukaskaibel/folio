@@ -23,9 +23,10 @@ versions follow [semantic versioning](https://semver.org).
   drawing on screen, or in a new one below the line you're writing on (at the end of the note, or in the middle of the
   screen, when you aren't writing), as wide as the text and with no frame around it; it grows as you draw near its lower
   edge, and at the end of the note you can draw anywhere below the text. On iPhone and iPad with Apple Pencil or a
-  finger and the system's tool picker; on the Mac with the mouse, the trackpad or a tablet, and a pen, pencil, marker
-  and eraser at the bottom of the note. Each drawing is a PNG in `.assets` that other apps show, with its strokes in a
-  `.drawing` file next to it, so it stays a drawing you can go on with in Notebook.
+  finger and the system's tool picker, and on the iPhone Undo at the top (touch and hold it for Redo); on the Mac with
+  the mouse, the trackpad or a tablet, and a pen, pencil, marker and eraser at the bottom of the note. Each drawing is a
+  PNG in `.assets` that other apps show, with its strokes in a `.drawing` file next to it, so it stays a drawing you can
+  go on with in Notebook.
 - Hide folders you don't want to see, such as the ones other apps keep in iCloud Drive: right-click one and choose
   Hide Folder, or on iPhone and iPad touch and hold it. Hidden folders leave the sidebar, the lists, search and Move
   To, and stay hidden on your other Macs, iPhones and iPads through iCloud. To see them again, dimmed, click the eye
