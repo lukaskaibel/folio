@@ -126,6 +126,9 @@ enum DebugRemote {
             case "deletepicture": editor.deleteObject(ranges[index])
             default: log("pictures \(ranges)")
             }
+        case "movetext":
+            // movetext <location> <length> <to>: text dragged within the note.
+            if numbers.count == 3 { editor.moveText(NSRange(location: Int(numbers[0]), length: Int(numbers[1])), to: Int(numbers[2])) }
         case "formatpanel":
             argument == "hide" ? editor.hideFormatPanel() : editor.showFormatPanel()
         case "scroll":

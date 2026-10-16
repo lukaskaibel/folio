@@ -100,9 +100,17 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
 
     func visibleChildren(of node: FileNode) -> [FileNode] {
         if let cached = visible[ObjectIdentifier(node)] { return cached }
-        let children = node.visibleChildren()
+        let children = workspace.shownChildren(of: node, in: location(of: node))
         visible[ObjectIdentifier(node)] = children
         return children
+    }
+
+    /// The location a node is in, found from its top: locations can be inside one another.
+    private func location(of node: FileNode) -> Location? {
+        var top = node
+        while let parent = top.parent { top = parent }
+        guard let id = workspace.roots.first(where: { $0.value === top })?.key else { return nil }
+        return workspace.locations.first { $0.id == id }
     }
 
     @objc private func optionsChanged() {
@@ -277,15 +285,22 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     }
 
     func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
-        if let entry = item as? SidebarEntry, case .header(let title, _) = entry.kind {
+        if let entry = item as? SidebarEntry, case .header(let title, let id) = entry.kind {
             let cell = outlineView.makeView(withIdentifier: SidebarHeaderCell.identifier, owner: nil) as? SidebarHeaderCell ?? SidebarHeaderCell()
             cell.label.stringValue = title
+            if let location = workspace.locations.first(where: { $0.id == id }), workspace.hasHiddenFolders(in: location) {
+                let shows = workspace.showsHiddenFolders(in: location)
+                cell.showHiddenButton(shows: shows) { [weak self] in self?.workspace.showHiddenFolders(!shows, in: location) }
+            } else {
+                cell.showHiddenButton(shows: nil)
+            }
             return cell
         }
         let cell = outlineView.makeView(withIdentifier: SidebarFileCell.identifier, owner: nil) as? SidebarFileCell ?? SidebarFileCell()
         cell.label.delegate = self
         if let node = item as? FileNode {
-            let dimmed = NotebookSettings.shared.dimsOtherFiles && !node.isFolder && node.kind != .note
+            // Hidden folders show dimmed while their location shows them, as hidden files in the Finder.
+            let dimmed = NotebookSettings.shared.dimsOtherFiles && !node.isFolder && node.kind != .note || node.isFolder && workspace.isHidden(node.url)
             cell.configure(name: node.name, kind: node.kind, inCloud: node.isInCloud, url: node.url, dimmed: dimmed)
         } else if let entry = item as? SidebarEntry, let url = entry.url {
             let kind = FileKind(url: url, isDirectory: (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false)
@@ -414,8 +429,11 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     // MARK: - Context menu
 
     func menuNeedsUpdate(_ menu: NSMenu) {
+        fill(menu, row: outline.clickedRow)
+    }
+
+    func fill(_ menu: NSMenu, row: Int) {
         menu.removeAllItems()
-        let row = outline.clickedRow
         let item = row >= 0 ? outline.item(atRow: row) : nil
         if let entry = item as? SidebarEntry, case .header(_, let locationID) = entry.kind, let locationID,
            let location = workspace.locations.first(where: { $0.id == locationID }) {
@@ -423,6 +441,12 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             add(menu, "New Folder", "folder.badge.plus") { [weak self] in self?.workspace.newFolder(in: location.url) }
             menu.addItem(.separator())
             add(menu, "Show in Finder", "folder") { [weak self] in self?.workspace.revealInFinder(location.url) }
+            if workspace.hasHiddenFolders(in: location) {
+                let shows = workspace.showsHiddenFolders(in: location)
+                add(menu, shows ? "Hide Hidden Folders" : "Show Hidden Folders", shows ? "eye.slash" : "eye") { [weak self] in
+                    self?.workspace.showHiddenFolders(!shows, in: location)
+                }
+            }
             menu.addItem(.separator())
             add(menu, "Add Location…", "plus.rectangle.on.folder") { [weak self] in self?.workspace.chooseLocation(iCloud: false) }
             add(menu, "Remove from Sidebar", "minus.circle") { [weak self] in self?.workspace.removeLocation(locationID) }
@@ -451,6 +475,10 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         }
         let favorite = workspace.isFavorite(url)
         add(menu, favorite ? "Remove from Favorites" : "Add to Favorites", favorite ? "star.slash" : "star") { [weak self] in self?.workspace.toggleFavorite(url) }
+        if isFolder, workspace.canHide(url) {
+            let isHidden = workspace.isHidden(url)
+            add(menu, isHidden ? "Unhide Folder" : "Hide Folder", isHidden ? "eye" : "eye.slash") { [weak self] in self?.workspace.setHidden(url, !isHidden) }
+        }
         menu.addItem(.separator())
         if !isFolder { add(menu, "Copy Link", "link") { [weak self] in self?.workspace.copyLink(url) } }
         add(menu, "Show in Finder", "folder") { [weak self] in self?.workspace.revealInFinder(url) }
@@ -562,6 +590,14 @@ final class SidebarOutlineView: NSOutlineView {
 final class SidebarHeaderCell: NSTableCellView {
     static let identifier = NSUserInterfaceItemIdentifier("header")
     let label = NSTextField(labelWithString: "")
+    /// Shows a location's hidden folders: there while the pointer is on the header, and in the accent colour while
+    /// they show, like a filter that is on.
+    let hiddenButton = NSButton()
+    private var toggleHidden: (() -> Void)?
+    private var showsHidden: Bool?
+    var isHovered = false {
+        didSet { updateButton() }
+    }
 
     init() {
         super.init(frame: .zero)
@@ -571,13 +607,72 @@ final class SidebarHeaderCell: NSTableCellView {
         label.textColor = .secondaryLabelColor
         label.translatesAutoresizingMaskIntoConstraints = false
         addSubview(label)
+        hiddenButton.isBordered = false
+        hiddenButton.imagePosition = .imageOnly
+        hiddenButton.image = NSImage(systemSymbolName: "eye", accessibilityDescription: nil)
+        hiddenButton.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)
+        hiddenButton.target = self
+        hiddenButton.action = #selector(hiddenButtonClicked)
+        hiddenButton.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(hiddenButton)
         NSLayoutConstraint.activate([
             label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
             label.centerYAnchor.constraint(equalTo: centerYAnchor, constant: 1),
+            label.trailingAnchor.constraint(lessThanOrEqualTo: hiddenButton.leadingAnchor, constant: -4),
+            // Left of the row's own Show/Hide chevron, which comes up on hover at the end of the row.
+            hiddenButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -28),
+            hiddenButton.centerYAnchor.constraint(equalTo: label.centerYAnchor),
+            hiddenButton.widthAnchor.constraint(equalToConstant: 20),
+            hiddenButton.heightAnchor.constraint(equalToConstant: 20),
         ])
+        updateButton()
     }
 
     required init?(coder: NSCoder) { fatalError() }
+
+    /// `shows` is nil for a section without hidden folders.
+    func showHiddenButton(shows: Bool?, toggle: (() -> Void)? = nil) {
+        showsHidden = shows
+        toggleHidden = toggle
+        let title = shows == true ? "Hide Hidden Folders" : "Show Hidden Folders"
+        hiddenButton.toolTip = title
+        hiddenButton.setAccessibilityLabel(title)
+        updateHover()
+    }
+
+    // The sidebar makes new headers when it reloads, under a pointer that hasn't moved.
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        updateHover()
+    }
+
+    private func updateHover() {
+        guard let window else { return updateButton() }
+        isHovered = window.isKeyWindow && bounds.contains(convert(window.mouseLocationOutsideOfEventStream, from: nil))
+    }
+
+    private func updateButton() {
+        hiddenButton.isHidden = showsHidden == nil || showsHidden == false && !isHovered
+        hiddenButton.contentTintColor = showsHidden == true ? .controlAccentColor : .secondaryLabelColor
+    }
+
+    @objc private func hiddenButtonClicked() {
+        toggleHidden?()
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for area in trackingAreas { removeTrackingArea(area) }
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self))
+    }
+
+    override func mouseEntered(with event: NSEvent) { isHovered = true }
+    override func mouseExited(with event: NSEvent) { isHovered = false }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        isHovered = false
+    }
 }
 
 final class SidebarFileCell: NSTableCellView {

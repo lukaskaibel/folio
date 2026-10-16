@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 
 /// The editor in a UIKit text view: taps instead of clicks, the keyboard's Return and Backspace as text, the keyboard
 /// over the note, and a menu instead of a popover.
-extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRecognizerDelegate, UITextDropDelegate {
+extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRecognizerDelegate, UITextDragDelegate, UITextDropDelegate {
     func configureTextView() {
         let view = textView
         view.isEditable = true
@@ -34,6 +34,7 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         // would show the text view's, which it is inside of.
         view.titleField.inputAccessoryView = UIView(frame: .zero)
 
+        view.textDragDelegate = self
         view.textDropDelegate = self
         let pictures = PictureInteractions(editor: self)
         pictures.install(on: view)
@@ -499,12 +500,61 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         return false
     }
 
+    // MARK: - Dragging
+
+    /// What is dragged out of the note: its Markdown, where it was, and in which note.
+    final class Drag {
+        let range: NSRange
+        let markdown: String
+        let note: Int
+        let isObject: Bool
+        init(range: NSRange, markdown: String, note: Int, isObject: Bool) {
+            self.range = range
+            self.markdown = markdown
+            self.note = note
+            self.isObject = isObject
+        }
+    }
+
+    /// What a drag out of the note carries: the Markdown, never the text view's attributed text, which can't travel
+    /// and would drop as nothing. A picture or file selected whole goes as the file, for other apps, and its Markdown.
+    func dragItem(for range: NSRange) -> UIDragItem? {
+        guard range.length > 0, range.upperBound <= storage.length else { return nil }
+        let markdown = nsText.substring(with: range)
+        let isObject = isWholeObject(range)
+        var provider = NSItemProvider()
+        if isObject, let url = pictureInteractions?.picture(at: range)?.url, let file = NSItemProvider(contentsOf: url) {
+            file.suggestedName = url.deletingPathExtension().lastPathComponent
+            provider = file
+        }
+        provider.registerObject(markdown as NSString, visibility: .all)
+        let item = UIDragItem(itemProvider: provider)
+        item.localObject = Drag(range: range, markdown: markdown, note: loadCount, isObject: isObject)
+        return item
+    }
+
+    /// Selected text, dragged by the text view's own drag.
+    public func textDraggableView(_ textDraggableView: UIView & UITextDraggable, itemsForDrag dragRequest: UITextDragRequest) -> [UIDragItem] {
+        let start = textView.offset(from: textView.beginningOfDocument, to: dragRequest.dragRange.start)
+        let end = textView.offset(from: textView.beginningOfDocument, to: dragRequest.dragRange.end)
+        return dragItem(for: NSRange(location: start, length: end - start)).map { [$0] } ?? []
+    }
+
+    /// Text or a picture of this note, dragged within it.
+    func noteDrag(in drop: UITextDropRequest) -> Drag? {
+        guard let drag = drop.dropSession.localDragSession?.items.first?.localObject as? Drag,
+              drag.note == loadCount, drag.range.upperBound <= storage.length,
+              nsText.substring(with: drag.range) == drag.markdown else { return nil }
+        return drag
+    }
+
     // MARK: - Dropping pictures and files
 
     /// Pictures and files dragged in from Photos or Files go next to the note, as pasted ones do; text dragged
     /// within the note is the text view's.
     public func textDroppableView(_ textDroppableView: UIView & UITextDroppable, proposalForDrop drop: UITextDropRequest) -> UITextDropProposal {
-        if pictureDrag(in: drop) != nil {
+        if noteDrag(in: drop) != nil {
+            // Moved by the editor itself, in one change: see `willPerformDrop`.
             let proposal = UITextDropProposal(operation: .move)
             proposal.dropPerformer = .delegate
             proposal.dropAction = .insert
@@ -518,7 +568,7 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
     }
 
     private func isFileDrop(_ drop: UITextDropRequest) -> Bool {
-        guard pictureDrag(in: drop) == nil else { return false }
+        guard noteDrag(in: drop) == nil else { return false }
         let providers = drop.dropSession.items.map(\.itemProvider)
         return !drop.isSameView && !providers.isEmpty && providers.allSatisfy { provider in
             provider.canLoadObject(ofClass: UIImage.self) || provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier)
@@ -527,8 +577,9 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
     }
 
     public func textDroppableView(_ textDroppableView: UIView & UITextDroppable, willPerformDrop drop: UITextDropRequest) {
-        if let drag = pictureDrag(in: drop) {
-            return moveObject(drag.range, to: textView.offset(from: textView.beginningOfDocument, to: drop.dropPosition))
+        if let drag = noteDrag(in: drop) {
+            let location = textView.offset(from: textView.beginningOfDocument, to: drop.dropPosition)
+            return drag.isObject ? moveObject(drag.range, to: location) : moveText(drag.range, to: location)
         }
         guard isFileDrop(drop) else { return }
         let location = textView.offset(from: textView.beginningOfDocument, to: drop.dropPosition)

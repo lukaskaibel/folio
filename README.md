@@ -133,13 +133,16 @@ open. Links, the caret and folders are in ink blue to go with it, or in the acce
 
 ### On iPhone and iPad
 
-The same notes in the same editor, laid out the way each device works. On the iPhone you go into one folder per
-screen, as in the Files app, and a note opens on a screen of its own; swipe from the edge to go back. The first screen
-has your favourites, what you opened last and the folders of each location. Search and a new note sit at the bottom,
-as in Notes, and search finds names, notes and PDFs as on the Mac. While you write, a bar above the keyboard has the
-text styles and formatting, a checklist, a link, and pictures from the camera, the document scanner, your photos or
-the Files app. Tap a checkbox to tick it, a link to follow it, a picture to look at it. Swipe a file to move or delete
-it, or to make it a favourite; touch and hold it for everything else.
+The same notes in the same editor, laid out the way each device works. On the iPhone you go into one folder per screen,
+as in the Files app, and a note opens on a screen of its own; swipe from the edge to go back. The first screen has your
+favourites, what you opened last and the folders of each location. Search and a new note sit at the bottom, as in Notes,
+and search finds names, notes and PDFs as on the Mac. While you write, a bar floats above the keyboard with Aa, a
+checklist, attachments, a link, undo and the formatting, a page of tools at a time; Settings › Writing Bar chooses which
+and in what order. Aa brings up the Format panel in the keyboard's place, as in Notes: the text styles, bold, italic and
+the rest, lists, indenting and quotes. Pictures come from the camera, the document scanner, your photos or the Files
+app. Tap a checkbox to tick it, a link to follow it, a picture to look at it; touch and hold a picture and drag it to
+move it in the note, or let go to copy, share or delete it. Swipe a file to move or delete it, or to make it a
+favourite; touch and hold it for everything else.
 
 The iPad has the Mac's layout: the sidebar with its folders opening in place, the note next to it, and the outline in
 an inspector. In portrait the sidebar steps aside once you have picked a note. With a keyboard, the Mac's shortcuts
@@ -162,8 +165,12 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
   sidebar.
 - **iPhone and iPad.** The same editor, search and file handling, with screens made for each: one folder per screen
   on the iPhone, the sidebar on the iPad. Pick iCloud Drive or any folder in the Files app's picker, or keep notes on
-  the device, in On My iPhone › Notebook. A bar above the keyboard formats, links and adds photos, scans and files.
+  the device, in On My iPhone › Notebook. A bar above the keyboard, whose tools you choose, formats, links and adds
+  photos, scans and files; Aa opens the Format panel as in Notes.
   Deleting moves to Recently Deleted; where a place has none, Notebook asks before it deletes.
+- **Hidden folders.** Right-click a folder you don't want to see, such as one another app keeps in iCloud Drive, and
+  choose Hide Folder. It leaves the sidebar, search and Move To, and stays hidden on your other Macs through iCloud.
+  The eye next to the location's name, or ⇧⌘., shows hidden folders again, dimmed, until you click it again.
 - **Live preview editor.** Headings, bold, italic, strikethrough, `==highlight==`, inline code, links, checklists,
   bulleted and numbered lists, quotes, callouts, tables, code blocks, maths, Mermaid, footnotes and front matter, which
   folds into a small "properties" pill.
@@ -188,7 +195,7 @@ Everything is plain Markdown, so other apps keep reading your notes. Notebook ad
 | Link to a note or file | `[[Recipes]]`, `[[Recipes\|text]]`, `[[Offer.pdf]]` | A link you click; dashed when the target doesn't exist yet |
 | Embed | `![[Recipes]]`, `![[Offer.pdf]]` | An excerpt of the note, or a card for the file |
 | Web link | `[text](https://…)` | The text, with a pencil to edit the address |
-| Checklist | `- [ ]`, `- [x]` | A checkbox; done items turn grey |
+| Checklist | `- [ ]`, `- [x]` | A round checkbox, filled when done; done items turn grey |
 | Highlight | `==text==` | A yellow highlight |
 | Callout | `> [!tip] Title` | A coloured box with a symbol |
 | Maths | `$x^2$`, `$$ … $$` | A typeset formula |
@@ -228,10 +235,11 @@ git clone https://github.com/lukaskaibel/notebook.git
 open notebook/Notebook.xcodeproj
 ```
 
-Choose the **Notebook** scheme, then **My Mac** or an iPhone or iPad simulator as the destination, and press ⌘R. A
-local build needs no Apple developer account: without a team, Xcode signs it to run on your Mac and in the Simulator.
-To run it on your own iPhone or iPad, or to sign with your own team, create `Config/Local.xcconfig` with
-`DEVELOPMENT_TEAM = <your team ID>`; it isn't checked in.
+Choose the **Notebook** scheme, then **My Mac** or an iPhone or iPad simulator as the destination, and press ⌘R. A local
+build needs no Apple developer account: without a team, Xcode signs it to run on your Mac and in the Simulator. To run
+it on your own iPhone or iPad, or to sign with your own team, create `Config/Local.xcconfig` with `DEVELOPMENT_TEAM =
+<your team ID>`; it isn't checked in. A local build keeps hidden folders on the device; only the App Store build, signed
+with a team, has the iCloud entitlement that takes them to your other devices.
 
 ### Adding your notes
 
@@ -259,6 +267,7 @@ app's own folder there.
 | ⌘O | Open a Markdown file in a window of its own, or a folder in the sidebar |
 | ⌃⌘S | Show or hide the sidebar |
 | ⌃⌘I | Show or hide the outline |
+| ⇧⌘. | Show or hide hidden folders |
 | ⌘+, ⌘− and ⌘0 | Bigger, smaller and actual text size |
 | ⌥⌘E | Export as PDF |
 | ⌘P | Print |
@@ -286,7 +295,8 @@ While writing:
 | ↑ on the first line | Into the title; Return, Tab or ↓ back into the text |
 
 In the sidebar: Return renames, ⌘⌫ moves to the Trash, and Space opens a file in Quick Look. Right-click a file or
-folder for everything else, including Copy Link, which copies a `[[link]]` to it.
+folder for everything else, including Copy Link, which copies a `[[link]]` to it, and Hide Folder. When a location has
+hidden folders, an eye comes up next to its name as you point at it.
 
 On an iPad with a keyboard, ⌘N, ⌘F, ⌘[ and ⌘], ⌃⌘I and the shortcuts for writing work as on the Mac. On iPhone
 and iPad:
@@ -298,6 +308,8 @@ and iPad:
 | Touch and hold a file or folder | Rename, move, duplicate, copy a link, share and more |
 | Pull a list down | Read the folder again |
 | Tap a checkbox, a link or a picture | Tick it, follow it, or look at it in Quick Look |
+| Touch and hold a picture or file in a note, then drag | Move it to another place in the note, or into another app |
+| Touch and hold a picture or file, then let go | Select it: Quick Look, copy, cut, share or delete |
 | Tap the heading level in the margin | Title, heading, subheading or body (iPad) |
 | Drag down over a note | Put the keyboard away |
 
