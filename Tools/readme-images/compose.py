@@ -2,18 +2,19 @@
 import numpy as np
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
-# Neutral for now: Notebook's own colour comes with its icon. Change the glows here when it does.
+# Notebook's colours: glows in the ink blue of its accent (Notebook/Assets.xcassets/AccentColor), and a little of
+# the icon's oxblood leather in one corner.
 THEMES = {
     # Glows: colour, strength, centre (fractions of width and height), radius (fraction of width).
     "dark": dict(
-        base=(14, 14, 16),
-        glows=[((120, 116, 108), 0.55, (0.50, -0.05), 0.95), ((92, 98, 112), 0.30, (1.00, 1.05), 0.60),
-               ((112, 100, 92), 0.20, (0.00, 1.05), 0.55)],
+        base=(12, 13, 17),
+        glows=[((46, 72, 132), 0.60, (0.50, -0.05), 0.95), ((64, 90, 150), 0.30, (1.00, 1.05), 0.60),
+               ((110, 52, 50), 0.18, (0.00, 1.05), 0.55)],
         shadow=0.70, border=(255, 255, 255, 22), rim=(255, 255, 255, 34)),
     "light": dict(
-        base=(242, 241, 238),
-        glows=[((214, 208, 196), 0.55, (0.50, 0.00), 0.75), ((196, 204, 218), 0.30, (0.95, 1.05), 0.55),
-               ((222, 210, 198), 0.25, (0.02, 1.00), 0.50)],
+        base=(238, 240, 245),
+        glows=[((196, 208, 232), 0.60, (0.50, 0.00), 0.75), ((184, 198, 228), 0.30, (0.95, 1.05), 0.55),
+               ((230, 206, 200), 0.25, (0.02, 1.00), 0.50)],
         shadow=0.24, border=(0, 0, 0, 20), rim=(0, 0, 0, 30)),
 }
 

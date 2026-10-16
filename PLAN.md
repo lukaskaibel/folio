@@ -46,6 +46,7 @@ Name: **Notebook** (bis zum 16.10.2026 hieß die App Folio). Stand: Planungssitz
 | Anhänge | `.assets/` in jedem Ordner, unsichtbar in Notebook, im Finder und in der Dateien-App. Wer ein Bild in der Notiz löscht, löscht auch die Datei. |
 | Andere Dateien | Quick Look für alles, was nicht Markdown ist, auch für PDF, Bild und Video |
 | Offline | Markdown-Dateien bleiben auf jedem Gerät geladen. PDFs und Bilder werden durchsucht, sobald sie lokal sind, bis dahin zeigt der Baum ein Wolken-Symbol. |
+| Symbol und Farbe | Ein Notizbuch aus Ochsenblut-Leder als App-Symbol, in den Einstellungen selbst einzufärben. Akzentfarbe ist Tintenblau (`#34508F` hell, `#93ABE3` dunkel), wenn in den Systemeinstellungen „Mehrfarbig“ gewählt ist. |
 
 ## 3. Wie es sich anfühlt
 
@@ -320,5 +321,3 @@ Das meiste davon lässt sich später ergänzen, ohne das Dateiformat zu ändern.
   kleines Werkzeug, das alle Notizen samt Ordnern auf einmal holt?
 - **Sortierung im Baum:** nach Name oder nach Änderungsdatum, Ordner zuerst?
 - **Typografie des Dokuments:** SF Pro oder New York, Lesebreite (Vorschlag: etwa 680 pt, mittig)
-- **Akzentfarbe:** das Violett von Issues oder eine eigene Farbe für Notebook
-- **App-Symbol**

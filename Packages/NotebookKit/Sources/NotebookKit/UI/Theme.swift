@@ -35,11 +35,12 @@ public enum Theme {
     static let faint = NSColor(light: 0xA3A7AF, dark: 0x5A5E66)
 
     #if os(macOS)
-    /// The accent colour chosen in System Settings, or Notebook's violet when it is set to Multicolour.
+    /// The accent colour chosen in System Settings, or Notebook's ink blue (`AccentColor`) when it is set to Multicolour.
     static let accent = NSColor.controlAccentColor
     #else
-    /// Notebook's violet, the app's accent colour (the system has no accent of its own to choose on iPhone and iPad).
-    static let accent = UIColor(named: "AccentColor") ?? NSColor(light: 0x5B63D3, dark: 0x8F96F2)
+    /// Notebook's ink blue (`AccentColor`), the app's accent colour (the system has no accent of its own to choose on
+    /// iPhone and iPad).
+    static let accent = UIColor(named: "AccentColor") ?? NSColor(light: 0x34508F, dark: 0x93ABE3)
     #endif
     static let positive = NSColor(light: 0x2F9B67, dark: 0x4CB782)
     static let warning = NSColor(light: 0xB8791C, dark: 0xE5A84B)
