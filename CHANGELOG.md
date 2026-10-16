@@ -64,6 +64,9 @@ versions follow [semantic versioning](https://semver.org).
   Mac, iPhone and iPad. The note now opens at once with its title, and its text fades in when it has come, with
   "Downloading from iCloud…" if that takes a moment. Nothing can be typed into it before then, so nothing is lost or
   saved over it.
+- On the Mac, the caret on an empty line left a small piece of itself below the line while it blinked, and under a
+  heading it was as tall as the heading. It is now as tall as the text and sits where the text will go, on empty lines
+  and at the end of a line too, on the Mac, iPhone and iPad.
 - Opening a note was slow in a large location such as a whole iCloud Drive: up to a second, and many seconds for a note
   with dozens of links, because every link was looked for among all the files. Links are now found by their names at
   once.
