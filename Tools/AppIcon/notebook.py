@@ -3,8 +3,10 @@
 
   notebook.py icon <out dir>     <out dir>/AppIcon.icon, the oxblood notebook in light and dark (the app's own icon)
   notebook.py passes <out dir>   the neutral passes behind Settings › App Icon (see NotebookIcon.swift)
+  notebook.py leather <out>      the cover's grain alone as a seamless tile, for the website's leather buttons
+                                 (Website/images/leather.webp; needs only NumPy and Pillow)
 
-Tools/AppIcon/make.sh runs both and renders the passes with Apple's ictool. Needs Python 3 with NumPy and Pillow,
+Tools/AppIcon/make.sh runs all three and renders the passes with Apple's ictool. Needs Python 3 with NumPy and Pillow,
 and rsvg-convert (brew install librsvg).
 
 The layers are drawn as SVG, the leather grain is added to the cover with NumPy, and Icon Composer's file format puts
@@ -79,8 +81,13 @@ def write_png(path, body, defs=""):
 
 # The leather grain: soft pebbles at two sizes, lit from the top left, with faint mottling.
 
-def pebbles(size, cell, rng):
-    n = int(size / cell) + 3
+def pebbles(size, cell, rng, wrap=False):
+    """wrap: the cells fitted to the size and wrapped around its edges, so the result tiles without a seam."""
+    if wrap:
+        n = round(size / cell)
+        cell = size / n
+    else:
+        n = int(size / cell) + 3
     points = rng.random((n, n, 2))
     yy, xx = np.mgrid[0:size, 0:size].astype(np.float32)
     cx, cy = np.floor(xx / cell).astype(int), np.floor(yy / cell).astype(int)
@@ -88,19 +95,32 @@ def pebbles(size, cell, rng):
     d2 = np.full((size, size), 1e9, np.float32)
     for oy in (-1, 0, 1):
         for ox in (-1, 0, 1):
-            gx, gy = np.clip(cx + ox, 0, n - 1), np.clip(cy + oy, 0, n - 1)
-            d = np.hypot(xx - (gx + points[gy, gx, 0]) * cell, yy - (gy + points[gy, gx, 1]) * cell)
+            if wrap:
+                gx, gy = cx + ox, cy + oy
+                px, py = gx % n, gy % n
+            else:
+                gx, gy = np.clip(cx + ox, 0, n - 1), np.clip(cy + oy, 0, n - 1)
+                px, py = gx, gy
+            d = np.hypot(xx - (gx + points[py, px, 0]) * cell, yy - (gy + points[py, px, 1]) * cell)
             closer = d < d1
             d2 = np.where(closer, d1, np.minimum(d2, d))
             d1 = np.where(closer, d, d1)
     t = np.clip((d2 - d1) / (cell * 0.55), 0, 1)
     return t * t * (3 - 2 * t)
 
-def grain(size=1024, seed=7):
+def grain(size=1024, seed=7, wrap=False):
     rng = np.random.default_rng(seed)
-    e = 0.6 * pebbles(size, 8.5, rng) + 0.4 * pebbles(size, 15.0, rng)
-    gy, gx = np.gradient(e)
-    low = Image.fromarray((rng.random((24, 24)) * 255).astype(np.uint8)).resize((size, size), Image.BICUBIC)
+    e = 0.6 * pebbles(size, 8.5, rng, wrap) + 0.4 * pebbles(size, 15.0, rng, wrap)
+    if wrap:
+        gx = (np.roll(e, -1, 1) - np.roll(e, 1, 1)) / 2
+        gy = (np.roll(e, -1, 0) - np.roll(e, 1, 0)) / 2
+        # The mottling at the icon's scale, from noise tiled three by three so that its middle wraps too.
+        k = max(2, round(24 * size / 1024))
+        low = Image.fromarray((np.tile(rng.random((k, k)), (3, 3)) * 255).astype(np.uint8))
+        low = low.resize((size * 3, size * 3), Image.BICUBIC).crop((size, size, size * 2, size * 2))
+    else:
+        gy, gx = np.gradient(e)
+        low = Image.fromarray((rng.random((24, 24)) * 255).astype(np.uint8)).resize((size, size), Image.BICUBIC)
     mottle = (np.asarray(low).astype(np.float32) / 255 - 0.5) * 0.05
     return 0.93 + 0.08 * e - (gx + gy) * 0.9 + mottle + rng.normal(0, 1, (size, size)).astype(np.float32) * 0.01
 
@@ -178,7 +198,15 @@ def passes(out):
         notebook(os.path.join(out, f"pass-{part}.icon"), colour("cover"), colour("ribbon"),
                  (colour("band"), colour("band")), {"light": ground, "dark": ground})
 
+def leather(out):
+    """The grain at half its contrast, lifted so that its highlights just reach white: the website multiplies it
+    over the button's colour, at 2x."""
+    g = 1 + (grain(256, wrap=True) - 1) * 0.5
+    # A high percentile rather than the maximum, so that a few bright outliers don't darken the whole tile.
+    g = np.clip(g / np.percentile(g, 99.5), 0, 1)
+    Image.fromarray((g * 255).round().astype(np.uint8), "L").save(out, quality=82, method=6)
+
 
 if __name__ == "__main__":
     what, out = sys.argv[1], sys.argv[2]
-    {"icon": standard_icon, "passes": passes}[what](out)
+    {"icon": standard_icon, "passes": passes, "leather": leather}[what](out)

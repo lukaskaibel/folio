@@ -1,5 +1,6 @@
-/* Notebook's website. The page is a sheet of the notebook on its icon: warm stone paper, ink-blue links and buttons,
-   and the gold bookmark ribbon hanging from the top. Everything comes with the page; nothing loads from elsewhere. */
+/* Notebook's website. The page is a sheet of the notebook on its icon: warm stone paper, ink-blue links, a button
+   cut from the cover's leather, and the gold bookmark ribbon hanging from the top. Everything comes with the page;
+   nothing loads from elsewhere. */
 
 :root {
   --paper: #F1ECE4;
@@ -11,11 +12,25 @@
   --ink: #34508F;
   --on-ink: #FFFFFF;
   --shadow: rgba(70, 48, 26, 0.24);
+  --rim: rgba(30, 27, 24, 0.14);
   --grain-opacity: 0.38;
+  /* The button's leather: the icon's oxblood cover, with its grain (images/leather.webp) multiplied over it. For
+     leather in the ink blue of the links instead: linear-gradient(#4767A9, #263F78), and (#5471B3, #2A437A) in the
+     dark. */
+  --leather: linear-gradient(#B04746, #7A2928);
+  /* Pressed into the paper: a shadow along the top inside, a highlight along the bottom outside. */
+  --deboss-shade: rgba(70, 48, 26, 0.2);
+  --deboss-light: rgba(255, 255, 255, 0.75);
+  /* The ribbon, read by ribbon.js; the fallback below draws the same gold as a gradient. */
+  --ribbon: #DC9C30;
+  --ribbon-sheen: #FFF1C9;
+  --ribbon-notch: 13px;
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
   --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
   --gutter: max(24px, env(safe-area-inset-left, 0px));
+  /* Above the hero: room for the ribbon, which ends just above the window. */
+  --hero-top: clamp(80px, 14vh, 150px);
   color-scheme: light dark;
 }
 
@@ -30,7 +45,11 @@
     --ink: #93ABE3;
     --on-ink: #10141E;
     --shadow: rgba(0, 0, 0, 0.55);
+    --rim: rgba(255, 248, 238, 0.13);
     --grain-opacity: 0.22;
+    --leather: linear-gradient(#BC5251, #82302F);
+    --deboss-shade: rgba(0, 0, 0, 0.5);
+    --deboss-light: rgba(255, 248, 238, 0.07);
   }
 }
 
@@ -79,13 +98,15 @@ body.home {
   overflow-x: hidden;
 }
 
-/* The ribbon: satin gold, with the notch of the one on the icon. It unrolls once when the page opens. */
+/* The ribbon: gold grosgrain, with the notch of the one on the icon. ribbon.js draws it as fabric that the pointer
+   pushes around; without it (no script, no WebGL) this gradient unrolls once when the page opens. It hangs in the
+   open paper at the top right, over the window's outline and ending just above it. */
 .ribbon {
   position: absolute;
   top: 0;
-  left: max(28px, calc(50% - 660px));
+  right: max(72px, calc(50% - 560px));
   width: 26px;
-  height: clamp(130px, 24vh, 250px);
+  height: calc(var(--hero-top) - 14px);
   z-index: 2;
   filter: drop-shadow(0 6px 6px rgba(90, 58, 12, 0.22));
   pointer-events: none;
@@ -95,9 +116,11 @@ body.home {
   position: absolute;
   inset: 0;
   background: linear-gradient(90deg, #C3841E 0%, #E7B455 30%, #F7D683 52%, #E2AA45 74%, #C07F1A 100%);
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 13px), 0 100%);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - var(--ribbon-notch)), 0 100%);
   transform-origin: top;
 }
+.ribbon.live::before { display: none; }
+.ribbon canvas { position: absolute; top: 0; pointer-events: none; }
 
 @media (prefers-reduced-motion: no-preference) {
   .ribbon::before { animation: unroll 0.95s cubic-bezier(0.2, 0.85, 0.25, 1) 0.15s both; }
@@ -108,7 +131,7 @@ body.home {
   width: 100%;
   max-width: 1340px;
   margin: 0 auto;
-  padding: clamp(64px, 11vh, 120px) var(--gutter) clamp(32px, 5vh, 56px) calc(var(--gutter) + 52px);
+  padding: var(--hero-top) var(--gutter) clamp(32px, 5vh, 56px);
   display: grid;
   grid-template-columns: minmax(300px, 410px) minmax(0, 1fr);
   gap: clamp(36px, 5vw, 80px);
@@ -170,17 +193,60 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; }
   text-decoration: none;
 }
 .button svg { font-size: 18px; fill: currentColor; }
-.button.primary { background: var(--ink); color: var(--on-ink); box-shadow: 0 8px 20px -10px var(--ink); }
-.button.primary:hover { filter: brightness(1.08); }
 
+/* A piece of the icon's leather cover: grained, stitched along the edge, and pressed in when clicked. */
+.button.primary {
+  position: relative;
+  color: #FFF;
+  background: url("images/leather.webp") 0 0 / 128px 128px, var(--leather);
+  background-blend-mode: multiply, normal;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.35);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1.5px 2px rgba(0, 0, 0, 0.28),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.22),
+    0 1px 1px rgba(40, 20, 0, 0.18),
+    0 8px 18px -10px rgba(30, 20, 10, 0.6);
+}
+.button.primary svg { filter: drop-shadow(0 -1px 0 rgba(0, 0, 0, 0.35)); }
+/* The stitching, sunk a little into the leather. */
+.button.primary::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: inherit;
+  border: 1.25px dashed rgba(255, 244, 225, 0.5);
+  filter: drop-shadow(0 0.75px 0 rgba(0, 0, 0, 0.3));
+  pointer-events: none;
+}
+.button.primary:hover { filter: brightness(1.06) saturate(1.04); }
+.button.primary:active {
+  filter: brightness(0.95);
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.38),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.26),
+    0 0 0 rgba(40, 20, 0, 0),
+    0 4px 10px -8px rgba(30, 20, 10, 0.5);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .button.primary { transition: filter 0.15s, transform 0.1s, box-shadow 0.1s; }
+}
+
+/* Not a button yet: a place pressed into the paper, waiting for the App Store's. */
 .soon {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 11px 16px;
+  padding: 12px 17px;
   border-radius: 999px;
-  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--paper-deep) 55%, transparent);
+  box-shadow:
+    inset 0 1.5px 2.5px var(--deboss-shade),
+    inset 0 0 0 0.5px var(--deboss-shade),
+    0 1px 0 var(--deboss-light);
   color: var(--text-2);
+  text-shadow: 0 1px 0 var(--deboss-light);
   font-size: 14px;
   font-weight: 500;
 }
@@ -199,18 +265,58 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; }
 .facts li { display: inline-flex; align-items: center; gap: 7px; }
 .facts svg { color: var(--ink); fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
 
-/* The app, and the same note as its file. */
-.stage { margin: 0; min-width: 0; }
+/* The app, and the same note as its file. The stage is a container, so that the window's corners and the phone in
+   front of it are sized in the window's width (cqw). */
+.stage { --phone-width: 18cqw; --phone-left: -2.5cqw; margin: 0; min-width: 0; container-type: inline-size; }
 
 .window-frame { position: relative; }
 
+/* The window as it is on the Mac, lying on the paper: its own corners, the hairline macOS draws around it, and a
+   shadow. */
 .shot {
   display: block;
   width: 100%;
   height: auto;
-  border-radius: 18px;
-  box-shadow: 0 34px 70px -28px var(--shadow), 0 0 0 1px var(--line);
+  border-radius: 1.33cqw;
+  box-shadow:
+    0 0 0 0.5px var(--rim),
+    0 1px 3px rgba(40, 28, 16, 0.08),
+    0 30px 60px -24px var(--shadow);
   transition: filter 0.4s ease;
+}
+
+/* The iPhone standing in front of the window's lower left corner, drawn around its screenshot: a dark bezel with a
+   graphite edge, the screen's own corners and the Dynamic Island, in an iPhone's proportions. */
+.phone {
+  --width: var(--phone-width);
+  --bezel: calc(var(--width) * 0.028);
+  --screen: calc(var(--width) - 2 * var(--bezel));
+  position: absolute;
+  left: var(--phone-left);
+  bottom: -6cqw;
+  width: var(--width);
+  padding: var(--bezel);
+  border-radius: calc(var(--screen) * 0.137 + var(--bezel));
+  background: #111113;
+  box-shadow:
+    inset 0 0 0 calc(var(--width) * 0.005) rgba(255, 255, 255, 0.1),
+    0 0 0 calc(var(--width) * 0.007) #4A4A4F,
+    0 0 0 calc(var(--width) * 0.011) rgba(0, 0, 0, 0.18),
+    0 1.6cqw 3cqw -0.8cqw rgba(0, 0, 0, 0.42),
+    0 3cqw 6cqw -2cqw var(--shadow);
+  transition: filter 0.4s ease;
+}
+.phone img { display: block; width: 100%; height: auto; border-radius: calc(var(--screen) * 0.137); }
+.phone::after {
+  content: "";
+  position: absolute;
+  top: calc(var(--bezel) + var(--screen) * 0.027);
+  left: 50%;
+  width: calc(var(--screen) * 0.313);
+  height: calc(var(--screen) * 0.092);
+  translate: -50% 0;
+  border-radius: 999px;
+  background: #000;
 }
 
 .file {
@@ -230,10 +336,10 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; }
 }
 
 .stage[data-view="file"] .file { opacity: 1; transform: none; pointer-events: auto; }
-.stage[data-view="file"] .shot { filter: saturate(0.85) brightness(0.96); }
+.stage[data-view="file"] :is(.shot, .phone) { filter: saturate(0.85) brightness(0.96); }
 
 @media (prefers-reduced-motion: reduce) {
-  .file, .shot { transition: none; }
+  .file, .shot, .phone { transition: none; }
 }
 
 .file-bar {
@@ -262,12 +368,14 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; }
 .file-text s { text-decoration: none; color: var(--text-2); opacity: 0.85; }
 .file-text b { font-weight: 700; }
 
+/* Next to the phone, below the window. */
 figcaption {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 10px 16px;
   margin-top: 20px;
+  padding-left: calc(var(--phone-left) + var(--phone-width) + 24px);
 }
 
 .switch {
@@ -316,20 +424,17 @@ figcaption {
   .hero {
     grid-template-columns: minmax(0, 1fr);
     padding-top: clamp(72px, 12vh, 110px);
-    padding-left: calc(var(--gutter) + 40px);
     gap: 44px;
   }
-  .ribbon { left: max(20px, env(safe-area-inset-left, 0px)); width: 22px; height: 150px; }
-  .stage { margin-left: -40px; }
+  .ribbon { right: max(48px, calc(env(safe-area-inset-right, 0px) + 32px)); width: 22px; height: 150px; }
+  .stage { --phone-left: -1.5cqw; }
   .file { width: 74%; right: 4%; }
 }
 
 @media (max-width: 560px) {
-  .hero { padding-left: calc(var(--gutter) + 26px); padding-right: var(--gutter); }
-  .stage { margin-left: -26px; }
-  .ribbon { width: 18px; height: 118px; left: 16px; }
+  .stage { --phone-width: 24cqw; }
+  .ribbon { width: 18px; height: 118px; right: max(28px, calc(env(safe-area-inset-right, 0px) + 20px)); }
   .app-icon { width: 108px; height: 108px; margin-left: -11px; }
-  .shot { border-radius: 12px; }
   .file { width: 92%; right: 4%; bottom: 4%; max-height: 92%; }
   .file-bar span { display: none; }
   .file-text { font-size: 10.5px; padding: 12px 13px 14px; }

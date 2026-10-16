@@ -54,15 +54,18 @@
     <div class="faq">
       <details>
         <summary>How do I get Notebook?</summary>
-        <p>For now you build it yourself: a Mac with Apple silicon and macOS 27, Xcode 27, and about five minutes. The
-          <a href="https://github.com/lukaskaibel/notebook#build-and-run">steps are in the README</a>, and a local build
-          needs no Apple developer account. The Mac App Store comes later.</p>
+        <p>For now you build it yourself with Xcode 27, in about five minutes: for a Mac with Apple silicon and macOS
+          27, and for iPhone and iPad with iOS and iPadOS 27, in the Simulator or on your own device. The
+          <a href="https://github.com/lukaskaibel/notebook#build-and-run">steps are in the README</a>. A build for the
+          Mac or the Simulator needs no Apple developer account; for your own iPhone or iPad, put your team in
+          <code>Config/Local.xcconfig</code> as <code>DEVELOPMENT_TEAM</code>. The App Store comes later.</p>
       </details>
       <details>
         <summary>Where are my notes kept?</summary>
         <p>Where they already are. Notebook shows the folders you add, iCloud Drive or any other, and reads and writes
-          the Markdown files in them in place. A note's title is its file name. Pictures and files you add to a note go
-          into a hidden <code>.assets</code> folder next to it, and that is all Notebook adds.</p>
+          the Markdown files in them in place. On iPhone and iPad you pick them in the Files app's picker, or keep notes
+          on the device, in On My iPhone › Notebook. A note's title is its file name. Pictures and files you add to a
+          note go into a hidden <code>.assets</code> folder next to it, and that is all Notebook adds.</p>
       </details>
       <details>
         <summary>Can I keep using Obsidian, iA Writer or GitHub?</summary>
@@ -70,15 +73,16 @@
           note by its name as Obsidian does: one in the same folder first, then the one with the shortest path.</p>
       </details>
       <details>
-        <summary>What if a note changes on another Mac?</summary>
+        <summary>What if a note changes on another device?</summary>
         <p>Notebook watches the open note. If it changed somewhere else and you haven't typed, it reloads quietly. If
           both sides changed, it merges the two line by line and never writes over a change it hasn't seen. Only when
           both changed the same lines does it ask: keep this version, use the other one, or keep both.</p>
       </details>
       <details>
         <summary>Is there a version for iPhone and iPad?</summary>
-        <p>Not yet. iPhone and iPad versions are planned, from the same project, together with quick capture from a
-          widget and the share menu.</p>
+        <p>Yes, from the same project: the same editor, search and files, laid out the way each device works. On the
+          iPhone you go into one folder per screen, and the iPad has the Mac's sidebar. With iCloud Drive, the same
+          notes are on your Mac, iPhone and iPad. Quick capture from a widget and the share menu comes later.</p>
       </details>
       <details>
         <summary>Does Notebook collect anything?</summary>
