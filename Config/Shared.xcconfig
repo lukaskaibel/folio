@@ -19,4 +19,11 @@ NOTEBOOK_MAC_ENTITLEMENTS =
 NOTEBOOK_MAC_ENTITLEMENTS[config=AppStore] = Config/Notebook-macOS.entitlements
 CODE_SIGN_ENTITLEMENTS[sdk=macosx*] = $(NOTEBOOK_MAC_ENTITLEMENTS)
 
+// On iPhone and iPad too, only the App Store build has iCloud's key-value store. Debug and Release keep the folders
+// you hide on the device, so they run in the Simulator without a team, and on your own iPhone or iPad with a free one,
+// which can't have iCloud.
+NOTEBOOK_IOS_ENTITLEMENTS =
+NOTEBOOK_IOS_ENTITLEMENTS[config=AppStore] = Config/Notebook-iOS.entitlements
+CODE_SIGN_ENTITLEMENTS[sdk=iphone*] = $(NOTEBOOK_IOS_ENTITLEMENTS)
+
 #include? "Local.xcconfig"

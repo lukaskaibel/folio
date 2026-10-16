@@ -1,0 +1,85 @@
+#if os(iOS)
+import SwiftUI
+
+/// Hide Folder and Unhide Folder, for a folder's menu; Hide and Unhide for its swipe actions.
+struct HideFolderButton: View {
+    let workspace: Workspace
+    let url: URL
+    var isShort = false
+
+    var body: some View {
+        let isHidden = workspace.isHidden(url)
+        let title = isHidden ? "Unhide" : "Hide"
+        Button { withAnimation { workspace.setHidden(url, !isHidden) } } label: {
+            Label(isShort ? title : title + " Folder", systemImage: isHidden ? "eye" : "eye.slash")
+        }
+    }
+}
+
+/// Shows a location's hidden folders, dimmed, until you turn it off: for its menus.
+struct ShowHiddenFoldersToggle: View {
+    let workspace: Workspace
+    let location: Location
+    /// In a menu of locations, the location's name and symbol instead.
+    var title = "Show Hidden Folders"
+    var symbol = "eye"
+
+    var body: some View {
+        Toggle(isOn: Binding(get: { workspace.showsHiddenFolders(in: location) }, set: { shows in
+            withAnimation { workspace.showHiddenFolders(shows, in: location) }
+        })) {
+            Label(title, systemImage: symbol)
+        }
+    }
+}
+
+/// Show Hidden Folders in the ⋯ menu of the sidebar and the first screen, when there are any: for the one location
+/// that has them, or a menu of the locations that do.
+struct ShowHiddenFoldersMenu: View {
+    let workspace: Workspace
+
+    var body: some View {
+        let locations = workspace.locations.filter(workspace.hasHiddenFolders(in:))
+        if locations.count == 1, let location = locations.first {
+            ShowHiddenFoldersToggle(workspace: workspace, location: location)
+        } else if !locations.isEmpty {
+            Menu {
+                ForEach(locations) { location in
+                    ShowHiddenFoldersToggle(workspace: workspace, location: location, title: location.name,
+                                            symbol: location.isICloudDrive ? "icloud" : "externaldrive")
+                }
+            } label: {
+                Label("Show Hidden Folders", systemImage: "eye")
+            }
+        }
+    }
+}
+
+/// A location's name over its files and folders, and, as on the Mac, an eye to show its hidden folders: in the accent
+/// colour while they show, and under the pointer.
+struct LocationHeader: View {
+    let workspace: Workspace
+    let location: Location
+    @State private var isHovered = false
+
+    var body: some View {
+        let shows = workspace.showsHiddenFolders(in: location)
+        HStack {
+            Text(location.name)
+            Spacer(minLength: 8)
+            if shows || isHovered, workspace.hasHiddenFolders(in: location) {
+                let title = shows ? "Hide Hidden Folders" : "Show Hidden Folders"
+                Button { withAnimation { workspace.showHiddenFolders(!shows, in: location) } } label: {
+                    Label(title, systemImage: "eye")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(shows ? Color.accentColor : Color.secondary)
+                .help(title)
+            }
+        }
+        .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
+    }
+}
+#endif
