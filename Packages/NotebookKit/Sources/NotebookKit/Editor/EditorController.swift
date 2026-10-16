@@ -40,6 +40,8 @@ public protocol EditorControllerDelegate: AnyObject {
     func editorEditingDidChange(_ editor: EditorController)
     /// Drawing mode started or ended.
     func editorDrawingDidChange(_ editor: EditorController)
+    /// The reminder under the title, or the writing bar's bell, was tapped: to set, change or remove the note's reminder.
+    func editorShowReminder(_ editor: EditorController)
 }
 
 public extension EditorControllerDelegate {
@@ -47,6 +49,7 @@ public extension EditorControllerDelegate {
     func editorPositionDidChange(_ editor: EditorController) {}
     func editorEditingDidChange(_ editor: EditorController) {}
     func editorDrawingDidChange(_ editor: EditorController) {}
+    func editorShowReminder(_ editor: EditorController) {}
 }
 
 /// Notebook's editor: a TextKit 1 text view whose storage holds the note's Markdown exactly, styled so that it reads as
@@ -252,6 +255,8 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     }
 
     public func setMeta(_ meta: String) { metaText = meta }
+    /// The note's reminder in the line under the title, "Today 14:00", red once its time has passed; nil for none.
+    func setReminder(_ text: String?, isOverdue: Bool) { textView.setReminder(text, isOverdue: isOverdue) }
     public func setTitle(_ title: String) {
         if !isEditingTitle { titleText = title }
     }

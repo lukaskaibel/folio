@@ -11,6 +11,13 @@ collects nothing about you.
   security-scoped bookmark).
 - **Favourites, recently opened files, the folders open in the sidebar and your settings** (typeface, text size,
   what the sidebar shows) are kept in the app's preferences on your Mac.
+- **The folders you hide and the reminders you set** are kept in the app's preferences and, in the App Store build, in
+  iCloud's key-value store, which Apple syncs to your other devices signed in to the same Apple Account. A reminder is
+  the place of its note in your folders and its time; it is never written into the note, so it doesn't go along when
+  you share the note.
+- **Notifications** of reminders are scheduled on each of your devices by the system. Their text is the note's name,
+  the time and the note's first points, read from the note on that device. Notebook asks whether it may send
+  notifications when you set your first reminder, and you can turn them off in System Settings or Settings.
 - **The search index** of file names, note text and PDF text is kept in memory only, and built again at every launch.
 
 ## What is sent, and to whom

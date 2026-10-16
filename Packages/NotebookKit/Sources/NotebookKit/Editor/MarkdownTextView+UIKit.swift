@@ -11,6 +11,8 @@ final class MarkdownTextView: UITextView {
 
     let titleField = TitleField()
     let metaLabel = UILabel()
+    /// The note's reminder, a bell and its time, before the date under the title. A tap changes or removes it.
+    let reminderButton = UIButton(configuration: .plain())
     /// The level of the heading the caret is on, in the margin, as on the Mac; a tap on it changes the level. Only
     /// where the margin is wide enough for it (iPad), since the iPhone's is too narrow.
     let headingButton = UIButton(configuration: .plain())
@@ -41,6 +43,19 @@ final class MarkdownTextView: UITextView {
         metaLabel.textColor = Theme.textTertiary
         metaLabel.adjustsFontForContentSizeCategory = true
         addSubview(metaLabel)
+        var reminder = UIButton.Configuration.plain()
+        reminder.contentInsets = .zero
+        reminder.imagePadding = 4
+        reminder.image = UIImage(systemName: "bell.fill")
+        reminder.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(font: .systemFont(ofSize: 11))
+        reminderButton.configuration = reminder
+        reminderButton.contentHorizontalAlignment = .leading
+        reminderButton.isHidden = true
+        reminderButton.addAction(UIAction { [weak self] _ in
+            guard let controller = self?.controller else { return }
+            controller.delegate?.editorShowReminder(controller)
+        }, for: .primaryActionTriggered)
+        addSubview(reminderButton)
 
         var configuration = UIButton.Configuration.plain()
         configuration.contentInsets = .zero
@@ -84,7 +99,14 @@ final class MarkdownTextView: UITextView {
         if textContainerInset != inset { textContainerInset = inset }
         let width = bounds.width - side * 2
         titleField.frame = CGRect(x: side, y: titleTop, width: width, height: titleHeight)
-        metaLabel.frame = CGRect(x: side, y: titleTop + titleHeight + 2, width: width, height: 18)
+        var metaStart = side
+        if !reminderButton.isHidden {
+            // Taller than the line, for a fingertip.
+            let size = reminderButton.intrinsicContentSize
+            reminderButton.frame = CGRect(x: side, y: titleTop + titleHeight + 2 + 9 - 15, width: size.width, height: 30)
+            metaStart = reminderButton.frame.maxX + 10
+        }
+        metaLabel.frame = CGRect(x: metaStart, y: titleTop + titleHeight + 2, width: max(0, side + width - metaStart), height: 18)
         if laidOutWidth != bounds.width {
             laidOutWidth = bounds.width
             applyTypography()
@@ -98,6 +120,19 @@ final class MarkdownTextView: UITextView {
 
 
     private var knownTopInset: CGFloat = 0
+
+    /// The bell and time of the note's reminder, red once the time has passed; nil for none.
+    func setReminder(_ text: String?, isOverdue: Bool) {
+        reminderButton.isHidden = text == nil
+        var configuration = reminderButton.configuration ?? .plain()
+        var title = AttributedString(text ?? "")
+        title.font = .systemFont(ofSize: 13)
+        configuration.attributedTitle = title
+        configuration.baseForegroundColor = isOverdue ? .systemRed : Theme.accent
+        reminderButton.configuration = configuration
+        reminderButton.accessibilityLabel = text.map { "Reminder, \($0)" }
+        setNeedsLayout()
+    }
 
     /// A note opened before its screen had a navigation bar starts at the top once the bar is there: the room it
     /// takes comes later than the note.

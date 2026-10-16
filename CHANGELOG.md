@@ -33,6 +33,13 @@ versions follow [semantic versioning](https://semver.org).
   notes in them keep working.
 - Add Location at the bottom of the sidebar, to show another folder there. A folder dropped from the Finder on the
   sidebar, between or below its sections, is added the same way.
+- Reminders of notes: choose Remind Me… for a note and pick Later Today, This Evening, Tomorrow or a date and time. At
+  that time a notification brings the note's name and its first points, what is still to do first, and gets through a
+  Focus; tap it to open the note, or choose Remind Me in 1 Hour or Done. A note with a reminder shows a bell and the
+  time under its title and in its row, where a click changes or removes it. Remind Me… is in the note's ⋯ menu, the
+  sidebar's right-click menu and the inspector on the Mac, and in the ⋯ menu, on touch and hold and, if you add it in
+  Settings › Writing Bar, as a bell above the keyboard on iPhone and iPad. Reminders aren't written into the note;
+  they follow it when you rename or move it in Notebook, and reach your other devices through iCloud.
 
 ### Changed
 

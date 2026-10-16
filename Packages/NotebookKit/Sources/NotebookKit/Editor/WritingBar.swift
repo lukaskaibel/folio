@@ -9,6 +9,7 @@ enum WritingTool: String, CaseIterable, Identifiable {
     case bold, italic, strikethrough, highlight, code, quote
     case bulletedList, numberedList, outdent, indent
     case camera, scanner, photos, files
+    case reminder
     case hideKeyboard
 
     var id: Self { self }
@@ -57,6 +58,7 @@ enum WritingTool: String, CaseIterable, Identifiable {
         case .drawing: return "Drawing"
         case .undo: return "Undo"
         case .redo: return "Redo"
+        case .reminder: return "Remind Me"
         default: return "Hide Keyboard"
         }
     }
@@ -70,6 +72,7 @@ enum WritingTool: String, CaseIterable, Identifiable {
         case .drawing: return "pencil.tip.crop.circle"
         case .undo: return "arrow.uturn.backward"
         case .redo: return "arrow.uturn.forward"
+        case .reminder: return "bell"
         default: return "keyboard.chevron.compact.down"
         }
     }
@@ -217,6 +220,7 @@ struct WritingBarView: View {
         case .drawing: editor.beginDrawing()
         case .undo: editor.textView.undoManager?.undo()
         case .redo: editor.textView.undoManager?.redo()
+        case .reminder: editor.delegate?.editorShowReminder(editor)
         default: editor.endEditing()
         }
     }

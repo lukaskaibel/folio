@@ -31,6 +31,15 @@ public final class Workspace: NSObject {
     private(set) var recents: [String] = []
     /// The folders hidden from the sidebar: kept in iCloud, or only for this run with locations given on the command line.
     private(set) var hidden = HiddenFolders(defaults: nil, cloud: nil)
+    /// The reminders of notes: kept in iCloud too, or only for this run with locations given on the command line.
+    private(set) var reminders = Reminders(defaults: nil, cloud: nil)
+    /// Counts the reminders whose time came, so what shows them turns red then, without anything else changing.
+    var remindersDue = 0
+    @ObservationIgnored var dueTimer: Timer?
+    #if DEBUG
+    /// The sample notes' reminders, shown but never scheduled: a run on the sample notes leaves no notification behind.
+    @ObservationIgnored var unscheduledReminders = Set<UUID>()
+    #endif
 
     #if os(macOS)
     /// The search field in the toolbar.
@@ -62,13 +71,15 @@ public final class Workspace: NSObject {
     /// The folder selected in the sidebar, where ⌘N puts a note when no note is open.
     var selectedFolder: URL?
     /// Locations given on the command line for this run only (tests, the demo library).
-    @ObservationIgnored private var temporaryLocations = false
-    @ObservationIgnored private var isStarted = false
+    @ObservationIgnored private(set) var temporaryLocations = false
+    @ObservationIgnored private(set) var isStarted = false
     /// Brings the main window up (set by the window, which SwiftUI opens).
     @ObservationIgnored var showWindow: (() -> Void)?
 
     #if os(macOS)
     @ObservationIgnored weak var sidebar: SidebarController?
+    /// Remind Me… while it is open, so another one takes its place.
+    @ObservationIgnored weak var reminderPopover: NSPopover?
     #else
     /// Counts changes to the folders that have been read, so the lists showing them read them again.
     private(set) var treeVersion = 0
@@ -86,6 +97,8 @@ public final class Workspace: NSObject {
     var searchRequest = 0
     /// A file to delete for good, once you said so, where there is no Recently Deleted to put it in.
     var deleting: URL?
+    /// A note to set a reminder for, in a sheet.
+    var reminderRequest: ReminderRequest?
     /// What each note looked like when you went on from it, shown while the screen of the note you go on to slides
     /// over it, and while you swipe back to it. There is only one editor, and it is on the screen in front.
     @ObservationIgnored var pageSnapshots: [URL: UIView] = [:]
@@ -111,7 +124,11 @@ public final class Workspace: NSObject {
     public override init() {
         super.init()
         editor.delegate = self
-        index.onBuilt = { [weak self] in self?.editor.refreshLinks() }
+        index.onBuilt = { [weak self] in
+            self?.editor.refreshLinks()
+            // Notes moved in the Finder can be found by their names now.
+            self?.scheduleReminders()
+        }
         #if os(macOS)
         pages.workspace = self
         #endif
@@ -145,13 +162,19 @@ public final class Workspace: NSObject {
         } else {
             locations = LocationStore.load()
             hidden = HiddenFolders()
+            reminders = Reminders()
         }
         #if DEBUG
         if temporaryLocations, UserDefaults.standard.bool(forKey: "NotebookDemo"), let library = locations.first {
             for path in DemoLibrary.hiddenFolders { hidden.set(hiddenKey(for: library.url.appendingPathComponent(path)), hidden: true) }
+            for (path, date) in DemoLibrary.reminders() {
+                unscheduledReminders.insert(reminders.set(note: hiddenKey(for: library.url.appendingPathComponent(path)), date: date).id)
+            }
         }
         #endif
         hidden.onChange = { [weak self] in self?.hiddenFoldersChanged() }
+        reminders.onChange = { [weak self] in self?.remindersChanged() }
+        watchForDueReminders()
         let last = temporaryLocations ? nil : UserDefaults.standard.string(forKey: "lastOpened")
         locationsChanged(resolving: true, reading: last.map { [$0] } ?? [])
         if let last, FileManager.default.fileExists(atPath: last) {
@@ -241,6 +264,7 @@ public final class Workspace: NSObject {
         }
         updateHiddenPaths()
         index.rebuild(locations)
+        scheduleReminders()
         let waiting = afterSurvey
         afterSurvey = []
         waiting.forEach { $0() }
@@ -248,6 +272,12 @@ public final class Workspace: NSObject {
 
     /// True while the locations are being looked up (`survey`).
     var isSurveying: Bool { surveysDone < surveys }
+
+    /// Does something once the locations have been looked up, with iCloud Drive's linked folders: at once if they have.
+    func whenSurveyed(_ action: @escaping () -> Void) {
+        if isSurveying { afterSurvey.append(action) } else { action() }
+    }
+
     /// True once they have been, and their tops read.
     var hasReadLocations: Bool { surveysDone > 0 && !isSurveying }
 
@@ -471,6 +501,7 @@ public final class Workspace: NSObject {
         }
         read(changed, again: true)
         index.refresh(folders: indexFolders, locations: locations)
+        remindersMayHaveChanged(in: indexFolders)
         editor.refreshLinks()
         if let current = currentURL, !FileManager.default.fileExists(atPath: current.path), note == nil {
             currentURL = nil
@@ -521,6 +552,10 @@ public final class Workspace: NSObject {
             document.onExternalChange = { [weak self] text in self?.editor.reload(text: text) }
             document.onMove = { [weak self] url in self?.noteMoved(to: url) }
             document.onDelete = { [weak self] in self?.currentNoteDeleted() }
+            document.onSave = { [weak self, weak document] in
+                guard let self, let document else { return }
+                self.noteSaved(document.url)
+            }
             document.onLoad = { [weak self, weak document] _ in
                 guard let self, let document, self.note === document else { return }
                 self.show(document, focusTitle: focusTitle, place: place)
@@ -556,6 +591,7 @@ public final class Workspace: NSObject {
         assetsInUse = FileOperations.assetNames(in: document.text)
         editor.load(text: document.isLoaded ? document.text : nil, folder: document.url.deletingLastPathComponent(),
                     title: focusTitle ? "" : document.url.deletingPathExtension().lastPathComponent, meta: meta(for: document), focusTitle: focusTitle)
+        updateReminderLine()
         if document.isLoaded, let place { restore(place) }
         // The editor only reports changes, and a Quick Look file in between cleared the outline here.
         editorOutlineDidChange(editor)
@@ -708,8 +744,12 @@ public final class Workspace: NSObject {
         }
     }
 
+    /// The open note was renamed or moved somewhere else, in the Finder or on another device: its reminder follows.
     private func noteMoved(to url: URL) {
-        if let old = currentURL { relocation = (old, url.standardizedFileURL, UUID()) }
+        if let old = currentURL {
+            relocation = (old, url.standardizedFileURL, UUID())
+            reminderMoved(from: old, to: url.standardizedFileURL)
+        }
         currentURL = url.standardizedFileURL
         editor.setTitle(url.deletingPathExtension().lastPathComponent)
         reveal(url, select: true)
@@ -754,6 +794,7 @@ public final class Workspace: NSObject {
             path == oldPath ? newPath : path.hasPrefix(oldPath + "/") ? newPath + path.dropFirst(oldPath.count) : path
         }
         hiddenFolderMoved(from: old, to: new)
+        reminderMoved(from: old, to: new)
         favorites = favorites.map(fix)
         recents = recents.map(fix)
         history = history.map { URL(fileURLWithPath: fix($0.path)) }
@@ -869,6 +910,7 @@ public final class Workspace: NSObject {
         refreshNow(folder)
         if moved == currentURL, let note {
             editor.load(text: note.isLoaded ? editor.text : nil, folder: folder, title: moved.deletingPathExtension().lastPathComponent, meta: meta(for: note))
+            updateReminderLine()
         }
         reveal(moved, select: moved == currentURL)
     }
@@ -927,6 +969,7 @@ public final class Workspace: NSObject {
         }
         guard FileOperations.trash(url) else { beep(); return false }
         hiddenFolderMoved(from: url, to: nil)
+        reminderMoved(from: url, to: nil)
         refreshNow(url.deletingLastPathComponent())
         favorites.removeAll { $0 == url.path }
         #if os(macOS)
@@ -943,6 +986,7 @@ public final class Workspace: NSObject {
         if url == currentURL || (currentURL?.path.hasPrefix(url.path + "/") ?? false) { closeFile() }
         guard FileOperations.delete(url) else { beep(); return }
         hiddenFolderMoved(from: url, to: nil)
+        reminderMoved(from: url, to: nil)
         refreshNow(url.deletingLastPathComponent())
         favorites.removeAll { $0 == url.path }
     }
@@ -1147,5 +1191,10 @@ extension Workspace: EditorControllerDelegate {
 
     public func editorNoteName(_ editor: EditorController) -> String {
         currentURL?.deletingPathExtension().lastPathComponent ?? "Note"
+    }
+
+    public func editorShowReminder(_ editor: EditorController) {
+        guard let currentURL, note != nil else { return }
+        askForReminder(currentURL)
     }
 }

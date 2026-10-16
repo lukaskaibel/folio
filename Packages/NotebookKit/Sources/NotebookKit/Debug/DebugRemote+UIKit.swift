@@ -263,6 +263,7 @@ enum DebugRemote {
                   let rect = editor.layoutManager.blockObjectRect(at: found.index, origin: editor.textOrigin) else { return log("no drawing") }
             editor.debugTap(at: CGPoint(x: rect.midX, y: rect.midY))
         default:
+            if DebugReminders.run(command, argument, workspace: workspace, url: url, log: log) { break }
             // Everything else is the screens': going back, searching, showing settings.
             NotificationCenter.default.post(name: .notebookDebug, object: nil, userInfo: ["command": command, "argument": argument])
         }

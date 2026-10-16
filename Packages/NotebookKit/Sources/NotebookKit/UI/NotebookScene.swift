@@ -9,6 +9,7 @@ public struct NotebookScene: Scene {
 
     public init() {
         AppIconTip.configure()
+        ReminderNotifications.activate()
     }
 
     public var body: some Scene {

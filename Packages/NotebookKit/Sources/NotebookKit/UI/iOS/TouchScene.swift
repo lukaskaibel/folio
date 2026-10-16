@@ -8,6 +8,8 @@ public struct NotebookScene: Scene {
     @State private var workspace = Workspace.shared
 
     public init() {
+        // Before a tap on a reminder's notification, which can be what started the app, reaches it.
+        ReminderNotifications.activate()
         // Before the first frame, which would otherwise show the welcome screen until the locations are read.
         Workspace.shared.start()
     }
@@ -23,6 +25,10 @@ public struct NotebookScene: Scene {
                 .onOpenURL { url in workspace.openFromOutside(url) }
         }
         .commands { TouchCommands(workspace: workspace) }
+        // Reminders set on another device: iOS doesn't wake the app for them, but gives it time now and then.
+        .backgroundTask(.appRefresh(Workspace.reminderRefreshTask)) {
+            await Workspace.shared.refreshRemindersInBackground()
+        }
     }
 }
 
@@ -54,7 +60,10 @@ struct TouchRootView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
-            case .background, .inactive: workspace.saveAll()
+            case .background:
+                workspace.saveAll()
+                workspace.scheduleReminderRefresh()
+            case .inactive: workspace.saveAll()
             case .active: workspace.refresh()
             @unknown default: break
             }

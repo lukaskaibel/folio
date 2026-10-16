@@ -46,6 +46,7 @@ Name: **Notebook** (bis zum 16.10.2026 hieß die App Folio). Stand: Planungssitz
 | Anhänge | `.assets/` in jedem Ordner, unsichtbar in Notebook, im Finder und in der Dateien-App. Wer ein Bild in der Notiz löscht, löscht auch die Datei. |
 | Andere Dateien | Quick Look für alles, was nicht Markdown ist, auch für PDF, Bild und Video |
 | Offline | Markdown-Dateien bleiben auf jedem Gerät geladen. PDFs und Bilder werden durchsucht, sobald sie lokal sind, bis dahin zeigt der Baum ein Wolken-Symbol. |
+| Erinnerungen | „Erinnern…“ an eine Notiz zu einer Uhrzeit (#57), später an einem Ort, zu einem Kalendertermin und als Live-Aktivität (Epic #55). Die Erinnerung steht nicht in der Notiz, sondern wie ausgeblendete Ordner im iCloud-Key-Value-Store, ein Schlüssel pro Erinnerung; jedes Gerät plant seine Mitteilungen selbst. Die Mitteilung zeigt die ersten Punkte der Notiz (offene Aufgaben zuerst), ist „Dringend“ (Time Sensitive) und bietet „In 1 Stunde erinnern“ und „Erledigt“. Erledigte Erinnerungen verschwinden aus dem Store. Keine Wiederholungen. |
 | Symbol und Farbe | Ein Notizbuch aus Ochsenblut-Leder als App-Symbol, in den Einstellungen selbst einzufärben. Akzentfarbe ist Tintenblau (`#34508F` hell, `#93ABE3` dunkel), wenn in den Systemeinstellungen „Mehrfarbig“ gewählt ist. |
 
 ## 3. Wie es sich anfühlt

@@ -103,6 +103,8 @@ for theme in [] if only == "devices" else ["dark", "light"]:
          f"objects-{theme}")
     webp(place(crop_card(window(f"drawing-{theme}"), DRAWING_BOX, theme), theme, (110, 90), 1400, rim=False),
          f"drawing-{theme}")
+    # The whole window: the bell in the sidebar, under the title and in the inspector, and Remind Me… open.
+    webp(place(window(f"reminder-{theme}"), theme, (130, 110), 1800), f"reminder-{theme}")
     webp(place(window(f"quicklook-{theme}"), theme, (130, 110), 1800), f"quicklook-{theme}")
     webp(search(theme), f"search-{theme}")
 

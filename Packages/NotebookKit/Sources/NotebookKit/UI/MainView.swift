@@ -184,6 +184,9 @@ struct MoreMenu: View {
             Button { workspace.toggleFavorite(url) } label: {
                 Label(favorite ? "Remove from Favorites" : "Add to Favorites", systemImage: favorite ? "star.slash" : "star")
             }
+            if workspace.note != nil {
+                Button { workspace.askForReminder(url) } label: { Label("Remind Me…", systemImage: "bell") }
+            }
             Divider()
             Button { workspace.editor.focusTitle() } label: { Label("Rename", systemImage: "pencil") }
                 .disabled(workspace.note?.isLoaded != true)
