@@ -99,6 +99,7 @@ public final class Workspace: NSObject {
     public override init() {
         super.init()
         editor.delegate = self
+        index.onBuilt = { [weak self] in self?.editor.refreshLinks() }
         #if os(macOS)
         pages.workspace = self
         #endif

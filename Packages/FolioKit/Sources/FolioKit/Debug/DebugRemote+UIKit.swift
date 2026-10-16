@@ -178,6 +178,8 @@ enum DebugRemote {
             log("current \(workspace.currentURL?.path ?? "none") editing \(workspace.isEditing) selection \(editor.selection) scroll \(editor.scrollTop) top \(editor.topInset) titleAway \(workspace.isTitleScrolledAway) heading \(String(describing: workspace.currentHeading))")
         case "text":
             log(editor.text)
+        case "resolve":
+            log("resolve \(argument): \(workspace.index.resolve(argument, from: workspace.currentURL)?.path ?? "nothing") building \(workspace.index.isBuilding) entries \(workspace.index.entries.count)")
         case "suggestions":
             log("suggestions \(editor.suggestions.isVisible) \(editor.suggestions.model.items.map(\.title))")
         case "views":

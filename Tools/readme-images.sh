@@ -1,12 +1,14 @@
 #!/bin/bash
-# Takes the README's pictures of the Mac app on the sample notes and lays them out as Design/screenshots/*.webp and
+# Takes the README's pictures of the app on the sample notes and lays them out as Design/screenshots/*.webp and
 # Design/social-preview.png.
-#   Tools/readme-images.sh
-# The app runs in the background on a fresh copy of the sample notes (Debug/DemoLibrary.swift), under a bundle
+#   Tools/readme-images.sh            all of them
+#   Tools/readme-images.sh devices    only the iPhone and iPad picture, which needs no screen
+# The Mac app runs in the background on a fresh copy of the sample notes (Debug/DemoLibrary.swift), under a bundle
 # identifier of its own so your Folio's settings stay as they are. It never comes to the front and leaves keyboard and
-# mouse alone; only the search suggestions show on screen for a moment. Takes about a minute and a half. Needs Screen
-# Recording permission for the terminal, a Retina display, Python 3 with Pillow and NumPy, ffmpeg and img2webp
-# (brew install ffmpeg webp).
+# mouse alone; only the search suggestions show on screen for a moment. The iPhone and iPad pictures come from two
+# simulators of the script's own ("Folio README iPhone" and "… iPad"), which run without the Simulator app's window.
+# Takes about three minutes. Needs Screen Recording permission for the terminal, a Retina display, Python 3 with
+# Pillow and NumPy, ffmpeg and img2webp (brew install ffmpeg webp), and the iOS Simulator runtime of Xcode.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -21,6 +23,12 @@ for tool in ffmpeg img2webp; do
   command -v $tool >/dev/null || { echo "Needs $tool: brew install ffmpeg webp" >&2; exit 1; }
 done
 
+only=${1:-}
+mkdir -p "$raw"
+
+# The Mac's scenes, left out with "devices". (Not indented: the typing scene's here-document must end at the
+# start of a line.)
+if [ "$only" != devices ]; then
 echo "Building…"
 xcodebuild -project Folio.xcodeproj -scheme Folio -configuration Debug -destination 'platform=macOS,arch=arm64' \
   -derivedDataPath "$work/DerivedData" PRODUCT_BUNDLE_IDENTIFIER=$bundle_id build -quiet
@@ -113,13 +121,72 @@ for theme in dark light; do
   pid=""
   sleep 1
 done
+fi
 
-size=$(sips -g pixelWidth -g pixelHeight "$raw/note-dark.png" | awk '/pixel/ { printf "%s ", $2 }')
-if [ "$size" != "2560 1640 " ]; then
-  echo "The window came out ${size% }px; the layout expects 1280 x 820 points on a Retina display." >&2
-  exit 1
+echo "Building for iPhone and iPad…"
+ios_app=$work/DerivedData-iOS/Build/Products/Debug-iphonesimulator/Folio.app
+xcodebuild -project Folio.xcodeproj -scheme Folio -configuration Debug -destination 'generic/platform=iOS Simulator' \
+  -derivedDataPath "$work/DerivedData-iOS" PRODUCT_BUNDLE_IDENTIFIER=$bundle_id build -quiet
+
+# simulator <name> <device type>: a simulator of the script's own, made the first time and booted, by its UDID.
+simulator() {
+  local udid runtime
+  udid=$(xcrun simctl list devices available -j | python3 -c "import json, sys
+devices = json.load(sys.stdin)['devices'].values()
+print(next((d['udid'] for group in devices for d in group if d['name'] == '$1'), ''))")
+  if [ -z "$udid" ]; then
+    runtime=$(xcrun simctl list runtimes available -j | python3 -c "import json, sys
+runtimes = [r for r in json.load(sys.stdin)['runtimes'] if r['platform'] == 'iOS']
+print(max(runtimes, key=lambda r: [int(n) for n in r['version'].split('.')])['identifier'])")
+    udid=$(xcrun simctl create "$1" "$2" "$runtime")
+  fi
+  xcrun simctl boot "$udid" 2>/dev/null || true
+  xcrun simctl bootstatus "$udid" -b > /dev/null
+  echo "$udid"
+}
+
+# device <udid> <name> <theme> <commands>…: a fresh install on the sample notes, driven by its debug remote
+# (Debug/DebugRemote+UIKit.swift), then a screenshot.
+device() {
+  local udid=$1 name=$2 theme=$3 container
+  shift 3
+  xcrun simctl ui "$udid" appearance "$theme"
+  xcrun simctl status_bar "$udid" override --time 9:41 --dataNetwork wifi --wifiMode active --wifiBars 3 \
+    --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
+  xcrun simctl uninstall "$udid" $bundle_id 2>/dev/null || true
+  xcrun simctl install "$udid" "$ios_app"
+  container=$(xcrun simctl get_app_container "$udid" $bundle_id data)
+  mkdir -p "$container/Documents"
+  : > "$container/Documents/cmd"
+  for line in "$@"; do echo "$line" >> "$container/Documents/cmd"; done
+  xcrun simctl launch "$udid" $bundle_id -FolioLibrary "~/Documents/Notes" -FolioLibraryName "iCloud Drive" -FolioDemo YES \
+    -AppleLanguages '(en)' -AppleLocale en_US -NSAllowContinuousSpellChecking NO -debugCommandFile "~/Documents/cmd" > /dev/null
+  for _ in $(seq 60); do
+    grep -q "^> done" "$container/Documents/cmd.log" 2>/dev/null && break
+    sleep 0.5
+  done
+  sleep 1
+  xcrun simctl io "$udid" screenshot "$raw/$name-$theme.png" > /dev/null 2>&1
+  xcrun simctl terminate "$udid" $bundle_id 2>/dev/null || true
+}
+
+echo "iPhone and iPad…"
+iphone=$(simulator "Folio README iPhone" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro)
+ipad=$(simulator "Folio README iPad" com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB)
+for theme in dark light; do
+  device "$iphone" iphone $theme "wait 2" "open Travel/Kyoto trip.md" "wait 2.5" "done"
+  device "$ipad" ipad $theme "wait 2" "open Travel/Kyoto trip.md" "wait 2.5" "done"
+done
+xcrun simctl shutdown "$iphone" "$ipad" 2>/dev/null || true
+
+if [ "$only" != devices ]; then
+  size=$(sips -g pixelWidth -g pixelHeight "$raw/note-dark.png" | awk '/pixel/ { printf "%s ", $2 }')
+  if [ "$size" != "2560 1640 " ]; then
+    echo "The window came out ${size% }px; the layout expects 1280 x 820 points on a Retina display." >&2
+    exit 1
+  fi
 fi
 
 echo "Laying out…"
-python3 Tools/readme-images/build.py "$raw"
+python3 Tools/readme-images/build.py "$raw" $only
 echo "Done. Check the images, then commit them with the change they show."

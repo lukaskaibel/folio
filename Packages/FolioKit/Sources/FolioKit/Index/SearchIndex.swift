@@ -37,6 +37,8 @@ public final class SearchIndex {
 
     public private(set) var entries: [Entry] = []
     public private(set) var isBuilding = false
+    /// Called when the index has been built: links in a note opened before resolve now.
+    @ObservationIgnored var onBuilt: (() -> Void)?
     private var byPath: [String: Int] = [:]
     private var generation = 0
 
@@ -62,6 +64,7 @@ public final class SearchIndex {
                 self.entries = found
                 self.reindex()
                 self.isBuilding = false
+                self.onBuilt?()
                 self.indexPDFs()
             }
         }
