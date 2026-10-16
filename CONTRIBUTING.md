@@ -35,7 +35,9 @@ Every pull request is reviewed and merged by the maintainer; nothing lands on `m
   read off the main thread (`Files/FolderReader.swift`, `Files/LocationSurvey.swift`, `Index/SearchIndex.swift`), and
   what the main thread does with the result is only the part that changed. A note or other file still in iCloud opens
   at once and fills in when it has come down (`Files/NoteDocument.swift`, `UI/FileLoadingView.swift`). Try a change
-  with `-NotebookSlowFolders 2` and `-NotebookSlowFiles 2`.
+  with `-NotebookSlowFolders 2` and `-NotebookSlowFiles 2`. Nothing that happens as a note opens or as you type goes
+  through every file or folder either: a whole iCloud Drive has a hundred thousand. Look things up by name
+  (`SearchIndex.resolve`), keep sorted lists ready, and make long menus when they open (`UI/MoveToSubmenu.swift`).
 - **Markdown is a file format, not the interface.** Pictures, links and embeds are objects; marks show only next to
   the caret.
 - **Use what the Mac has.** System components and layout (split view, source list, inspector, toolbar, search field,

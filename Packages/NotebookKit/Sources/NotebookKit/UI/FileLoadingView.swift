@@ -2,7 +2,7 @@ import SwiftUI
 
 /// A file Notebook draws itself rather than through Quick Look, which shows a dashed box while it loads. The file is
 /// read in the background; until then there is only the background, and a spinner if that takes long enough to notice
-/// (`WaitingIndicator`). Then it fades in. A file that can't be read this way
+/// (`WaitingIndicator`). Then it shows, fading in if there was a wait to see. A file that can't be read this way
 /// goes to Quick Look after all.
 ///
 /// `content` is there from the start, without what was read, so a scroll view in it is already in the window (and
@@ -39,6 +39,7 @@ struct FileLoadingView<Loaded, Content: View>: View {
     }
 
     private func load() async {
+        let start = ContinuousClock.now
         inCloud = (try? url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]).ubiquitousItemDownloadingStatus) == .notDownloaded
         let url = url, read = read
         let result = await Task.detached(priority: .userInitiated) { () -> Loaded? in
@@ -49,7 +50,10 @@ struct FileLoadingView<Loaded, Content: View>: View {
         }.value
         guard !Task.isCancelled else { return }
         if let result {
-            loaded = result
+            // Read before the wait could be seen, it is simply there, as in Preview; only after one it fades in.
+            var transaction = Transaction()
+            transaction.disablesAnimations = ContinuousClock.now - start < FileLoading.noticeableWait
+            withTransaction(transaction) { loaded = result }
         } else {
             failed = true
         }
@@ -112,6 +116,9 @@ struct NoteWaitingView: View {
 }
 
 enum FileLoading {
+    /// A file read within this long shows at once; one that took longer fades in.
+    static let noticeableWait = Duration.milliseconds(150)
+
     /// Reads a file in a coordinated read, which waits for iCloud to bring it down, and for anyone still writing it.
     static func read<Result>(_ url: URL, _ body: (URL) -> Result?) -> Result? {
         var result: Result?

@@ -51,6 +51,8 @@ versions follow [semantic versioning](https://semver.org).
   iCloud syncing thousands of files doesn't hold up the window. Folders on screen are read ahead, so they usually open
   with everything already in them.
 - On iPhone, a folder that takes a while to read shows a spinner instead of "No Notes".
+- A PDF or picture that is read at once shows at once, as in Preview, instead of fading in; it fades in only after a
+  wait you could see, such as a download from iCloud.
 
 ### Fixed
 
@@ -62,6 +64,12 @@ versions follow [semantic versioning](https://semver.org).
   Mac, iPhone and iPad. The note now opens at once with its title, and its text fades in when it has come, with
   "Downloading from iCloud…" if that takes a moment. Nothing can be typed into it before then, so nothing is lost or
   saved over it.
+- Opening a note was slow in a large location such as a whole iCloud Drive: up to a second, and many seconds for a note
+  with dozens of links, because every link was looked for among all the files. Links are now found by their names at
+  once.
+- Opening a note in a location with thousands of folders also waited for Move To to list them all, in the File menu
+  and the ⋯ menu, every time. Move To now lists the folders when you open it, indented as in the sidebar's menu.
+- Typing in search with a whole iCloud Drive took most of a second for every letter; it now keeps up with your typing.
 
 ## [0.1.0] – not released yet
 

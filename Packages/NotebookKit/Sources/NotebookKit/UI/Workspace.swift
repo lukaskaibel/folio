@@ -123,6 +123,11 @@ public final class Workspace: NSObject {
     @ObservationIgnored private var refreshScheduled = false
     /// `.assets` files the open note used, so the ones it drops can go to the Trash when you leave it.
     @ObservationIgnored private var assetsInUse = Set<String>()
+    /// Every folder Move To offers, in order (`prepareMoveFolders`).
+    @ObservationIgnored private var moveFolders: MoveFolders?
+    @ObservationIgnored private var preparingMoveFolders: MoveFolders.Key?
+    /// Counts the times Move To's folders were sorted again in the background, for the menus that show them.
+    private var moveFoldersVersion = 0
 
     public override init() {
         super.init()
@@ -132,6 +137,7 @@ public final class Workspace: NSObject {
             // Notes moved in the Finder can be found by their names now.
             self?.scheduleReminders()
         }
+        index.onFoldersChanged = { [weak self] in self?.prepareMoveFolders() }
         #if os(macOS)
         pages.workspace = self
         #endif
@@ -143,6 +149,9 @@ public final class Workspace: NSObject {
     public func start() {
         guard !isStarted else { return }
         isStarted = true
+        #if os(macOS)
+        MoveToSubmenu.fillSwiftUIMenus(for: self)
+        #endif
         #if DEBUG
         // The welcome screen, for screenshots, without touching the locations you added.
         if UserDefaults.standard.bool(forKey: "NotebookWelcome") {
@@ -936,27 +945,52 @@ public final class Workspace: NSObject {
 
     /// Where a file can be moved: every folder of every location, in order, with how deep it is.
     func moveTargets(for url: URL) -> [(location: Location, folders: [(url: URL, name: String, depth: Int)])] {
-        let all = index.folders(matching: "", limit: .max)
         let source = url.standardizedFileURL.path
-        return locations.map { location in
-            // Linked folders (iCloud Drive's Desktop) sit at the top, under their own names.
-            let folders = location.folders.flatMap { folder -> [(url: URL, name: String, depth: Int, path: String)] in
-                let base = folder.url.path
-                let prefix = folder.linked.map { $0.name + "/" } ?? ""
-                var found = all.compactMap { entry -> (url: URL, name: String, depth: Int, path: String)? in
-                    let path = entry.url.standardizedFileURL.path
-                    guard path.hasPrefix(base + "/"), path != source, !path.hasPrefix(source + "/") else { return nil }
-                    let relative = prefix + String(path.dropFirst(base.count + 1))
-                    return (entry.url, entry.name, relative.split(separator: "/").count - 1, relative)
-                }
-                if let linked = folder.linked, base != source, !base.hasPrefix(source + "/"), !index.isHidden(linked.url) {
-                    found.append((linked.url, linked.name, 0, linked.name))
-                }
-                return found
+        return currentMoveFolders().targets.map { target in
+            (target.location, target.folders.compactMap { folder in
+                folder.depth >= 0 && (folder.path == source || folder.path.hasPrefix(source + "/")) ? nil : (folder.url, folder.name, folder.depth)
+            })
+        }
+    }
+
+    /// What the folders Move To lists now were sorted from: when it changes, so do they.
+    var moveFoldersInUse: MoveFolders.Key { currentMoveFolders().key }
+
+    private var moveFoldersKey: MoveFolders.Key {
+        MoveFolders.Key(folders: index.folderVersion, locations: locations, hidden: index.hiddenPaths)
+    }
+
+    /// Move To's folders as they are now. After folders came or went they are as they were for the moment it takes to
+    /// sort the new ones, as the index itself is behind the disk for a moment; a folder hidden or a location added
+    /// shows at once.
+    private func currentMoveFolders() -> MoveFolders {
+        _ = moveFoldersVersion
+        let key = moveFoldersKey
+        if let moveFolders, moveFolders.key.locations == key.locations, moveFolders.key.hidden == key.hidden {
+            if moveFolders.key != key { prepareMoveFolders() }
+            return moveFolders
+        }
+        let made = MoveFolders(key, folders: index.allFolders())
+        moveFolders = made
+        preparingMoveFolders = nil
+        return made
+    }
+
+    /// Sorts Move To's folders again in the background, after folders came or went: for a whole iCloud Drive that is
+    /// thousands of them.
+    private func prepareMoveFolders() {
+        let key = moveFoldersKey
+        guard moveFolders?.key != key, preparingMoveFolders != key else { return }
+        preparingMoveFolders = key
+        let folders = index.allFolders()
+        Task.detached(priority: .utility) {
+            let made = MoveFolders(key, folders: folders)
+            await MainActor.run {
+                guard self.preparingMoveFolders == key else { return }
+                self.preparingMoveFolders = nil
+                self.moveFolders = made
+                self.moveFoldersVersion += 1
             }
-            .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
-            .map { (url: $0.url, name: $0.name, depth: $0.depth) }
-            return (location, [(url: location.url, name: location.name, depth: -1)] + folders)
         }
     }
 

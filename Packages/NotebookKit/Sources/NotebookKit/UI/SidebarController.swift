@@ -539,19 +539,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     private func moveToItem(for url: URL) -> NSMenuItem {
         let item = NSMenuItem(title: "Move To", action: nil, keyEquivalent: "")
         item.image = NSImage(systemSymbolName: "folder", accessibilityDescription: nil)
-        let submenu = NSMenu()
-        let parent = url.deletingLastPathComponent().standardizedFileURL
-        for target in workspace.moveTargets(for: url) {
-            submenu.addItem(.sectionHeader(title: target.location.name))
-            for folder in target.folders {
-                let entry = ClosureMenuItem(title: folder.depth < 0 ? "Top Level" : folder.name) { [weak self] in self?.workspace.move(url, into: folder.url) }
-                entry.indentationLevel = max(0, folder.depth)
-                entry.isEnabled = folder.url.standardizedFileURL != parent
-                submenu.addItem(entry)
-            }
-        }
-        submenu.autoenablesItems = false
-        item.submenu = submenu
+        item.submenu = MoveToSubmenu(workspace: workspace) { url }
         return item
     }
 

@@ -217,10 +217,21 @@ public final class NoteDocument: NSObject, NSFilePresenter {
 
     // MARK: - Conflicts
 
+    /// Asks iCloud for versions of the file from other devices that it couldn't put together with this one. That asks
+    /// another process and can take a while, so it is done off the main thread.
     private func checkForConflictVersions() {
-        guard let versions = NSFileVersion.unresolvedConflictVersionsOfItem(at: url), let other = versions.first,
-              let otherText = Self.read(other.url), otherText != text else { return }
-        conflict = Conflict(otherText: otherText, source: other.localizedNameOfSavingComputer ?? "another device", date: other.modificationDate)
+        let url = url
+        Self.readQueue.addOperation {
+            guard let versions = NSFileVersion.unresolvedConflictVersionsOfItem(at: url), let other = versions.first,
+                  let otherText = Self.read(other.url) else { return }
+            let found = Conflict(otherText: otherText, source: other.localizedNameOfSavingComputer ?? "another device", date: other.modificationDate)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard !self.isClosed, self.url == url, self.conflict == nil, found.otherText != self.text else { return }
+                    self.conflict = found
+                }
+            }
+        }
     }
 
     enum Resolution { case keepThis, takeOther, keepBoth }
