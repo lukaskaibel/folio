@@ -80,6 +80,10 @@ public struct NotebookScene: Scene {
                 Toggle("Show Only Notes", isOn: $settings.showsOnlyNotes)
                 Toggle("Dim Files That Aren’t Notes", isOn: $settings.dimsOtherFiles)
                 Toggle("Keep Folders on Top", isOn: $settings.foldersFirst)
+                // The Finder's shortcut for its hidden files.
+                Button(workspace.showsAllHiddenFolders ? "Hide Hidden Folders" : "Show Hidden Folders") { workspace.toggleAllHiddenFolders() }
+                    .keyboardShortcut(".", modifiers: [.command, .shift])
+                    .disabled(!workspace.hasHiddenFolders)
                 Divider()
                 Button("Bigger") { settings.changeTextSize(by: 1) }
                     .keyboardShortcut("+", modifiers: .command)

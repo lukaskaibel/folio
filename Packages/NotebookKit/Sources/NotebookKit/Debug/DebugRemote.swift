@@ -257,10 +257,75 @@ enum DebugRemote {
                 let lines = (0..<outline.numberOfRows).map { row -> String in
                     let item = outline.item(atRow: row)
                     let name = (item as? FileNode)?.name ?? (outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView)?.textField?.stringValue ?? "?"
-                    return String(repeating: "  ", count: outline.level(forRow: row)) + name + (outline.selectedRow == row ? " *" : "")
+                    let hidden = (item as? FileNode).map { $0.isFolder && workspace?.isHidden($0.url) == true } ?? false
+                    var header = ""
+                    if let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarHeaderCell, !cell.hiddenButton.isHidden {
+                        header = " [eye\(cell.hiddenButton.contentTintColor == .controlAccentColor ? " on" : "")]"
+                    }
+                    return String(repeating: "  ", count: outline.level(forRow: row)) + name + (hidden ? " (hidden)" : "") + header + (outline.selectedRow == row ? " *" : "")
                 }
                 let visible = outline.rows(in: outline.visibleRect)
                 log("rows (visible \(visible.location)..<\(visible.location + visible.length)):\n" + lines.joined(separator: "\n"))
+            }
+        case "hide", "unhide":
+            // hide <path>, unhide <path>: what Hide Folder and Unhide Folder in the sidebar's menu do.
+            workspace?.setHidden(URL(fileURLWithPath: argument), command == "hide")
+            log("\(command) \(argument): \(workspace?.hidden.keys.sorted() ?? [])")
+        case "hiddenpaths":
+            // hiddenpaths [text]: what search leaves out, and the paths of the files whose path has the text.
+            if let index = workspace?.index {
+                log("hiddenpaths: \(index.hiddenPaths) entries: " + index.entries.filter { argument.isEmpty || $0.url.path.contains(argument) }.prefix(8).map { "\($0.url.path) hidden=\(index.isHidden($0.url))" }.joined(separator: ", "))
+            }
+        case "showhidden":
+            // showhidden <location name> <1|0>: the eye button on that location's header; showhidden all: View › Show Hidden Folders.
+            guard let workspace else { break }
+            if argument == "all" {
+                workspace.toggleAllHiddenFolders()
+            } else if let space = argument.lastIndex(of: " "), let location = workspace.locations.first(where: { $0.name == argument[..<space] }) {
+                workspace.showHiddenFolders(argument[argument.index(after: space)...] == "1", in: location)
+            }
+            log("showhidden \(argument): \(workspace.locations.filter(workspace.showsHiddenFolders(in:)).map(\.name))")
+        case "hoverheader":
+            // hoverheader <title> <1|0>: as if the pointer rested on a section's header (the real one stays put).
+            guard let outline = workspace?.sidebar?.outline, let space = argument.lastIndex(of: " ") else { break }
+            for row in 0..<outline.numberOfRows {
+                guard let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarHeaderCell, cell.label.stringValue == argument[..<space] else { continue }
+                cell.isHovered = argument[argument.index(after: space)...] == "1"
+                let frame = cell.hiddenButton.convert(cell.hiddenButton.bounds, to: nil)
+                let height = window?.contentView?.bounds.height ?? 0
+                log("hoverheader \(argument): eye \(cell.hiddenButton.isHidden ? "hidden" : "at \(Int(frame.midX)) \(Int(height - frame.midY))")")
+            }
+        case "rowmenu":
+            // rowmenu <name>: the titles of the context menu of the sidebar row showing that name.
+            guard let sidebar = workspace?.sidebar, let outline = Optional(sidebar.outline) else { break }
+            for row in 0..<outline.numberOfRows {
+                guard let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView, cell.textField?.stringValue == argument else { continue }
+                let menu = NSMenu()
+                sidebar.fill(menu, row: row)
+                log("rowmenu \(argument): " + menu.items.map { $0.isSeparatorItem ? "—" : $0.title }.joined(separator: " | "))
+                break
+            }
+        case "menuitem":
+            // menuitem <row name> > <title>: chooses an item of that row's context menu.
+            let bits = argument.components(separatedBy: " > ")
+            guard bits.count == 2, let sidebar = workspace?.sidebar else { break }
+            let outline = sidebar.outline
+            for row in 0..<outline.numberOfRows {
+                guard let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView, cell.textField?.stringValue == bits[0] else { continue }
+                let menu = NSMenu()
+                sidebar.fill(menu, row: row)
+                if let index = menu.items.firstIndex(where: { $0.title == bits[1] }) { menu.performActionForItem(at: index) }
+                log("menuitem \(argument)")
+                break
+            }
+        case "clickeye":
+            // clickeye <title>: presses the eye button on a section's header.
+            guard let outline = workspace?.sidebar?.outline else { break }
+            for row in 0..<outline.numberOfRows {
+                guard let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarHeaderCell, cell.label.stringValue == argument else { continue }
+                cell.hiddenButton.performClick(nil)
+                log("clickeye \(argument)")
+                break
             }
         case "exportto":
             // exportto <pdf|png> <path>: writes the open note without asking where.

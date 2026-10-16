@@ -96,7 +96,7 @@ public struct Location: Identifiable, Codable, Equatable, Sendable {
         for item in (try? files.contentsOfDirectory(at: drive, includingPropertiesForKeys: Array(keys))) ?? [] {
             guard let values = try? item.resourceValues(forKeys: keys), values.isSymbolicLink == true, values.isHidden == true else { continue }
             let target = item.resolvingSymlinksInPath().standardizedFileURL
-            if isReadableFolder(target) { found.append(LinkedFolder(name: item.lastPathComponent, url: target)) }
+            if isReadableFolder(target) { found.append(LinkedFolder(name: item.lastPathComponent, url: target, alias: item.standardizedFileURL)) }
         }
         let containers = drive.deletingLastPathComponent()
         for container in (try? files.contentsOfDirectory(at: containers, includingPropertiesForKeys: [.isHiddenKey, .localizedNameKey])) ?? [] {
@@ -110,7 +110,7 @@ public struct Location: Identifiable, Codable, Equatable, Sendable {
                 let last = container.lastPathComponent.split(separator: "~").last.map(String.init) ?? name
                 name = last.prefix(1).uppercased() + last.dropFirst()
             }
-            found.append(LinkedFolder(name: name, url: documents))
+            found.append(LinkedFolder(name: name, url: documents, alias: documents))
         }
         return found
     }
@@ -127,6 +127,8 @@ public struct Location: Identifiable, Codable, Equatable, Sendable {
 public struct LinkedFolder: Equatable, Sendable {
     public var name: String
     public var url: URL
+    /// Where it is in iCloud: the link to it in iCloud Drive (Desktop), or the folder itself (an app's).
+    public var alias: URL
 }
 
 /// The locations, kept in the app's settings, with their bookmarks.

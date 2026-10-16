@@ -168,6 +168,9 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
   the device, in On My iPhone › Notebook. A bar above the keyboard, whose tools you choose, formats, links and adds
   photos, scans and files; Aa opens the Format panel as in Notes.
   Deleting moves to Recently Deleted; where a place has none, Notebook asks before it deletes.
+- **Hidden folders.** Right-click a folder you don't want to see, such as one another app keeps in iCloud Drive, and
+  choose Hide Folder. It leaves the sidebar, search and Move To, and stays hidden on your other Macs through iCloud.
+  The eye next to the location's name, or ⇧⌘., shows hidden folders again, dimmed, until you click it again.
 - **Live preview editor.** Headings, bold, italic, strikethrough, `==highlight==`, inline code, links, checklists,
   bulleted and numbered lists, quotes, callouts, tables, code blocks, maths, Mermaid, footnotes and front matter, which
   folds into a small "properties" pill.
@@ -232,10 +235,11 @@ git clone https://github.com/lukaskaibel/notebook.git
 open notebook/Notebook.xcodeproj
 ```
 
-Choose the **Notebook** scheme, then **My Mac** or an iPhone or iPad simulator as the destination, and press ⌘R. A
-local build needs no Apple developer account: without a team, Xcode signs it to run on your Mac and in the Simulator.
-To run it on your own iPhone or iPad, or to sign with your own team, create `Config/Local.xcconfig` with
-`DEVELOPMENT_TEAM = <your team ID>`; it isn't checked in.
+Choose the **Notebook** scheme, then **My Mac** or an iPhone or iPad simulator as the destination, and press ⌘R. A local
+build needs no Apple developer account: without a team, Xcode signs it to run on your Mac and in the Simulator. To run
+it on your own iPhone or iPad, or to sign with your own team, create `Config/Local.xcconfig` with `DEVELOPMENT_TEAM =
+<your team ID>`; it isn't checked in. A local build keeps hidden folders on the device; only the App Store build, signed
+with a team, has the iCloud entitlement that takes them to your other devices.
 
 ### Adding your notes
 
@@ -263,6 +267,7 @@ app's own folder there.
 | ⌘O | Open a Markdown file in a window of its own, or a folder in the sidebar |
 | ⌃⌘S | Show or hide the sidebar |
 | ⌃⌘I | Show or hide the outline |
+| ⇧⌘. | Show or hide hidden folders |
 | ⌘+, ⌘− and ⌘0 | Bigger, smaller and actual text size |
 | ⌥⌘E | Export as PDF |
 | ⌘P | Print |
@@ -290,7 +295,8 @@ While writing:
 | ↑ on the first line | Into the title; Return, Tab or ↓ back into the text |
 
 In the sidebar: Return renames, ⌘⌫ moves to the Trash, and Space opens a file in Quick Look. Right-click a file or
-folder for everything else, including Copy Link, which copies a `[[link]]` to it.
+folder for everything else, including Copy Link, which copies a `[[link]]` to it, and Hide Folder. When a location has
+hidden folders, an eye comes up next to its name as you point at it.
 
 On an iPad with a keyboard, ⌘N, ⌘F, ⌘[ and ⌘], ⌃⌘I and the shortcuts for writing work as on the Mac. On iPhone
 and iPad:

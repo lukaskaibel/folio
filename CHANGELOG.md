@@ -19,6 +19,10 @@ versions follow [semantic versioning](https://semver.org).
   time; Settings › Writing Bar chooses its tools and their order. Aa opens the Format panel in the keyboard's place.
 - Touch and hold a picture or file in a note and drag it to another place in the note, or let go to copy, cut, share or
   delete it.
+- Hide folders you don't want to see, such as the ones other apps keep in iCloud Drive: right-click one and choose
+  Hide Folder. Hidden folders leave the sidebar, search and Move To, and stay hidden on your other Macs through iCloud.
+  To see them again, dimmed, click the eye next to the location's name or press ⇧⌘.; links to notes in them keep
+  working.
 
 ### Changed
 

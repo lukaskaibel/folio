@@ -94,10 +94,11 @@ extension FileNode {
 }
 
 extension Workspace {
-    /// What a folder shows, read when first asked for and again whenever files change in it.
+    /// What a folder shows, read when first asked for and again whenever files change in it. Folders hidden on the
+    /// Mac stay out, as they do there.
     func visibleChildren(of folder: URL) -> [FileNode] {
         _ = treeVersion
-        return node(for: folder)?.visibleChildren() ?? []
+        return node(for: folder).map { shownChildren(of: $0, in: location(containing: folder)) } ?? []
     }
 
     /// A row for any file, found again by its address.

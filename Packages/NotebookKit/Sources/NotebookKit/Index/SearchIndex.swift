@@ -39,6 +39,8 @@ public final class SearchIndex {
     public private(set) var isBuilding = false
     /// Called when the index has been built: links in a note opened before resolve now.
     @ObservationIgnored var onBuilt: (() -> Void)?
+    /// Folders hidden from the sidebar: what is in them stays out of search, `[[` and Move To, but links still find it.
+    @ObservationIgnored var hiddenPaths: [String] = []
     private var byPath: [String: Int] = [:]
     private var generation = 0
 
@@ -273,7 +275,7 @@ public final class SearchIndex {
         guard !q.isEmpty else { return [] }
         var scored: [(Int, Entry)] = []
         for entry in entries where entry.kind != .folder {
-            guard let score = Self.score(entry.foldedName, q) else { continue }
+            guard let score = Self.score(entry.foldedName, q), !isHidden(entry.url) else { continue }
             var total = score
             if entry.kind == .note { total += 5 }
             scored.append((total, entry))
@@ -283,9 +285,19 @@ public final class SearchIndex {
 
     public func folders(matching query: String, limit: Int = 12) -> [Entry] {
         let q = Self.fold(query.trimmingCharacters(in: .whitespaces))
-        return entries.filter { $0.kind == .folder && (q.isEmpty || Self.score($0.foldedName, q) != nil) }
+        return entries.filter { $0.kind == .folder && (q.isEmpty || Self.score($0.foldedName, q) != nil) && !isHidden($0.url) }
             .sorted { (Self.score($0.foldedName, q) ?? 0) > (Self.score($1.foldedName, q) ?? 0) }
             .prefix(limit).map { $0 }
+    }
+
+    /// In a hidden folder, or one itself.
+    func isHidden(_ url: URL) -> Bool {
+        guard !hiddenPaths.isEmpty else { return false }
+        let path = HiddenFolders.withoutPrivate(url.path)
+        return hiddenPaths.contains { folder in
+            let folder = HiddenFolders.withoutPrivate(folder)
+            return path == folder || path.hasPrefix(folder + "/")
+        }
     }
 
     nonisolated static func score(_ name: String, _ query: String) -> Int? {
@@ -309,7 +321,7 @@ public final class SearchIndex {
         guard q.count >= 2 else { return [] }
         var hits: [TextHit] = []
         for entry in entries.sorted(by: { ($0.modified ?? .distantPast) > ($1.modified ?? .distantPast) }) {
-            guard let folded = entry.folded, folded.contains(q), let text = entry.text else { continue }
+            guard let folded = entry.folded, folded.contains(q), let text = entry.text, !isHidden(entry.url) else { continue }
             hits.append(Self.hit(entry, text: text, query: query))
             if hits.count >= limit { break }
         }
@@ -367,7 +379,7 @@ public final class SearchIndex {
         var items: [LinkSuggestion] = []
         let candidates: [Entry]
         if query.trimmingCharacters(in: .whitespaces).isEmpty {
-            candidates = entries.filter { $0.kind == .note && $0.url != note }.sorted { ($0.modified ?? .distantPast) > ($1.modified ?? .distantPast) }.prefix(6).map { $0 }
+            candidates = entries.filter { $0.kind == .note && $0.url != note && !isHidden($0.url) }.sorted { ($0.modified ?? .distantPast) > ($1.modified ?? .distantPast) }.prefix(6).map { $0 }
         } else {
             candidates = files(matching: query, limit: 7).filter { $0.url != note }
         }

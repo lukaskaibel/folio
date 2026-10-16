@@ -29,6 +29,8 @@ public final class Workspace: NSObject {
     @ObservationIgnored private var places: [URL: EditorController.Place] = [:]
     private(set) var favorites: [String] = []
     private(set) var recents: [String] = []
+    /// The folders hidden from the sidebar: kept in iCloud, or only for this run with locations given on the command line.
+    private(set) var hidden = HiddenFolders(defaults: nil, cloud: nil)
 
     #if os(macOS)
     /// The search field in the toolbar.
@@ -132,7 +134,14 @@ public final class Workspace: NSObject {
             recents = []
         } else {
             locations = LocationStore.load()
+            hidden = HiddenFolders()
         }
+        #if DEBUG
+        if temporaryLocations, UserDefaults.standard.bool(forKey: "NotebookDemo"), let library = locations.first {
+            for path in DemoLibrary.hiddenFolders { hidden.set(hiddenKey(for: library.url.appendingPathComponent(path)), hidden: true) }
+        }
+        #endif
+        hidden.onChange = { [weak self] in self?.hiddenFoldersChanged() }
         locationsChanged()
         if !temporaryLocations, let last = UserDefaults.standard.string(forKey: "lastOpened"), FileManager.default.fileExists(atPath: last) {
             open(URL(fileURLWithPath: last))
@@ -154,6 +163,7 @@ public final class Workspace: NSObject {
         watcher = FileWatcher(paths: locations.flatMap { $0.folders.map(\.url.path) }) { [weak self] paths in
             MainActor.assumeIsolated { self?.filesChanged(paths) }
         }
+        updateHiddenPaths()
         index.rebuild(locations)
         sidebarReloadAll()
     }
@@ -532,6 +542,7 @@ public final class Workspace: NSObject {
         func fix(_ path: String) -> String {
             path == oldPath ? newPath : path.hasPrefix(oldPath + "/") ? newPath + path.dropFirst(oldPath.count) : path
         }
+        hiddenFolderMoved(from: old, to: new)
         favorites = favorites.map(fix)
         recents = recents.map(fix)
         history = history.map { URL(fileURLWithPath: fix($0.path)) }
@@ -681,7 +692,7 @@ public final class Workspace: NSObject {
                     let relative = prefix + String(path.dropFirst(base.count + 1))
                     return (entry.url, entry.name, relative.split(separator: "/").count - 1, relative)
                 }
-                if let linked = folder.linked, base != source, !base.hasPrefix(source + "/") {
+                if let linked = folder.linked, base != source, !base.hasPrefix(source + "/"), !index.isHidden(linked.url) {
                     found.append((linked.url, linked.name, 0, linked.name))
                 }
                 return found
@@ -703,6 +714,7 @@ public final class Workspace: NSObject {
             currentURL = nil
         }
         guard FileOperations.trash(url) else { beep(); return false }
+        hiddenFolderMoved(from: url, to: nil)
         refreshNow(url.deletingLastPathComponent())
         favorites.removeAll { $0 == url.path }
         #if os(macOS)
@@ -718,6 +730,7 @@ public final class Workspace: NSObject {
     func deleteImmediately(_ url: URL) {
         if url == currentURL || (currentURL?.path.hasPrefix(url.path + "/") ?? false) { closeFile() }
         guard FileOperations.delete(url) else { beep(); return }
+        hiddenFolderMoved(from: url, to: nil)
         refreshNow(url.deletingLastPathComponent())
         favorites.removeAll { $0 == url.path }
     }
@@ -811,7 +824,7 @@ public final class Workspace: NSObject {
         #endif
     }
 
-    private func sidebarReloadAll() {
+    func sidebarReloadAll() {
         #if os(macOS)
         sidebar?.reloadAll()
         #else
