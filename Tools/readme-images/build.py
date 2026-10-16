@@ -143,7 +143,7 @@ def font(weight, size):
 
 
 d = ImageDraw.Draw(canvas)
-d.text((86 * S, 318 * S), "Folio", font=font("Bold", 84), fill=(240, 240, 242))
+d.text((86 * S, 318 * S), "Notebook", font=font("Bold", 84), fill=(240, 240, 242))
 d.text((88 * S, 422 * S), "Your notes as Markdown files,", font=font("Medium", 32), fill=(206, 205, 210))
 d.text((88 * S, 462 * S), "on Mac, iPhone and iPad.", font=font("Medium", 32), fill=(206, 205, 210))
 d.text((88 * S, 530 * S), "Written like in Notes, kept in", font=font("Regular", 22), fill=(146, 145, 152))

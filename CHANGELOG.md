@@ -7,7 +7,7 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
-- Folio on iPhone and iPad, with the editor, search and files of the Mac. On the iPhone, one folder per screen as in
+- Notebook on iPhone and iPad, with the editor, search and files of the Mac. On the iPhone, one folder per screen as in
   the Files app, with search and a new note at the bottom as in Notes; on the iPad, the Mac's sidebar, the note and its
   outline.
 - A bar above the keyboard with the text styles and formatting, a checklist, a link, and pictures from the camera, the
@@ -18,7 +18,7 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
-- Links in a note opened while Folio was still reading your folders showed as links to notes that don't exist yet.
+- Links in a note opened while Notebook was still reading your folders showed as links to notes that don't exist yet.
 
 ## [0.1.0] – not released yet
 
@@ -47,4 +47,4 @@ The first version: a Mac app for Markdown notes in your own folders.
   sidebar.
 - Settings for the typeface, size, line spacing and line width, and for what the sidebar shows.
 - A leather notebook as the app icon. Make it your own in Settings › App Icon: the leather, the elastic band, the
-  ribbon and the background, shown in the Dock while Folio is open. A tip in the sidebar points there.
+  ribbon and the background, shown in the Dock while Notebook is open. A tip in the sidebar points there.

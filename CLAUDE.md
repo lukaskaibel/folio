@@ -23,7 +23,7 @@ being asked. Before calling such a change done, go through this list and do what
 - **Sample notes** (`Debug/DemoLibrary.swift`): the pictures are taken on them, so a new feature needs something there
   to show it with.
 - **The repository on GitHub:** when the app's scope changes (a platform, a headline feature), update the description
-  and topics with `gh repo edit lukaskaibel/folio --description "…" --add-topic …` and say that you did. When
+  and topics with `gh repo edit lukaskaibel/notebook --description "…" --add-topic …` and say that you did. When
   `Design/social-preview.png` changed, tell the user to upload it under Settings › General › Social preview; GitHub
   has no API for it.
 - **Releases:** the version in `Config/Shared.xcconfig`, the version badge in the README and the changelog heading
@@ -33,7 +33,7 @@ In the pull request, say which of these you updated and which you left alone on 
 
 ## Planning
 
-Folio is planned in the GitHub project [Folio](https://github.com/users/lukaskaibel/projects/4): milestones are
+Notebook is planned in the GitHub project [Notebook](https://github.com/users/lukaskaibel/projects/4): milestones are
 versions (0.1.0, 0.2.0, …), larger pieces are issues labelled `epic` with sub-issues as their steps, and Status runs
 Inbox → Backlog → Todo → In Progress → In Review → Done. Work you find but don't do becomes an issue there (Inbox, or
 Backlog when it's clearly wanted). Link pull requests to their issue (`Closes #12`). When a version ships, close its

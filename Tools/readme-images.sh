@@ -4,9 +4,9 @@
 #   Tools/readme-images.sh            all of them
 #   Tools/readme-images.sh devices    only the iPhone and iPad picture, which needs no screen
 # The Mac app runs in the background on a fresh copy of the sample notes (Debug/DemoLibrary.swift), under a bundle
-# identifier of its own so your Folio's settings stay as they are. It never comes to the front and leaves keyboard and
+# identifier of its own so your Notebook's settings stay as they are. It never comes to the front and leaves keyboard and
 # mouse alone; only the search suggestions show on screen for a moment. The iPhone and iPad pictures come from two
-# simulators of the script's own ("Folio README iPhone" and "… iPad"), which run without the Simulator app's window.
+# simulators of the script's own ("Notebook README iPhone" and "… iPad"), which run without the Simulator app's window.
 # Takes about three minutes. Needs Screen Recording permission for the terminal, a Retina display, Python 3 with
 # Pillow and NumPy, ffmpeg and img2webp (brew install ffmpeg webp), and the iOS Simulator runtime of Xcode.
 set -euo pipefail
@@ -15,8 +15,8 @@ cd "$(dirname "$0")/.."
 work=build/readme-images
 raw=$work/raw
 library=$work/Notes
-app=$work/DerivedData/Build/Products/Debug/Folio.app
-bundle_id=com.lukaskbl.Folio.readme
+app=$work/DerivedData/Build/Products/Debug/Notebook.app
+bundle_id=com.lukaskbl.Notebook.readme
 
 python3 -c "import PIL, numpy" 2>/dev/null || { echo "Needs Pillow and NumPy: pip3 install pillow numpy" >&2; exit 1; }
 for tool in ffmpeg img2webp; do
@@ -30,7 +30,7 @@ mkdir -p "$raw"
 # start of a line.)
 if [ "$only" != devices ]; then
 echo "Building…"
-xcodebuild -project Folio.xcodeproj -scheme Folio -configuration Debug -destination 'platform=macOS,arch=arm64' \
+xcodebuild -project Notebook.xcodeproj -scheme Notebook -configuration Debug -destination 'platform=macOS,arch=arm64' \
   -derivedDataPath "$work/DerivedData" PRODUCT_BUNDLE_IDENTIFIER=$bundle_id build -quiet
 mkdir -p "$raw"
 swiftc -O Tools/readme-images/capture.swift -o "$work/capture" 2>/dev/null
@@ -53,8 +53,8 @@ launch() {
   defaults delete $bundle_id 2>/dev/null || true
   : > "$work/cmd"
   rm -f "$work/cmd.log"
-  open -n -g "$app" --args -FolioLibrary "$PWD/$library" -FolioLibraryName "iCloud Drive" -FolioDemo YES \
-    -AppleLanguages '(en)' -AppleLocale en_US -NSAllowContinuousSpellChecking NO -FolioTips hide -debugCommandFile "$PWD/$work/cmd" \
+  open -n -g "$app" --args -NotebookLibrary "$PWD/$library" -NotebookLibraryName "iCloud Drive" -NotebookDemo YES \
+    -AppleLanguages '(en)' -AppleLocale en_US -NSAllowContinuousSpellChecking NO -NotebookTips hide -debugCommandFile "$PWD/$work/cmd" \
     "-NSWindow Frame main" "160 80 1280 820 0 0 1512 949"
   for _ in $(seq 40); do
     pid=$(pgrep -nf "$PWD/$app/Contents/MacOS" || true)
@@ -97,7 +97,7 @@ for theme in dark light; do
   sleep 1.5
   shot "note-$theme"
 
-  say "open Projects/Folio roadmap.md"; sleep 1.5; shot "blocks-$theme"
+  say "open Projects/Notebook roadmap.md"; sleep 1.5; shot "blocks-$theme"
   say "open University/Linear algebra/Week 3.md"; sleep 1.5; shot "math-$theme"
   say "open Travel/Flight tickets.pdf"; sleep 2; shot "quicklook-$theme"
   # Further down the trip: the plan with its link, the callout, the table and the embedded PDF.
@@ -124,8 +124,8 @@ done
 fi
 
 echo "Building for iPhone and iPad…"
-ios_app=$work/DerivedData-iOS/Build/Products/Debug-iphonesimulator/Folio.app
-xcodebuild -project Folio.xcodeproj -scheme Folio -configuration Debug -destination 'generic/platform=iOS Simulator' \
+ios_app=$work/DerivedData-iOS/Build/Products/Debug-iphonesimulator/Notebook.app
+xcodebuild -project Notebook.xcodeproj -scheme Notebook -configuration Debug -destination 'generic/platform=iOS Simulator' \
   -derivedDataPath "$work/DerivedData-iOS" PRODUCT_BUNDLE_IDENTIFIER=$bundle_id build -quiet
 
 # simulator <name> <device type>: a simulator of the script's own, made the first time and booted, by its UDID.
@@ -159,7 +159,7 @@ device() {
   mkdir -p "$container/Documents"
   : > "$container/Documents/cmd"
   for line in "$@"; do echo "$line" >> "$container/Documents/cmd"; done
-  xcrun simctl launch "$udid" $bundle_id -FolioLibrary "~/Documents/Notes" -FolioLibraryName "iCloud Drive" -FolioDemo YES \
+  xcrun simctl launch "$udid" $bundle_id -NotebookLibrary "~/Documents/Notes" -NotebookLibraryName "iCloud Drive" -NotebookDemo YES \
     -AppleLanguages '(en)' -AppleLocale en_US -NSAllowContinuousSpellChecking NO -debugCommandFile "~/Documents/cmd" > /dev/null
   for _ in $(seq 60); do
     grep -q "^> done" "$container/Documents/cmd.log" 2>/dev/null && break
@@ -171,8 +171,8 @@ device() {
 }
 
 echo "iPhone and iPad…"
-iphone=$(simulator "Folio README iPhone" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro)
-ipad=$(simulator "Folio README iPad" com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB)
+iphone=$(simulator "Notebook README iPhone" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro)
+ipad=$(simulator "Notebook README iPad" com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB)
 for theme in dark light; do
   device "$iphone" iphone $theme "wait 2" "open Travel/Kyoto trip.md" "wait 2.5" "done"
   device "$ipad" ipad $theme "wait 2" "open Travel/Kyoto trip.md" "wait 2.5" "done"
