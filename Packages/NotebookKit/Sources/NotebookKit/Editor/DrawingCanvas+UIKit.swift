@@ -163,6 +163,14 @@ extension EditorController: PKToolPickerObserver {
         session.toolPicker.addObserver(self)
         session.toolPicker.stateAutosaveName = "NotebookDrawing"
         if textView.isFirstResponder || textView.titleField.isFirstResponder { textView.endEditing(true) }
+        // A stroke from left to right is also how you go back from anywhere on the screen (iOS 26): it would end
+        // in the middle. Back stays at the edge and in the bar.
+        var responder: UIResponder? = textView
+        while let next = responder, !(next is UINavigationController) { responder = next.next }
+        if let back = (responder as? UINavigationController)?.interactiveContentPopGestureRecognizer, back.isEnabled {
+            back.isEnabled = false
+            session.pausedGestures.append(back)
+        }
     }
 
     func stopDrawingInput(_ session: DrawingSession) {
@@ -173,6 +181,7 @@ extension EditorController: PKToolPickerObserver {
             canvas.removeFromSuperview()
         }
         session.toolPicker.removeObserver(self)
+        session.pausedGestures.forEach { $0.isEnabled = true }
         setDrawingInset(0)
     }
 

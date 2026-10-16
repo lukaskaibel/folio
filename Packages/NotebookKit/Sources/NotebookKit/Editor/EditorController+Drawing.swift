@@ -20,6 +20,8 @@ final class DrawingSession {
     var saveWork: DispatchWorkItem?
     #if os(iOS)
     let toolPicker = PKToolPicker()
+    /// Gestures of the screen that would take a stroke for themselves, off while drawing.
+    var pausedGestures: [UIGestureRecognizer] = []
     #endif
 }
 

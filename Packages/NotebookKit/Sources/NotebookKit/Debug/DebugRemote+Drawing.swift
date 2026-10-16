@@ -71,6 +71,7 @@ extension EditorController {
             lines.append(line)
         }
         #if os(iOS)
+        if let paused = drawingSession?.pausedGestures { lines.append("paused gestures: \(paused.map { String(describing: type(of: $0)) })") }
         if let picker = drawingSession?.toolPicker {
             lines.append("tool picker visible \(picker.isVisible), obscures \(picker.frameObscured(in: textView)), text view \(textView.bounds), inset \(textView.contentInset.bottom), pencil only \(UIPencilInteraction.prefersPencilOnlyDrawing), tool \(String(describing: picker.selectedToolItem))")
             for canvas in drawingSession?.canvases.values ?? [:].values {
