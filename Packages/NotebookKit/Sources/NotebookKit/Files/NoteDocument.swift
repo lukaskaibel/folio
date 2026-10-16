@@ -58,7 +58,7 @@ public final class NoteDocument: NSObject, NSFilePresenter {
 
     // MARK: - Reading and writing
 
-    static func read(_ url: URL) -> String? {
+    nonisolated static func read(_ url: URL) -> String? {
         var result: String?
         var error: NSError?
         NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &error) { url in

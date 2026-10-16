@@ -588,8 +588,10 @@ public final class Workspace: NSObject {
         index.refresh(folders: [folder], locations: locations)
     }
 
+    /// Renames a file or folder. Links to a renamed note in other notes follow it, unless it is a new note getting its
+    /// first name, which nothing links to yet.
     @discardableResult
-    func rename(_ url: URL, to name: String) -> URL? {
+    func rename(_ url: URL, to name: String, updatingLinks: Bool = true) -> URL? {
         guard !isLinkedFolder(url) else { beep(); return nil }
         let isNote = FileKind(url: url, isDirectory: false) == .note
         let oldName = url.deletingPathExtension().lastPathComponent
@@ -604,10 +606,15 @@ public final class Workspace: NSObject {
         if url.standardizedFileURL == note?.url.standardizedFileURL || renamed.standardizedFileURL == currentURL {
             editor.setTitle(renamed.deletingPathExtension().lastPathComponent)
         }
-        if isNote, let location = location(containing: renamed) {
+        if isNote, updatingLinks, let location = location(containing: renamed) {
             let newName = renamed.deletingPathExtension().lastPathComponent
-            for folder in location.folders {
-                _ = FileOperations.updateLinks(from: oldName, to: newName, under: folder.url, skipping: nil)
+            let roots = location.folders.map(\.url)
+            // In the background: it reads every note of the location, which in a large folder in iCloud Drive takes
+            // long (and waits for notes still to download). The notes it changes come back as changes on disk.
+            Task.detached(priority: .utility) {
+                for root in roots {
+                    _ = FileOperations.updateLinks(from: oldName, to: newName, under: root, skipping: nil)
+                }
             }
         }
         reveal(renamed, select: renamed == currentURL)
@@ -890,7 +897,7 @@ extension Workspace: EditorControllerDelegate {
             editor.setTitle(current)
             return
         }
-        if rename(note.url, to: wanted) == nil { editor.setTitle(current) }
+        if rename(note.url, to: wanted, updatingLinks: !note.isNew) == nil { editor.setTitle(current) }
         note.isNew = false
     }
 

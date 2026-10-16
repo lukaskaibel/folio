@@ -115,7 +115,7 @@ enum FileOperations {
     /// After a note was renamed, points every `[[Old]]` (and `[[Old|…]]`, `[[Old#…]]`, `![[Old]]`) in the notes
     /// under `root` at the new name. Returns how many notes changed.
     @discardableResult
-    static func updateLinks(from oldName: String, to newName: String, under root: URL, skipping: URL? = nil) -> Int {
+    nonisolated static func updateLinks(from oldName: String, to newName: String, under root: URL, skipping: URL? = nil) -> Int {
         guard oldName != newName, let expression = try? NSRegularExpression(
             pattern: "(!?\\[\\[)" + NSRegularExpression.escapedPattern(for: oldName) + "(\\.md)?(?=(\\]\\]|\\||#))",
             options: [.caseInsensitive]
