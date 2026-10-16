@@ -108,6 +108,24 @@ With an empty field, it lists what you opened last.
   <img alt="The search field with kyoto typed in: the note Kyoto trip under Files, and under In Notes and PDFs a match on page 1 of Flight tickets.pdf and one in the note Budget, then New Note kyoto" src="Design/screenshots/search-light.webp">
 </picture>
 
+### Remind me of a note
+
+Questions for the doctor, points for a meeting: Remind Me… brings a note back at the time you choose. Pick Later
+Today, This Evening or Tomorrow, or a date and a time, in a popover like a reminder's details in Reminders. The note
+then shows a bell and the time under its title ("Tomorrow 8:30") and a bell in its row; a click on it changes the time
+or removes the reminder, and once the time has passed it turns red. At that time a notification comes with the note's
+name, the time and its first points: what is still to do first, then the rest, without pictures or front matter. It is
+Time Sensitive, so it gets through a Focus. Tap it to open the note, or choose Remind Me in 1 Hour or Done.
+
+On the Mac, Remind Me… is in the note's ⋯ menu, the sidebar's right-click menu and the inspector; on iPhone and iPad it
+is in the ⋯ menu, on touch and hold, and, once you add it in Settings › Writing Bar, as a bell above the keyboard. The
+reminder isn't written into the note, so the file stays as it was and the time doesn't go along when you share it.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/reminder-dark.webp">
+  <img alt="The note Questions for Dr. Weber with a bell and Tomorrow 8:30 under its title, a bell in its row in the sidebar and a Reminder section in the inspector; Remind Me is open below the title with Later Today, This Evening and Tomorrow, a date and a time" src="Design/screenshots/reminder-light.webp">
+</picture>
+
 ### PDFs, pictures and every other file
 
 Notebook is a browser for your folders, not only for notes. A PDF opens right in the window the way Preview shows it, its
@@ -173,6 +191,9 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
   choose Hide Folder, or on iPhone and iPad touch and hold it. It leaves the sidebar, search and Move To, and stays
   hidden on your other Macs, iPhones and iPads through iCloud. The eye next to the location's name, or ⇧⌘., shows
   hidden folders again, dimmed, until you click it again; on iPhone and iPad, Show Hidden Folders is in the ⋯ menu.
+- **Reminders.** Remind Me… brings a note back at a time you choose, with a notification of its first points that
+  gets through a Focus. The reminder follows the note when you rename or move it in Notebook, goes when you delete it,
+  and reaches your other Macs, iPhones and iPads through iCloud; each device shows the notification itself.
 - **Live preview editor.** Headings, bold, italic, strikethrough, `==highlight==`, inline code, links, checklists,
   bulleted and numbered lists, quotes, callouts, tables, code blocks, maths, Mermaid, footnotes and front matter, which
   folds into a small "properties" pill.
@@ -188,7 +209,8 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
 ## How notes are stored
 
 Everything is plain Markdown, so other apps keep reading your notes. Notebook adds no files of its own besides the
-`.assets` folders for pictures and files you add to notes.
+`.assets` folders for pictures and files you add to notes. What isn't part of a note, such as the folders you hide and
+the reminders you set, is kept in the app's settings and iCloud's key-value store, not in your folders.
 
 | What | In the file | In Notebook |
 | --- | --- | --- |
@@ -242,8 +264,9 @@ open notebook/Notebook.xcodeproj
 Choose the **Notebook** scheme, then **My Mac** or an iPhone or iPad simulator as the destination, and press ⌘R. A local
 build needs no Apple developer account: without a team, Xcode signs it to run on your Mac and in the Simulator. To run
 it on your own iPhone or iPad, or to sign with your own team, create `Config/Local.xcconfig` with `DEVELOPMENT_TEAM =
-<your team ID>`; it isn't checked in. A local build keeps hidden folders on the device; only the App Store build, signed
-with a team, has the iCloud entitlement that takes them to your other devices.
+<your team ID>`; it isn't checked in. A local build keeps hidden folders and reminders on the device; only the App
+Store build, signed with a team, has the iCloud entitlement that takes them to your other devices, and the one for Time
+Sensitive notifications.
 
 ### Adding your notes
 
@@ -301,8 +324,8 @@ While writing:
 | ↑ on the first line | Into the title; Return, Tab or ↓ back into the text |
 
 In the sidebar: Return renames, ⌘⌫ moves to the Trash, and Space opens a file in Quick Look. Right-click a file or
-folder for everything else, including Copy Link, which copies a `[[link]]` to it, and Hide Folder. When a location has
-hidden folders, an eye comes up next to its name as you point at it.
+folder for everything else, including Copy Link, which copies a `[[link]]` to it, Remind Me… and Hide Folder. When a
+location has hidden folders, an eye comes up next to its name as you point at it.
 
 On an iPad with a keyboard, ⌘N, ⌘F, ⌘[ and ⌘], ⌃⌘I, ⇧⌘. and the shortcuts for writing work as on the Mac. On iPhone
 and iPad:
@@ -311,7 +334,7 @@ and iPad:
 | --- | --- |
 | Swipe from the left edge | Back to the folder or the note you came from (iPhone) |
 | Swipe a file to the left or right | Move or delete it, add it to your favourites, or hide a folder |
-| Touch and hold a file or folder | Rename, move, duplicate, copy a link, hide a folder, share and more |
+| Touch and hold a file or folder | Set a reminder, rename, move, duplicate, copy a link, hide a folder, share and more |
 | Pull a list down | Read the folder again |
 | Tap a checkbox, a link or a picture | Tick it, follow it, or look at it in Quick Look |
 | Touch and hold a picture or file in a note, then drag | Move it to another place in the note, or into another app |
@@ -327,6 +350,9 @@ Planned, and not built yet:
   extension, all adding a note to an Inbox folder.
 - **Spotlight,** text recognition in pictures and scans, and a search index that's kept between launches; today it is
   rebuilt at every launch.
+- **Reminders at a place** (arriving or leaving) **and when a calendar event starts,** and on the iPhone a Live
+  Activity that keeps the note on the Lock Screen. A reminder set on another device reaches an iPhone or iPad the next
+  time Notebook runs there or gets time in the background. Reminders don't repeat.
 - Links follow a renamed note, but not yet a moved one, a renamed folder or a rename in a single-file window.
   Footnotes are styled but don't jump to their text.
 - On iPhone and iPad there is no Settings › App Icon (iOS only switches between icons built into the app), no PNG
@@ -346,15 +372,15 @@ Packages/NotebookKit/
                              the Mac's text view, and iPhone's and iPad's in the "+UIKit" files
     Markdown/                Notebook's Markdown parser, which keeps every character's position in the file
     Render/                  Tables, maths, diagrams and code highlighting
-    Files/                   Locations, the file tree read in the background, file operations, saving, watching and the
-                             three-way merge
+    Files/                   Locations, the file tree read in the background, file operations, saving, watching, the
+                             three-way merge, and the hidden folders and reminders kept in iCloud's key-value store
     Index/                   Search over names, note text and PDF text, and how [[links]] resolve
     Platform/                The few names and calls that differ between AppKit and UIKit
     UI/                      The Mac's window, sidebar, inspector, search field, Settings and file windows; PDFs,
                              pictures, videos and Quick Look; what both share, such as the outline and search results
     UI/iOS/                  The iPhone's and iPad's screens: folders, the sidebar, the note, search and Settings
     Debug/                   The debug remotes and the sample notes (Debug builds only)
-  Tests/                     Parser, editor, merge, smoothness and app icon tests
+  Tests/                     Parser, editor, merge, smoothness, reminder and app icon tests
 Config/                      Build settings, Info.plist and entitlements
 Design/                      The icon, the README pictures and the social preview
 Website/                     The website, published to GitHub Pages by .github/workflows/website.yml
@@ -398,11 +424,13 @@ Tools/AppIcon/make.sh
 
 Debug builds can be driven from a file: launch with `-debugCommandFile <path>` and append commands such as
 `open Travel/Kyoto trip.md`, `type Hello`, `key return` or `snapshot <file>` to it, one per line. The commands are
-listed in `Debug/DebugRemote.swift`, and for iPhone and iPad in `Debug/DebugRemote+UIKit.swift`; in the Simulator the
-file is in the app's own folder (`-debugCommandFile ~/Documents/cmd`), where `xcrun simctl get_app_container` finds it,
-and `xcrun simctl io <device> screenshot` takes the pictures. `-NotebookSlowFolders 2` makes every folder take two
-seconds to read, as a slow iCloud might, to see that nothing waits for it, and `-NotebookSlowFiles 2` does the same
-for every note, PDF, picture and video you open.
+listed in `Debug/DebugRemote.swift`, and for iPhone and iPad in `Debug/DebugRemote+UIKit.swift`; those for reminders,
+such as `remind 2 Personal/Questions for Dr. Weber.md` (in two minutes) and `notifications`, are in
+`Debug/DebugReminders.swift`. In the Simulator the file is in the app's own folder (`-debugCommandFile
+~/Documents/cmd`), where `xcrun simctl get_app_container` finds it, and `xcrun simctl io <device> screenshot` takes the
+pictures. `-NotebookSlowFolders 2` makes every folder take two seconds to read, as a slow iCloud might, to see that
+nothing waits for it, and `-NotebookSlowFiles 2` does the same for every note, PDF, picture and video you open. macOS
+shows notifications only from an app in a lasting place, not from one in `/tmp`.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes.
 

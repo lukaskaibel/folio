@@ -239,6 +239,7 @@ enum DebugRemote {
         case "views":
             if let window = editor.textView.window { log(describe(window, depth: 0, limit: Int(numbers.first ?? 6))) }
         default:
+            if DebugReminders.run(command, argument, workspace: workspace, url: url, log: log) { break }
             // Everything else is the screens': going back, searching, showing settings.
             NotificationCenter.default.post(name: .notebookDebug, object: nil, userInfo: ["command": command, "argument": argument])
         }

@@ -103,6 +103,10 @@ for theme in dark light; do
   say "open Travel/Flight tickets.pdf"; sleep 2; shot "quicklook-$theme"
   # Further down the trip: the plan with its link, the callout, the table and the embedded PDF.
   say "open Travel/Kyoto trip.md"; sleep 1.2; say "scroll 640"; sleep 1; shot "objects-$theme"
+  # The questions for the doctor, with Remind Me… open under the title, where the sample reminder's bell is.
+  say "open Personal/Questions for Dr. Weber.md"; sleep 1.2
+  say "remindme Personal/Questions for Dr. Weber.md"; sleep 1.2; shot "reminder-$theme"
+  say "remindme close"; sleep 0.5
 
   say "open Personal/Weekend.md"; sleep 1.5
   rm -f "$raw/typing-$theme.mov"

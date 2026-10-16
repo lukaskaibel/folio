@@ -10,6 +10,14 @@ enum DemoLibrary {
     /// Hidden from the sidebar at first, to show hiding with: the header's eye button brings them back.
     static let hiddenFolders = ["Archive"]
 
+    /// Reminders of sample notes, to show reminders with: tomorrow morning, before the appointment.
+    static func reminders(now: Date = .now) -> [(path: String, date: Date)] {
+        let calendar = Calendar.current
+        guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: now),
+              let morning = calendar.date(bySettingHour: 8, minute: 30, second: 0, of: tomorrow) else { return [] }
+        return [("Personal/Questions for Dr. Weber.md", morning)]
+    }
+
     static func create(at root: URL) {
         let fm = FileManager.default
         if fm.fileExists(atPath: root.appendingPathComponent("Travel/Kyoto trip.md").path) { return }
@@ -87,6 +95,17 @@ enum DemoLibrary {
         - [ ] Flowers for the table
 
         Dinner: the mushroom risotto from [[Recipes]].
+
+        """)
+        write("Personal/Questions for Dr. Weber.md", """
+        Check-up at 9:30 at the practice on Lindenstraße. Bring the insurance card and the list of what I take.
+
+        - [ ] Is the knee pain from running, or something else?
+        - [ ] Do I still need vitamin D over the winter?
+        - [ ] Referral for physiotherapy
+        - [x] Blood test results by email
+
+        Last time: blood pressure 125/80, all fine.
 
         """)
         write("Personal/Cooking/Recipes.md", """

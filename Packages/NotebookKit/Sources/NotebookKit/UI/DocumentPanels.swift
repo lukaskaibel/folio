@@ -67,6 +67,11 @@ struct OutlinePanel: View {
             let base = workspace.outline.map(\.level).min() ?? 1
             ScrollViewReader { proxy in
                 List(selection: selection) {
+                    if let url = workspace.currentURL {
+                        Section("Reminder") {
+                            ReminderRow(workspace: workspace, url: url)
+                        }
+                    }
                     Section {
                         Text(workspace.currentTitle)
                             .fontWeight(.medium)
@@ -106,6 +111,36 @@ struct OutlinePanel: View {
             guard let id else { return }
             workspace.editor.scroll(to: workspace.outline.first { $0.id == id })
         })
+    }
+}
+
+/// The note's reminder in the inspector, or Remind Me… for a note without one. Either opens the times to choose from.
+struct ReminderRow: View {
+    let workspace: Workspace
+    let url: URL
+    @State private var isPicking = false
+
+    var body: some View {
+        let reminder = workspace.reminder(for: url)
+        Button { isPicking = true } label: {
+            Label {
+                Text(reminder.map { Workspace.reminderText($0.date) } ?? "Remind Me…")
+                    .foregroundStyle(reminder == nil ? Color.secondary : Color.primary)
+            } icon: {
+                Image(systemName: reminder == nil ? "bell" : "bell.fill")
+                    .foregroundStyle(reminder.map { $0.date <= .now ? Color.red : Color.accentColor } ?? Color.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $isPicking, arrowEdge: .leading) {
+            ReminderPicker(workspace: workspace, url: url) { isPicking = false }
+                #if os(iOS)
+                .frame(minWidth: 340, idealHeight: 520)
+                .presentationDetents([.medium, .large])
+                #endif
+        }
     }
 }
 

@@ -164,6 +164,12 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     }
 
     /// Favourites and recents changed (or a location's top level): rebuild the top without closing folders.
+    /// What the rows show changed, not which rows there are: a reminder was set or done.
+    func refreshRows() {
+        guard outline.numberOfRows > 0 else { return }
+        outline.reloadData(forRowIndexes: IndexSet(integersIn: 0..<outline.numberOfRows), columnIndexes: [0])
+    }
+
     func reloadSections() {
         let expanded = expandedPaths()
         rebuildTop()
@@ -336,11 +342,13 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             workspace.prefetch(node)
             // Hidden folders show dimmed while their location shows them, as hidden files in the Finder.
             let dimmed = NotebookSettings.shared.dimsOtherFiles && !node.isFolder && node.kind != .note || node.isFolder && workspace.isHidden(node.url)
-            cell.configure(name: node.name, kind: node.kind, inCloud: node.isInCloud, url: node.url, dimmed: dimmed)
+            cell.configure(name: node.name, kind: node.kind, inCloud: node.isInCloud, url: node.url, dimmed: dimmed,
+                           reminder: node.kind == .note ? workspace.reminder(for: node.url) : nil)
         } else if let entry = item as? SidebarEntry, let url = entry.url {
             let kind = FileKind(url: url, isDirectory: (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false)
             let name = kind == .note ? url.deletingPathExtension().lastPathComponent : kind == .folder ? workspace.folderName(url) : url.lastPathComponent
-            cell.configure(name: name, kind: kind, inCloud: false, url: url, symbol: { if case .favorite = entry.kind, kind == .folder { return "star" } else { return nil } }())
+            cell.configure(name: name, kind: kind, inCloud: false, url: url, symbol: { if case .favorite = entry.kind, kind == .folder { return "star" } else { return nil } }(),
+                           reminder: kind == .note ? workspace.reminder(for: url) : nil)
         }
         return cell
     }
@@ -502,6 +510,10 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         menu.addItem(.separator())
         if !isFolder, FileKind(url: url, isDirectory: false) != .note {
             add(menu, "Quick Look", "eye") { [weak self] in self?.workspace.quickLook(url) }
+        }
+        if FileKind(url: url, isDirectory: isFolder) == .note {
+            let anchor = outline.view(atColumn: 0, row: row, makeIfNecessary: false)
+            add(menu, "Remind Me…", "bell") { [weak self] in self?.workspace.askForReminder(url, from: anchor) }
         }
         if !isLinked {
             add(menu, "Rename", "pencil") { [weak self] in self?.beginRenaming(url) }
@@ -767,17 +779,26 @@ final class SidebarFileCell: NSTableCellView {
 
     private var tint: NSColor = .secondaryLabelColor
 
-    func configure(name: String, kind: FileKind, inCloud: Bool, url: URL, symbol: String? = nil, dimmed: Bool = false) {
+    func configure(name: String, kind: FileKind, inCloud: Bool, url: URL, symbol: String? = nil, dimmed: Bool = false, reminder: Reminder? = nil) {
         label.stringValue = name
         label.textColor = dimmed ? .tertiaryLabelColor : inCloud ? .secondaryLabelColor : .labelColor
         icon.alphaValue = dimmed ? 0.5 : 1
         icon.image = NSImage(systemSymbolName: symbol ?? kind.symbol, accessibilityDescription: nil)
         tint = kind == .folder ? .controlAccentColor : kind == .note || kind == .other ? .secondaryLabelColor : kind.tint
         updateTint()
-        accessory.image = inCloud ? NSImage(systemSymbolName: "icloud.and.arrow.down", accessibilityDescription: "In iCloud, not downloaded") : nil
-        toolTip = url.path
-        setAccessibilityLabel(name)
+        // A reminder's bell, red once its time has passed, goes before the cloud of a note still in iCloud.
+        if let reminder {
+            accessory.image = NSImage(systemSymbolName: "bell.fill", accessibilityDescription: "Reminder")
+            isOverdue = reminder.date <= .now
+        } else {
+            accessory.image = inCloud ? NSImage(systemSymbolName: "icloud.and.arrow.down", accessibilityDescription: "In iCloud, not downloaded") : nil
+            isOverdue = false
+        }
+        toolTip = reminder.map { url.path + "\nReminder: " + Workspace.reminderText($0.date) } ?? url.path
+        setAccessibilityLabel(reminder.map { "\(name), reminder \(Workspace.reminderText($0.date))" } ?? name)
     }
+
+    private var isOverdue = false
 
     // On the accent-coloured selection of a focused sidebar, icons turn white like the text.
     override var backgroundStyle: NSView.BackgroundStyle {
@@ -787,7 +808,7 @@ final class SidebarFileCell: NSTableCellView {
     private func updateTint() {
         let emphasized = backgroundStyle == .emphasized
         icon.contentTintColor = emphasized ? .alternateSelectedControlTextColor : tint
-        accessory.contentTintColor = emphasized ? .alternateSelectedControlTextColor : .tertiaryLabelColor
+        accessory.contentTintColor = emphasized ? .alternateSelectedControlTextColor : isOverdue ? .systemRed : .tertiaryLabelColor
     }
 }
 

@@ -167,6 +167,7 @@ struct DocumentScreen: View {
                     Button { workspace.toggleFavorite(url) } label: {
                         Label(favorite ? "Remove from Favorites" : "Add to Favorites", systemImage: favorite ? "star.slash" : "star")
                     }
+                    Button { workspace.askForReminder(url) } label: { Label("Remind Me…", systemImage: "bell") }
                     Button { workspace.editor.focusTitle() } label: { Label("Rename", systemImage: "pencil") }
                         .disabled(!isLoaded)
                     MoveToMenu(workspace: workspace, url: url)

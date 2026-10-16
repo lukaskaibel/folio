@@ -453,6 +453,11 @@ enum DebugRemote {
                 scrollView.reflectScrolledClipView(scrollView.contentView)
             }
         default:
+            // Reminders' commands, which iPhone and iPad have too: paths are absolute or in the first location.
+            let resolve = { (path: String) -> URL? in
+                path.hasPrefix("/") ? URL(fileURLWithPath: path) : workspace?.locations.first?.url.appendingPathComponent(path)
+            }
+            if let workspace, DebugReminders.run(command, argument, workspace: workspace, url: resolve, log: log) { break }
             log("unknown command: \(line)")
         }
     }
