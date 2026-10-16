@@ -635,13 +635,16 @@ enum DebugRemote {
         }
         var next = 1
         let interval = max(0.004, seconds / Double(max(1, points.count)))
+        // On the main run loop, so on the main thread.
         let timer = Timer(timeInterval: interval, repeats: true) { timer in
-            if next < points.count {
-                if let drag = event(.leftMouseDragged, points[next]) { NSApp.postEvent(drag, atStart: false) }
-                next += 1
-            } else {
-                if let up = event(.leftMouseUp, last) { NSApp.postEvent(up, atStart: false) }
-                timer.invalidate()
+            MainActor.assumeIsolated {
+                if next < points.count {
+                    if let drag = event(.leftMouseDragged, points[next]) { NSApp.postEvent(drag, atStart: false) }
+                    next += 1
+                } else {
+                    if let up = event(.leftMouseUp, last) { NSApp.postEvent(up, atStart: false) }
+                    timer.invalidate()
+                }
             }
         }
         RunLoop.main.add(timer, forMode: .common)

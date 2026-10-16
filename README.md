@@ -82,18 +82,21 @@ in the folder still uses it. Move a note to another folder and its pictures move
 
 ### Drawings
 
-Click the pencil in the toolbar and draw right in the note, as in Notes. A new drawing goes in below the line you're
-on (at the end of the note if you aren't writing), as wide as the text, and grows as you draw near its lower edge, so
-you can keep going down. Text stays text: you draw in the drawings, never over the words. On iPhone and iPad it is
-PencilKit with Apple's own tool picker, so Apple Pencil with its pressure and tilt, the ruler and the lasso work as
-they do in Notes; one finger draws and two scroll, or, where only Apple Pencil draws, a finger scrolls. On the Mac
-you draw with the mouse, the trackpad or a tablet's pen, with a pen, pencil, marker or eraser from a palette at the
-bottom of the note. Done, Escape or a click in the text puts the drawing back in the text, as tall as what you drew;
-start typing and the text goes on below it. Tap a drawing (double-click it on the Mac) to draw in it again.
+Click the pencil in the toolbar and draw right in the note, as in Notes. Drawing starts where you are, and the note
+doesn't move: in the drawing on screen, or in a new one below the line you're writing on, at the end of the note when
+it's on screen, or else below the line in the middle of the screen. A new drawing is as wide as the text and grows as
+you draw near its lower edge, so you can keep going down. As in Notes, there's no frame around it: you draw in the space
+between the lines of text, and at the end of the note anywhere below the text. Text stays text: you draw in the
+drawings, never over the words. On iPhone and iPad it is PencilKit with Apple's own tool picker, so Apple Pencil with
+its pressure and tilt, the ruler and the lasso work as they do in Notes; one finger draws and two scroll, or, where only
+Apple Pencil draws, a finger scrolls. On the Mac you draw with the mouse, the trackpad or a tablet's pen, with a pen,
+pencil, marker or eraser from a palette at the bottom of the note. Done, Escape or a click in the text puts the drawing
+back in the text, as tall as what you drew; start typing and the text goes on below it. Tap a drawing (double-click it
+on the Mac) to draw in it again.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/drawing-dark.webp">
-  <img alt="The note Getting to the ryokan open for drawing: a sketch of the way from the station over the river to the ryokan, ringed in red, inside the drawing's frame, and the palette with pen, pencil, marker, eraser, width, colours and Done at the bottom" src="Design/screenshots/drawing-light.webp">
+  <img alt="The note Getting to the ryokan open for drawing: a sketch of the way from the station over the river to the ryokan, ringed in red, between the lines of text with no frame around it, and the palette with pen, pencil, marker, eraser, width, colours and Done at the bottom" src="Design/screenshots/drawing-light.webp">
 </picture>
 
 Each drawing is a PNG in `.assets`, which every Markdown app shows, with white behind the ink so it reads in dark

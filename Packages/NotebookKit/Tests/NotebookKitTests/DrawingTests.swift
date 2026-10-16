@@ -116,6 +116,52 @@ final class DrawingTests: XCTestCase {
         XCTAssertEqual(h.text, "One\nTwo\n![Drawing](\(EditorController.markdownPath(picture.lastPathComponent)))\n")
     }
 
+    func testDrawingStartsWhereYouAreWithoutMovingTheNote() throws {
+        let before = (1...40).map { "Line \($0) of the note" }.joined(separator: "\n")
+        let after = (41...90).map { "Line \($0) of the note" }.joined(separator: "\n")
+        let h = EditorHarness("Before\n", height: 700)
+        let picture = h.folder.appendingPathComponent(".assets/Tall.png")
+        XCTAssertTrue(DrawingFile(drawing: PKDrawing(strokes: [stroke([CGPoint(x: 10, y: 80), CGPoint(x: 310, y: 900)])]), size: CGSize(width: 320, height: 1000)).write(picture: picture))
+        h.editor.load(text: before + "\n![Drawing](.assets/Tall.png)\n" + after, folder: h.folder, title: "Kyoto trip", meta: "")
+        h.settle()
+        h.caret(h.range(of: "Line 5 ").location)
+
+        // Scrolled into a drawing taller than the window, the caret far above: the pencil draws in that drawing.
+        let index = h.range(of: "![Drawing]").location
+        let rect = try XCTUnwrap(h.editor.layoutManager.blockObjectRect(at: index, origin: h.textView.textContainerOrigin))
+        XCTAssertGreaterThan(rect.height, 1000)
+        h.editor.setScrollTop(rect.minY + 300)
+        h.settle()
+        var top = h.editor.scrollTop
+        h.editor.beginDrawing()
+        XCTAssertEqual(h.editor.drawingSession?.focused?.standardizedFileURL, picture.standardizedFileURL, "the drawing on screen")
+        XCTAssertTrue(h.editor.drawingSession?.created.isEmpty ?? false, "no new one")
+        XCTAssertEqual(h.editor.scrollTop, top, accuracy: 0.5, "the note stays where it was")
+
+        // Two fingers on the trackpad scroll the note over the drawing.
+        let canvas = try XCTUnwrap(h.editor.drawingSession?.canvases.values.first)
+        let wheel = try XCTUnwrap(CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1, wheel1: -120, wheel2: 0, wheel3: 0).flatMap(NSEvent.init(cgEvent:)))
+        canvas.scrollWheel(with: wheel)
+        XCTAssertGreaterThan(h.editor.scrollTop, top + 60)
+        XCTAssertTrue(h.editor.isDrawing)
+        h.editor.endDrawing()
+
+        // Scrolled to text with no drawing on screen: a new drawing goes below the line in the middle of the screen,
+        // not at the caret, and the note doesn't move.
+        h.editor.setScrollTop(h.editor.yPosition(of: h.range(of: "Line 50 ").location) - h.editor.topInset)
+        h.settle()
+        top = h.editor.scrollTop
+        h.editor.beginDrawing()
+        let created = try XCTUnwrap(h.editor.drawingSession?.created.keys.first)
+        XCTAssertEqual(h.editor.scrollTop, top, accuracy: 0.5, "the note stays where it was")
+        let new = try XCTUnwrap(h.editor.drawingObjects().first { $0.picture == created }?.index)
+        let onScreen = h.editor.yPosition(of: new) - h.editor.scrollTop
+        XCTAssertGreaterThan(onScreen, 200)
+        XCTAssertLessThan(onScreen, 500, "in the middle of the screen")
+        XCTAssertTrue(h.text.contains(" of the note\n![Drawing](\(EditorController.markdownPath(created.lastPathComponent)))\nLine "), "between two lines, splitting none")
+        XCTAssertFalse(h.text.contains("Line 5 of the note\n![Drawing]"), "not at the caret, off screen")
+    }
+
     func testANewDrawingLeftEmptyGoesAwayAgain() throws {
         let h = EditorHarness("Hello world\nSecond line")
         h.caret(3)
@@ -189,6 +235,29 @@ final class DrawingTests: XCTestCase {
         XCTAssertGreaterThan(trimmed.file.size.height, trimmedHeight + 100, "one that does, does")
     }
 
+    func testAtTheEndOfTheNoteTheEmptyPageBelowIsTheDrawings() throws {
+        let h = EditorHarness("Hello")
+        h.caret(5)
+        h.editor.beginDrawing()
+        let picture = try XCTUnwrap(drawings(in: h).first)
+        let canvas = try XCTUnwrap(h.editor.drawingSession?.canvases[picture])
+        let index = try XCTUnwrap(h.editor.drawingObjects().first?.index)
+        let rect = try XCTUnwrap(h.editor.layoutManager.blockObjectRect(at: index, origin: h.textView.textContainerOrigin))
+        XCTAssertEqual(canvas.frame.minY, rect.minY)
+        XCTAssertGreaterThan(rect.maxY, rect.minY)
+        XCTAssertEqual(canvas.frame.maxY, h.textView.bounds.maxY, "with nothing below it, the canvas reaches the end of the page")
+
+        // A stroke below the drawing's own area: the drawing grows to take it, and keeps it once trimmed.
+        let height = canvas.file.size.height
+        canvas.addStroke(through: [CGPoint(x: 20, y: height + 40), CGPoint(x: 80, y: height + 60)], ink: PKInk(.pen), width: 3)
+        XCTAssertGreaterThan(canvas.file.size.height, height + 60)
+        h.editor.endDrawing()
+        written(h)
+        let file = try XCTUnwrap(DrawingFile.read(picture: picture))
+        XCTAssertGreaterThan(file.size.height, height + 60)
+        XCTAssertLessThan(file.size.height, height + 100)
+    }
+
     func testStrokesAreUndoneOneAtATime() throws {
         let h = EditorHarness("Hello")
         h.caret(5)
@@ -251,7 +320,10 @@ final class DrawingTests: XCTestCase {
     func testTheClickedLineStaysUnderThePointerWhenDrawingStops() throws {
         let intro = (1...60).map { "Line \($0) of the note" }.joined(separator: "\n")
         let h = EditorHarness(intro + "\nLast line", height: 700)
-        h.caret(h.range(of: "Line 50 ").location + 3)
+        let caret = h.range(of: "Line 50 ").location + 3
+        h.caret(caret)
+        h.editor.setScrollTop(h.editor.yPosition(of: caret) - h.editor.topInset - 40)
+        h.settle()
         h.editor.beginDrawing()
         let picture = try XCTUnwrap(drawings(in: h).first)
         h.editor.drawingSession?.canvases[picture]?.addStroke(through: [CGPoint(x: 10, y: 10), CGPoint(x: 40, y: 30)], ink: PKInk(.pen), width: 3)

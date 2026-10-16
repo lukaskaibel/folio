@@ -26,9 +26,13 @@ final class DrawingSession {
 }
 
 /// Drawing in a note, as in Notes: the pencil button puts the note into drawing mode, in which every drawing in it
-/// takes strokes (from Apple Pencil, a finger, a mouse or a tablet) and the text can't be drawn on. If the caret isn't
-/// on a drawing, a new one goes in next to its line (at the end of the note when you aren't writing), as wide as the
-/// text; it grows as you draw near its lower edge. A tap on a drawing (a double-click on the Mac) opens it for drawing too.
+/// takes strokes (from Apple Pencil, a finger, a mouse or a tablet) and the text can't be drawn on. Drawing starts where
+/// you are, and the note doesn't move: in the drawing on the caret's line, or a new one next to it, while you are
+/// writing; otherwise in the drawing on screen, or a new one at the end of the note when it ends on screen, or else
+/// below the line in the middle of the screen. A new drawing is as wide as the text; it grows as you draw near its
+/// lower edge. As in Notes, no edge shows around it: the text above and below does, and at the end of the note the
+/// whole empty page below the text is the drawing's. A tap on a drawing (a double-click on the Mac) opens it for
+/// drawing too.
 ///
 /// Each drawing is a picture in `.assets` that every Markdown app shows, with its strokes next to it
 /// (`DrawingFile`); both are written a moment after every change.
@@ -46,15 +50,18 @@ extension EditorController {
         if isDrawing { endDrawing() } else { beginDrawing() }
     }
 
-    /// Starts drawing mode: in `picture`, in the drawing at the caret, or in a new drawing put in there.
+    /// Starts drawing mode where you are, without moving the note: in `picture`, in the drawing at the caret, in the
+    /// drawing on screen, or in a new drawing put in at the caret or on screen.
     public func beginDrawing(in picture: URL? = nil) {
         // Not while the note is between screens: the canvases and the tools need it on one.
         guard !isDrawing, !isLoading, isInWindow, assetsFolder != nil else { return }
         closeSuggestions()
+        let top = scrollTop
         let session = DrawingSession()
-        var target = picture ?? drawingAtCaret()
+        let writing = isWritingInView
+        var target = picture ?? (writing ? drawingAtCaret() : drawingInView())
         if target == nil {
-            guard let (url, insertion) = insertDrawing() else { return beep() }
+            guard let (url, insertion) = insertDrawing(at: writing ? selection.location : lineInView(), writing: writing) else { return beep() }
             session.created[url] = insertion
             target = url
         }
@@ -65,10 +72,9 @@ extension EditorController {
         if selection.length > 0 { setSelection(NSRange(location: selection.upperBound, length: 0)) }
         startDrawingInput()
         updateDrawingCanvases()
-        if let target {
-            focusCanvas(target)
-            scrollDrawingIntoView(target)
-        }
+        if let target { focusCanvas(target) }
+        // Whatever the text view did to show the caret or the canvas, the note stays where it was.
+        if abs(scrollTop - top) > 0.5 { setScrollTop(min(top, maxScrollTop)) }
         delegate?.editorDrawingDidChange(self)
     }
 
@@ -154,6 +160,46 @@ extension EditorController {
         drawingObjects().first { $0.picture == picture }?.index
     }
 
+    /// The part of the note on screen, in the text view's coordinates: between the bar at the top and the tools (or
+    /// the keyboard) at the bottom.
+    private var shownRect: CGRect {
+        let visible = visibleRect
+        let top = visible.minY + topInset
+        return CGRect(x: visible.minX, y: top, width: visible.width, height: max(1, visible.maxY - drawingToolsHeight - top))
+    }
+
+    /// Whether you are writing where the note is on screen: the caret was put there, or something is selected there.
+    private var isWritingInView: Bool {
+        guard isFocused && caretWasPlaced || selection.length > 0, selection.location <= storage.length else { return false }
+        let y = yPosition(of: selection.location), shown = shownRect
+        return y >= shown.minY - 1 && y < shown.maxY
+    }
+
+    /// The drawing that shows most on screen, if enough of it shows to draw in.
+    private func drawingInView() -> URL? {
+        let shown = shownRect
+        let area = shown.offsetBy(dx: -textOrigin.x, dy: -textOrigin.y)
+        let glyphs = layoutManager.glyphRange(forBoundingRect: area, in: container)
+        let characters = layoutManager.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
+        var best: (picture: URL, height: CGFloat)?
+        for (index, picture) in drawingObjects() where index >= characters.location && index <= characters.upperBound {
+            guard let rect = layoutManager.blockObjectRect(at: index, origin: textOrigin) else { continue }
+            let height = rect.intersection(shown).height
+            if height >= min(rect.height, 44), height > best?.height ?? 0 { best = (picture, height) }
+        }
+        return best?.picture
+    }
+
+    /// Where a new drawing goes when you aren't writing: at the end of the note when it ends on screen with room to draw
+    /// below it, otherwise below the line in the middle of the screen.
+    private func lineInView() -> Int {
+        let shown = shownRect
+        let end = layoutManager.usedRect(for: container).maxY + textOrigin.y
+        guard storage.length > 0, end > shown.maxY - 120 else { return storage.length }
+        let glyph = layoutManager.glyphIndex(for: CGPoint(x: 1, y: shown.midY - textOrigin.y), in: container)
+        return min(storage.length, layoutManager.characterIndexForGlyph(at: glyph))
+    }
+
     /// The drawing on the caret's line, or selected, while you are in the text.
     func drawingAtCaret() -> URL? {
         let selection = self.selection
@@ -170,10 +216,10 @@ extension EditorController {
 
     // MARK: - A new drawing
 
-    /// Writes an empty drawing as wide as the text and puts it in on a line of its own: on the caret's line if it is
-    /// empty, above it with the caret at its start, below it otherwise, so no text is split. At the end of the note
-    /// a line follows it to go on writing in.
-    private func insertDrawing() -> (URL, (location: Int, inserted: String, replaced: String))? {
+    /// Writes an empty drawing as wide as the text and puts it in on a line of its own, at the line of `caret`: on it
+    /// if it is empty, above it when you are `writing` with the caret at its start, below it otherwise, so no text is
+    /// split. At the end of the note a line follows it to go on writing in.
+    private func insertDrawing(at caret: Int, writing: Bool) -> (URL, (location: Int, inserted: String, replaced: String))? {
         guard let picture = newDrawingURL() else { return nil }
         let width = floor(max(40, container.size.width - 2))
         let height = min(max(visibleRect.height * 0.42, 220), 420).rounded()
@@ -183,7 +229,7 @@ extension EditorController {
         guard file.writeStrokes(picture: picture) else { return nil }
         DrawingStore.shared.setLive(file, for: picture)
         let markdown = "![Drawing](\(Self.markdownPath(picture.lastPathComponent)))"
-        let caret = isFocused && caretWasPlaced ? min(selection.location, storage.length) : storage.length
+        let caret = min(caret, storage.length)
         let line = nsText.lineRange(for: NSRange(location: caret, length: 0))
         var lineEnd = line.upperBound
         if lineEnd > line.location, lineEnd <= storage.length, nsText.character(at: lineEnd - 1) == 10 { lineEnd -= 1 }
@@ -194,7 +240,7 @@ extension EditorController {
         if nsText.substring(with: content).trimmingCharacters(in: .whitespaces).isEmpty {
             range = content
             text = markdown + (atEnd ? "\n" : "")
-        } else if caret == line.location {
+        } else if writing, caret == line.location {
             range = NSRange(location: line.location, length: 0)
             text = markdown + "\n"
         } else {
@@ -272,7 +318,11 @@ extension EditorController {
                 }
                 continue
             }
-            canvas.place(in: rect)
+            // With no edge to show where a drawing ends, one at the end of the note takes the empty page below the
+            // text too, as in Notes: drawn there, it grows.
+            var area = rect
+            if endsNote(index) { area.size.height = max(rect.height, pageBottom - rect.minY) }
+            canvas.place(in: area)
         }
         for (picture, canvas) in session.canvases where !seen.contains(picture) {
             if canvas.hasUnsavedChanges { save(canvas) }
@@ -280,6 +330,13 @@ extension EditorController {
             session.canvases[picture] = nil
             DrawingStore.shared.setOpen(false, picture)
         }
+    }
+
+    /// Whether nothing but empty lines follows the drawing on the character at `index`.
+    private func endsNote(_ index: Int) -> Bool {
+        let line = nsText.lineRange(for: NSRange(location: index, length: 0))
+        let rest = NSRange(location: line.upperBound, length: storage.length - line.upperBound)
+        return nsText.rangeOfCharacter(from: CharacterSet.whitespacesAndNewlines.inverted, range: rest).location == NSNotFound
     }
 
     /// A stroke was drawn or erased, or undone: the drawing grows when a stroke goes further down than any before and
@@ -331,21 +388,6 @@ extension EditorController {
         }
         updateDrawingCanvases()
         textNeedsDisplay()
-    }
-
-    private func scrollDrawingIntoView(_ picture: URL) {
-        guard let index = drawingIndex(picture), let rect = layoutManager.blockObjectRect(at: index, origin: textOrigin) else { return }
-        let visible = visibleRect
-        let top = visible.minY + topInset
-        // The tools take the bottom of the window.
-        let bottom = visible.maxY - drawingToolsHeight
-        guard rect.minY < top || rect.maxY > bottom else { return }
-        // Just enough to see all of it, or its top when it is taller than the room there is.
-        let target = rect.minY < top || rect.height > bottom - top - 32
-            ? visible.minY + rect.minY - top - 16
-            : visible.minY + rect.maxY - bottom + 16
-        setScrollTop(min(max(-topInset, target), max(-topInset, maxScrollTop)))
-        updateDrawingCanvases()
     }
 
     // MARK: - Saving

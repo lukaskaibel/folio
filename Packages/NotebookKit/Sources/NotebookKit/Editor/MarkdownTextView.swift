@@ -64,11 +64,12 @@ final class MarkdownTextView: NSTextView {
     // MARK: - Layout
 
     override func setFrameSize(_ newSize: NSSize) {
-        let widthChanged = newSize.width != frame.width
+        let changed = newSize != frame.size
         super.setFrameSize(newSize)
         updateInsets()
-        // Drawings are as wide as the text: their canvases follow.
-        if widthChanged, controller?.isDrawing == true {
+        // Drawings are as wide as the text, and the last one reaches down to the end of the page: their canvases
+        // follow.
+        if changed, controller?.isDrawing == true {
             DispatchQueue.main.async { [weak self] in self?.controller?.updateDrawingCanvases() }
         }
     }

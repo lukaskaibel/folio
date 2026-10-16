@@ -179,13 +179,9 @@ final class DrawingCanvas: NSView, NSMenuItemValidation {
 
     private var isDark: Bool { effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua }
 
+    /// Only the strokes, with no edge around them, as in Notes: the text around shows where you can draw, and the
+    /// crosshair.
     override func draw(_ dirtyRect: NSRect) {
-        // The edge of the drawing's area, which shows only while drawing, as in Notes.
-        Theme.cardBorder.setStroke()
-        let edge = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 8, yRadius: 8)
-        edge.lineWidth = 1
-        edge.stroke()
-
         let backing = window?.backingScaleFactor ?? 2
         let dark = isDark
         if !file.drawing.strokes.isEmpty {
@@ -410,5 +406,8 @@ extension EditorController {
 
     /// The palette, floating at the bottom of the note.
     var drawingToolsHeight: CGFloat { 80 }
+
+    /// Where the note's page ends: the text view is at least as tall as the window shows.
+    var pageBottom: CGFloat { textView.bounds.maxY }
 }
 #endif

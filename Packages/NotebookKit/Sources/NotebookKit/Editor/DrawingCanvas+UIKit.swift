@@ -43,14 +43,9 @@ final class DrawingCanvas: PKCanvasView {
         showsVerticalScrollIndicator = false
         showsHorizontalScrollIndicator = false
         contentInsetAdjustmentBehavior = .never
-        layer.cornerRadius = 8
-        layer.borderWidth = 1
+        // No edge around it, as in Notes: the text around shows where you can draw.
         accessibilityLabel = "Drawing"
         delegate = events
-        updateEdge()
-        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (canvas: DrawingCanvas, _: UITraitCollection) in
-            canvas.updateEdge()
-        }
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -74,11 +69,6 @@ final class DrawingCanvas: PKCanvasView {
         isSettingDrawing = true
         self.drawing = drawing
         isSettingDrawing = false
-    }
-
-    /// The edge of the drawing's area, which shows only while drawing, as in Notes.
-    private func updateEdge() {
-        layer.borderColor = Theme.cardBorder.resolvedColor(with: traitCollection).cgColor
     }
 
     /// Over the drawing's place in the text, scaled so that the drawing is as wide as the text.
@@ -110,6 +100,12 @@ final class DrawingCanvas: PKCanvasView {
         guard !isSettingDrawing else { return }
         file.drawing = drawing
         editor?.drawingDidChange(self)
+    }
+
+    /// Drops the stroke being drawn.
+    func cancelStroke() {
+        drawingGestureRecognizer.isEnabled = false
+        drawingGestureRecognizer.isEnabled = true
     }
 
     fileprivate func beganUsingTool() {
@@ -219,8 +215,15 @@ extension EditorController: PKToolPickerObserver {
         }
     }
 
-    /// The tool picker, at the bottom of the screen.
+    /// What covers the bottom of the note: the tool picker, or before drawing the keyboard or the bar.
     var drawingToolsHeight: CGFloat { textView.adjustedContentInset.bottom }
+
+    /// Where the note's page ends: at the end of the text, or above the tool picker when the note is shorter than
+    /// the screen. From the layout rather than the content size, which UIKit updates later.
+    var pageBottom: CGFloat {
+        let text = layoutManager.usedRect(for: container).maxY + textView.textContainerInset.top + textView.textContainerInset.bottom
+        return max(text, textView.bounds.height - textView.adjustedContentInset.top - textView.adjustedContentInset.bottom)
+    }
 
     /// Whether the note scrolls with this gesture over a drawing: always where only Apple Pencil draws, otherwise
     /// with two fingers, since one draws.
@@ -256,6 +259,8 @@ extension EditorController: PKToolPickerObserver {
         guard textView.contentInset.bottom != inset else { return }
         textView.contentInset.bottom = inset
         textView.verticalScrollIndicatorInsets.bottom = inset
+        // The last drawing reaches down to the tool picker.
+        updateDrawingCanvases()
     }
 }
 #endif
