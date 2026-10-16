@@ -531,8 +531,8 @@ public final class Workspace: NSObject {
         favorites = favorites.map(fix)
         recents = recents.map(fix)
         history = history.map { URL(fileURLWithPath: fix($0.path)) }
-        if let current = currentURL { currentURL = URL(fileURLWithPath: fix(current.path)) }
         relocation = (old.standardizedFileURL, new.standardizedFileURL, UUID())
+        if let current = currentURL { currentURL = URL(fileURLWithPath: fix(current.path)) }
         if !temporaryLocations {
             UserDefaults.standard.set(favorites, forKey: "favorites")
             UserDefaults.standard.set(recents, forKey: "recents")

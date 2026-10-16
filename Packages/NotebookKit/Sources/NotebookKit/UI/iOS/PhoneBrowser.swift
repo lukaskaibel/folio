@@ -62,14 +62,7 @@ struct PhoneBrowser: View {
         #endif
         .onChange(of: workspace.relocation?.id) { _, _ in
             guard let relocation = workspace.relocation else { return }
-            for page in path {
-                let old = relocation.from.path
-                if page.url.path == old {
-                    page.url = relocation.to
-                } else if page.url.path.hasPrefix(old + "/") {
-                    page.url = URL(fileURLWithPath: relocation.to.path + page.url.path.dropFirst(old.count))
-                }
-            }
+            for page in path { page.url = Self.relocated(page.url, relocation.from, relocation.to) }
         }
     }
 
@@ -88,8 +81,24 @@ struct PhoneBrowser: View {
             if let top = path.last, !top.isFolder { path.removeLast() }
             return
         }
-        if let top = path.last, !top.isFolder, top.url == url { return }
+        if let top = path.last, !top.isFolder {
+            if top.url == url { return }
+            // Renamed or moved (itself or a folder it is in): the same screen, under the new name.
+            if let relocation = workspace.relocation, Self.relocated(top.url, relocation.from, relocation.to) == url {
+                top.url = url
+                return
+            }
+        }
         path.append(Page(url: url, isFolder: false))
+    }
+
+    /// Where a file is after `from` became `to`: itself, or a folder it is in.
+    static func relocated(_ url: URL, _ from: URL, _ to: URL) -> URL {
+        let old = from.standardizedFileURL.path
+        let path = url.standardizedFileURL.path
+        if path == old { return to.standardizedFileURL }
+        if path.hasPrefix(old + "/") { return URL(fileURLWithPath: to.standardizedFileURL.path + path.dropFirst(old.count)) }
+        return url
     }
 
     /// The folders from the top of a location down to the one a file is in.
