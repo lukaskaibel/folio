@@ -160,9 +160,9 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
   follow. New notes go into the folder you're in.
 - **Folders as they are.** Add iCloud Drive or any folder as a location in the sidebar, with ⌘O or File › Add
   Location. iCloud Drive shows what the Finder shows in it: Desktop and Documents when they are kept in iCloud, and the
-  folders of apps such as Pages or Obsidian. Create, rename, duplicate and move notes and folders, by drag and drop or
-  with Move To; Option-drag copies. Deleting moves to the Trash, never further. Favourites sit at the top of the
-  sidebar.
+  folders of apps such as Pages or Obsidian. Folders are read in the background, so even a large iCloud Drive shows at
+  once and nothing waits for it. Create, rename, duplicate and move notes and folders, by drag and drop or with Move
+  To; Option-drag copies. Deleting moves to the Trash, never further. Favourites sit at the top of the sidebar.
 - **iPhone and iPad.** The same editor, search and file handling, with screens made for each: one folder per screen
   on the iPhone, the sidebar on the iPad. Pick iCloud Drive or any folder in the Files app's picker, or keep notes on
   the device, in On My iPhone › Notebook. A bar above the keyboard, whose tools you choose, formats, links and adds
@@ -245,7 +245,8 @@ with a team, has the iCloud entitlement that takes them to your other devices.
 
 On first launch, Notebook asks for a folder: **Open iCloud Drive**, or **Choose another folder…**. Add more later with
 File › Open… (⌘O), File › Add Location…, Settings › General, or by dropping a folder on Notebook in the Dock. Notebook works
-on the files in place; nothing is copied or imported.
+on the files in place; nothing is copied or imported. A new location shows in the sidebar straight away, and its files a
+moment later, however many there are.
 
 On iPhone and iPad, **Choose a Folder** opens the Files app's picker: pick iCloud Drive itself to have everything you
 write on the Mac, or any folder in it or on the device. **Keep Notes on This iPhone** (or iPad) uses Notebook's own
@@ -340,7 +341,8 @@ Packages/NotebookKit/
                              the Mac's text view, and iPhone's and iPad's in the "+UIKit" files
     Markdown/                Notebook's Markdown parser, which keeps every character's position in the file
     Render/                  Tables, maths, diagrams and code highlighting
-    Files/                   Locations, the file tree, file operations, saving, watching and the three-way merge
+    Files/                   Locations, the file tree read in the background, file operations, saving, watching and the
+                             three-way merge
     Index/                   Search over names, note text and PDF text, and how [[links]] resolve
     Platform/                The few names and calls that differ between AppKit and UIKit
     UI/                      The Mac's window, sidebar, inspector, search field, Settings and file windows; PDFs,
@@ -391,7 +393,8 @@ Debug builds can be driven from a file: launch with `-debugCommandFile <path>` a
 `open Travel/Kyoto trip.md`, `type Hello`, `key return` or `snapshot <file>` to it, one per line. The commands are
 listed in `Debug/DebugRemote.swift`, and for iPhone and iPad in `Debug/DebugRemote+UIKit.swift`; in the Simulator the
 file is in the app's own folder (`-debugCommandFile ~/Documents/cmd`), where `xcrun simctl get_app_container` finds it,
-and `xcrun simctl io <device> screenshot` takes the pictures.
+and `xcrun simctl io <device> screenshot` takes the pictures. `-NotebookSlowFolders 2` makes every folder take two
+seconds to read, as a slow iCloud might, to see that nothing waits for it.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes.
 

@@ -2,35 +2,66 @@
 import CoreServices
 import Foundation
 
-/// Tells about changes under some folders (made by Notebook, the Finder, iCloud or anything else), a few at a time.
+/// Tells about changes under some folders (made by Notebook, the Finder, iCloud or anything else), a few at a time, on
+/// the main thread. Starting to watch opens every folder, which in iCloud Drive can take seconds, so that happens on a
+/// queue of its own.
 final class FileWatcher {
-    private var stream: FSEventStreamRef?
-    private let handler: ([String]) -> Void
+    private let stream: Stream
 
     init(paths: [String], handler: @escaping ([String]) -> Void) {
-        self.handler = handler
+        stream = Stream(handler: handler)
         guard !paths.isEmpty else { return }
-        var context = FSEventStreamContext(version: 0, info: Unmanaged.passUnretained(self).toOpaque(), retain: nil, release: nil, copyDescription: nil)
-        let callback: FSEventStreamCallback = { _, info, count, paths, _, _ in
-            guard let info else { return }
-            let watcher = Unmanaged<FileWatcher>.fromOpaque(info).takeUnretainedValue()
-            let array = unsafeBitCast(paths, to: NSArray.self) as? [String] ?? []
-            watcher.handler(Array(array.prefix(count)))
-        }
-        let flags = UInt32(kFSEventStreamCreateFlagUseCFTypes | kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagWatchRoot)
-        stream = FSEventStreamCreate(kCFAllocatorDefault, callback, &context, paths as CFArray, FSEventStreamEventId(kFSEventStreamEventIdSinceNow), 0.25, flags)
-        if let stream {
-            FSEventStreamSetDispatchQueue(stream, .main)
-            FSEventStreamStart(stream)
-        }
+        let stream = stream
+        Stream.queue.async { stream.start(paths) }
     }
 
     deinit {
-        if let stream {
-            FSEventStreamStop(stream)
-            FSEventStreamInvalidate(stream)
-            FSEventStreamRelease(stream)
+        let stream = stream
+        stream.isStoppedOnMain = true
+        Stream.queue.async { stream.stop() }
+    }
+
+    /// The event stream, only touched on `queue`, where it is started, stopped and tells about changes.
+    private final class Stream: @unchecked Sendable {
+        static let queue = DispatchQueue(label: "Notebook file events", qos: .utility)
+        private var ref: FSEventStreamRef?
+        private var isStopped = false
+        private let handler: ([String]) -> Void
+
+        init(handler: @escaping ([String]) -> Void) {
+            self.handler = handler
         }
+
+        func start(_ paths: [String]) {
+            guard !isStopped else { return }
+            // Not retained: it lives until `stop`, which runs on this queue, after which no change comes in any more.
+            var context = FSEventStreamContext(version: 0, info: Unmanaged.passUnretained(self).toOpaque(), retain: nil, release: nil, copyDescription: nil)
+            let callback: FSEventStreamCallback = { _, info, count, paths, _, _ in
+                guard let info else { return }
+                let stream = Unmanaged<Stream>.fromOpaque(info).takeUnretainedValue()
+                let array = unsafeBitCast(paths, to: NSArray.self) as? [String] ?? []
+                let changed = Array(array.prefix(count))
+                DispatchQueue.main.async { if !stream.isStoppedOnMain { stream.handler(changed) } }
+            }
+            let flags = UInt32(kFSEventStreamCreateFlagUseCFTypes | kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagWatchRoot)
+            ref = FSEventStreamCreate(kCFAllocatorDefault, callback, &context, paths as CFArray, FSEventStreamEventId(kFSEventStreamEventIdSinceNow), 0.25, flags)
+            if let ref {
+                FSEventStreamSetDispatchQueue(ref, Self.queue)
+                FSEventStreamStart(ref)
+            }
+        }
+
+        func stop() {
+            isStopped = true
+            guard let ref else { return }
+            FSEventStreamStop(ref)
+            FSEventStreamInvalidate(ref)
+            FSEventStreamRelease(ref)
+            self.ref = nil
+        }
+
+        /// Set on the main thread when the watcher goes, so changes already on their way there are dropped.
+        var isStoppedOnMain = false
     }
 }
 #else

@@ -216,7 +216,7 @@ enum DebugRemote {
         case "qlclose":
             workspace.quickLookURL = nil
         case "resolve":
-            log("resolve \(argument): \(workspace.index.resolve(argument, from: workspace.currentURL)?.path ?? "nothing") building \(workspace.index.isBuilding) entries \(workspace.index.entries.count)")
+            log("resolve \(argument): \(workspace.index.resolve(argument, from: workspace.currentURL)?.path ?? "nothing") building \(workspace.index.isBuilding) entries \(workspace.index.count)")
         case "suggestions":
             log("suggestions \(editor.suggestions.isVisible) \(editor.suggestions.model.items.map(\.title))")
         case "views":
