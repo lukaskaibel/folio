@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 
 /// The editor in a UIKit text view: taps instead of clicks, the keyboard's Return and Backspace as text, the keyboard
 /// over the note, and a menu instead of a popover.
-extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRecognizerDelegate {
+extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRecognizerDelegate, UITextDropDelegate {
     func configureTextView() {
         let view = textView
         view.isEditable = true
@@ -31,6 +31,8 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         // The title is plain text: none of the writing bar's formatting goes there. Without a bar of its own, it
         // would show the text view's, which it is inside of.
         view.titleField.inputAccessoryView = UIView(frame: .zero)
+
+        view.textDropDelegate = self
 
         let tap = UITapGestureRecognizer(target: self, action: #selector(tapped(_:)))
         tap.delegate = self
@@ -285,10 +287,19 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
     /// Taps on checkboxes, links and pictures are the editor's; everywhere else the text view places the caret.
     public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         guard gestureRecognizer.view === textView, !(gestureRecognizer is UIPanGestureRecognizer) else { return true }
-        let point = gestureRecognizer.location(in: textView)
-        guard let hit = hitTest(point) else { return false }
+        guard let (hit, _) = touchHit(at: gestureRecognizer.location(in: textView)) else { return false }
         if case .headingLevel = hit { return false }
         return true
+    }
+
+    /// What a finger hits: the thing under it, or a checkbox right next to it, which is smaller than a fingertip.
+    func touchHit(at point: CGPoint) -> (Hit, CGPoint)? {
+        if let hit = hitTest(point) { return (hit, point) }
+        for offset in [CGPoint(x: 10, y: 0), CGPoint(x: -10, y: 0), CGPoint(x: 0, y: 8), CGPoint(x: 0, y: -8), CGPoint(x: 18, y: 0)] {
+            let nearby = CGPoint(x: point.x + offset.x, y: point.y + offset.y)
+            if let hit = hitTest(nearby), case .checkbox = hit { return (hit, nearby) }
+        }
+        return nil
     }
 
     /// The text view's own taps wait for this one, so a tap on a checkbox neither moves the caret nor brings up the
@@ -298,8 +309,7 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
     }
 
     @objc private func tapped(_ recognizer: UITapGestureRecognizer) {
-        let point = recognizer.location(in: textView)
-        guard let hit = hitTest(point) else { return }
+        guard let (hit, point) = touchHit(at: recognizer.location(in: textView)) else { return }
         handleTap(hit, at: point)
     }
 
@@ -432,6 +442,67 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
             return true
         }
         return false
+    }
+
+    // MARK: - Dropping pictures and files
+
+    /// Pictures and files dragged in from Photos or Files go next to the note, as pasted ones do; text dragged
+    /// within the note is the text view's.
+    public func textDroppableView(_ textDroppableView: UIView & UITextDroppable, proposalForDrop drop: UITextDropRequest) -> UITextDropProposal {
+        guard isFileDrop(drop) else { return drop.suggestedProposal }
+        let proposal = UITextDropProposal(operation: .copy)
+        proposal.dropPerformer = .delegate
+        proposal.dropAction = .insert
+        return proposal
+    }
+
+    private func isFileDrop(_ drop: UITextDropRequest) -> Bool {
+        let providers = drop.dropSession.items.map(\.itemProvider)
+        return !drop.isSameView && !providers.isEmpty && providers.allSatisfy { provider in
+            provider.canLoadObject(ofClass: UIImage.self) || provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier)
+                || (!provider.canLoadObject(ofClass: String.self) && provider.hasItemConformingToTypeIdentifier(UTType.data.identifier))
+        }
+    }
+
+    public func textDroppableView(_ textDroppableView: UIView & UITextDroppable, willPerformDrop drop: UITextDropRequest) {
+        guard isFileDrop(drop) else { return }
+        let location = textView.offset(from: textView.beginningOfDocument, to: drop.dropPosition)
+        let providers = drop.dropSession.items.map(\.itemProvider)
+        Task { @MainActor in
+            var markdown: [String] = []
+            for provider in providers {
+                if let stored = await self.store(provider) { markdown.append(stored) }
+            }
+            guard !markdown.isEmpty else { return }
+            self.insertOnOwnLines(markdown.joined(separator: "\n"), at: NSRange(location: min(location, self.storage.length), length: 0))
+        }
+    }
+
+    /// A dropped item in `.assets`, as Markdown: a picture, or any other file as its card.
+    private func store(_ provider: NSItemProvider) async -> String? {
+        if !provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier), provider.canLoadObject(ofClass: UIImage.self) {
+            let image: UIImage? = await withCheckedContinuation { continuation in
+                provider.loadObject(ofClass: UIImage.self) { object, _ in continuation.resume(returning: object as? UIImage) }
+            }
+            return image.flatMap { storeAsset(image: $0) }.map { "![](\($0))" }
+        }
+        let type = provider.registeredTypeIdentifiers.first { UTType($0)?.conforms(to: .data) == true } ?? UTType.data.identifier
+        // The file is there only while this runs: it is copied right away.
+        let suggestedName = provider.suggestedName
+        let copied: String? = await withCheckedContinuation { continuation in
+            _ = provider.loadFileRepresentation(forTypeIdentifier: type) { url, _ in
+                guard let url else { return continuation.resume(returning: nil) }
+                let copy = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+                try? FileManager.default.createDirectory(at: copy, withIntermediateDirectories: true)
+                let file = copy.appendingPathComponent(suggestedName.map { $0 + "." + url.pathExtension } ?? url.lastPathComponent)
+                continuation.resume(returning: (try? FileManager.default.copyItem(at: url, to: file)) != nil ? file.path : nil)
+            }
+        }
+        guard let copied else { return nil }
+        let url = URL(fileURLWithPath: copied)
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        guard let stored = storeAsset(copying: url) else { return nil }
+        return MarkdownStyler.isImageFile(url) ? "![](\(stored))" : "![\(url.lastPathComponent)](\(stored))"
     }
 
     /// Pictures from the camera, the photo library or the document scanner, saved next to the note and put in at

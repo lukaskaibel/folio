@@ -134,6 +134,7 @@ struct HomeScreen: View {
                         let children = workspace.visibleChildren(of: location.url)
                         ForEach(children, id: \.url) { node in
                             NavigationLink(value: Page(url: node.url, isFolder: node.isFolder)) { node.row(in: workspace) }
+                                .fileDragAndDrop(node.url, isFolder: node.isFolder, workspace: workspace)
                                 .contextMenu { FileActions(workspace: workspace, url: node.url) { newFolderIn = $0 } }
                         }
                         if children.isEmpty {
@@ -228,6 +229,7 @@ struct FolderScreen: View {
                     NavigationLink(value: Page(url: node.url, isFolder: node.isFolder)) {
                         node.row(in: workspace, showsDetail: true)
                     }
+                    .fileDragAndDrop(node.url, isFolder: node.isFolder, workspace: workspace)
                     .contextMenu { FileActions(workspace: workspace, url: node.url) { newFolderIn = $0 } }
                     .swipeActions(edge: .trailing) {
                         if !node.isLinked {

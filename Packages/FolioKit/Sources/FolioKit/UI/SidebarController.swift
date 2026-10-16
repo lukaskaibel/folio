@@ -506,16 +506,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     func outlineView(_ outlineView: NSOutlineView, acceptDrop info: NSDraggingInfo, item: Any?, childIndex index: Int) -> Bool {
         guard let folder = dropFolder(for: item) else { return false }
         let urls = info.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
-        let copy = NSEvent.modifierFlags.contains(.option)
-        for url in urls {
-            if workspace.location(containing: url) != nil, !copy {
-                if url.deletingLastPathComponent().standardizedFileURL != folder.standardizedFileURL { workspace.move(url, into: folder) }
-            } else {
-                let destination = FileOperations.uniqueURL(in: folder, name: url.deletingPathExtension().lastPathComponent, extension: url.pathExtension.isEmpty ? nil : url.pathExtension)
-                try? FileManager.default.copyItem(at: url, to: destination)
-            }
-        }
-        workspace.refreshNow(folder)
+        workspace.drop(urls, into: folder, copying: NSEvent.modifierFlags.contains(.option))
         return true
     }
 

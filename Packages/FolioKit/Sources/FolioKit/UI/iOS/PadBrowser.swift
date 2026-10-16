@@ -146,6 +146,7 @@ struct PadSidebar: View {
                             FolderTree(workspace: workspace, folder: location.url, expanded: $expanded, newFolderIn: $newFolderIn)
                         } header: {
                             Text(location.name)
+                                .fileDragAndDrop(location.url, isFolder: true, workspace: workspace, canDrag: false)
                                 .contextMenu { FileActions(workspace: workspace, url: location.url) { newFolderIn = $0 } }
                         }
                     }
@@ -217,6 +218,7 @@ struct FolderTree: View {
                     node.row(in: workspace)
                         .contentShape(Rectangle())
                         .onTapGesture { withAnimation(.snappy) { toggle(node.url.path) } }
+                        .fileDragAndDrop(node.url, isFolder: true, workspace: workspace)
                         .contextMenu { FileActions(workspace: workspace, url: node.url) { newFolderIn = $0 } }
                 }
                 .id(node.url)
@@ -224,6 +226,7 @@ struct FolderTree: View {
                 node.row(in: workspace)
                     .tag(node.url)
                     .id(node.url)
+                    .fileDragAndDrop(node.url, isFolder: false, workspace: workspace)
                     .contextMenu { FileActions(workspace: workspace, url: node.url) { newFolderIn = $0 } }
             }
         }

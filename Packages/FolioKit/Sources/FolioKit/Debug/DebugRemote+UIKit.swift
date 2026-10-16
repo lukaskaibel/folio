@@ -163,7 +163,7 @@ enum DebugRemote {
         case "move":
             // move <file> > <folder>
             let paths = argument.components(separatedBy: " > ")
-            if paths.count == 2, let file = url(paths[0]), let folder = url(paths[1]) { workspace.move(file, into: folder) }
+            if paths.count == 2, let file = url(paths[0]), let folder = url(paths[1]) { workspace.drop([file], into: folder) }
         case "exists":
             log("exists \(argument): \(url(argument).map { FileManager.default.fileExists(atPath: $0.path) } ?? false)")
         case "ls":

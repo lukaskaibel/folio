@@ -111,6 +111,45 @@ extension Workspace {
     }
 }
 
+/// Dragging files onto folders: within Folio's locations they move, from other apps they are copied in.
+struct FileDragAndDrop: ViewModifier {
+    let workspace: Workspace
+    let url: URL
+    let isFolder: Bool
+    var canDrag = true
+    @State private var isTargeted = false
+
+    func body(content: Content) -> some View {
+        if isFolder {
+            dragged(content)
+                .dropDestination(for: URL.self) { urls, _ in
+                    let files = urls.filter { $0.isFileURL && $0.standardizedFileURL != url.standardizedFileURL }
+                    guard !files.isEmpty, !files.contains(where: { url.path.hasPrefix($0.path + "/") }) else { return false }
+                    withAnimation { workspace.drop(files, into: url) }
+                    return true
+                } isTargeted: { isTargeted = $0 }
+                .listRowBackground(isTargeted ? Color.accentColor.opacity(0.18) : nil)
+        } else {
+            dragged(content)
+        }
+    }
+
+    @ViewBuilder
+    private func dragged(_ content: Content) -> some View {
+        if canDrag, !workspace.isLinkedFolder(url) {
+            content.draggable(url)
+        } else {
+            content
+        }
+    }
+}
+
+extension View {
+    func fileDragAndDrop(_ url: URL, isFolder: Bool, workspace: Workspace, canDrag: Bool = true) -> some View {
+        modifier(FileDragAndDrop(workspace: workspace, url: url, isFolder: isFolder, canDrag: canDrag))
+    }
+}
+
 /// Everything you can do with a file or folder, for its context menu and the ⋯ menu of an open file.
 struct FileActions: View {
     let workspace: Workspace

@@ -432,7 +432,13 @@ public final class Workspace: NSObject {
         let dropped = assetsInUse.subtracting(FileOperations.assetNames(in: note.text))
         if !dropped.isEmpty { FileOperations.cleanUpAssets(in: folder, candidates: dropped) }
         if note.isNew, note.isEmpty, note.url.deletingPathExtension().lastPathComponent.hasPrefix("Untitled") {
+            #if os(iOS)
+            // Where there is no Recently Deleted, an empty note made a moment ago goes for good: nothing is lost.
+            if !FileOperations.trash(note.url) { _ = FileOperations.delete(note.url) }
+            #else
             _ = FileOperations.trash(note.url)
+            #endif
+            refreshNow(folder)
         }
         self.note = nil
     }
@@ -627,6 +633,22 @@ public final class Workspace: NSObject {
             editor.load(text: editor.text, folder: folder, title: moved.deletingPathExtension().lastPathComponent, meta: meta(for: note))
         }
         reveal(moved, select: moved == currentURL)
+    }
+
+    /// Files dropped on a folder: moved there from elsewhere in Folio's locations, copied from anywhere else (or
+    /// when `copying`, Option on the Mac).
+    func drop(_ urls: [URL], into folder: URL, copying: Bool = false) {
+        for url in urls {
+            if location(containing: url) != nil, !copying {
+                if url.deletingLastPathComponent().standardizedFileURL != folder.standardizedFileURL { move(url, into: folder) }
+            } else {
+                let destination = FileOperations.uniqueURL(in: folder, name: url.deletingPathExtension().lastPathComponent, extension: url.pathExtension.isEmpty ? nil : url.pathExtension)
+                let accessing = url.startAccessingSecurityScopedResource()
+                try? FileManager.default.copyItem(at: url, to: destination)
+                if accessing { url.stopAccessingSecurityScopedResource() }
+            }
+        }
+        refreshNow(folder)
     }
 
     /// Where a file can be moved: every folder of every location, in order, with how deep it is.
