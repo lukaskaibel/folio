@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 
 @MainActor
@@ -7,7 +11,19 @@ final class SuggestionModel {
     var items: [LinkSuggestion] = []
     var selected = 0
     var query = ""
+
+    /// Takes in new suggestions, keeping the one picked with the arrow keys while the query stays the same.
+    func update(_ items: [LinkSuggestion], query: String) {
+        if self.query != query || self.items != items {
+            selected = min(selected, items.count - 1)
+            if self.query != query { selected = 0 }
+        }
+        self.items = items
+        self.query = query
+    }
 }
+
+#if os(macOS)
 
 /// The list that opens under `[[`: notes and files whose names match what you type, and a way to link a note that
 /// doesn't exist yet. It floats next to the caret and never takes the focus from the text.
@@ -25,12 +41,7 @@ final class LinkSuggestionPanel {
 
     func show(_ items: [LinkSuggestion], query: String, at caret: NSRect, in window: NSWindow) {
         guard !items.isEmpty else { close(); return }
-        if model.query != query || model.items != items {
-            model.selected = min(model.selected, items.count - 1)
-            if model.query != query { model.selected = 0 }
-        }
-        model.items = items
-        model.query = query
+        model.update(items, query: query)
         let panel = self.panel ?? makePanel()
         let height = CGFloat(items.count) * Self.rowHeight + 10
         var frame = NSRect(x: caret.minX - 18, y: caret.minY - height - 6, width: Self.width, height: height)
@@ -145,11 +156,20 @@ private struct SuggestionList: View {
 }
 
 extension EditorController {
+    func showSuggestions(_ items: [LinkSuggestion], query: String, anchor: Int) {
+        guard let window = textView.window else { return closeSuggestions() }
+        let caret = textView.firstRect(forCharacterRange: NSRange(location: anchor - 2, length: 0), actualRange: nil)
+        suggestions.show(items, query: query, at: caret, in: window)
+    }
+}
+#endif
+
+extension EditorController {
     /// Follows the text between `[[` and `]]` as you type and shows what it could link to.
     func updateSuggestions() {
         guard let anchor = suggestionAnchor else { return }
         let text = nsText
-        let selection = textView.selectedRange()
+        let selection = self.selection
         guard isFocused, selection.length == 0, anchor >= 2, anchor <= text.length,
               text.substring(with: NSRange(location: anchor - 2, length: 2)) == "[[",
               let close = closingBrackets(after: anchor),
@@ -158,13 +178,12 @@ extension EditorController {
             return
         }
         let query = text.substring(with: NSRange(location: anchor, length: close - anchor))
-        guard !query.contains("["), !query.contains("\n"), let window = textView.window else {
+        guard !query.contains("["), !query.contains("\n") else {
             closeSuggestions()
             return
         }
         let items = delegate?.editor(self, suggestionsFor: query) ?? []
-        let caret = textView.firstRect(forCharacterRange: NSRange(location: anchor - 2, length: 0), actualRange: nil)
-        suggestions.show(items, query: query, at: caret, in: window)
+        showSuggestions(items, query: query, anchor: anchor)
     }
 
     private func closingBrackets(after anchor: Int) -> Int? {
@@ -182,6 +201,11 @@ extension EditorController {
     func closeSuggestions() {
         suggestionAnchor = nil
         suggestions.close()
+    }
+
+    /// Return or Tab: the suggestion picked, or none when there is nothing to pick.
+    func acceptSelectedSuggestion() {
+        if let suggestion = suggestions.selected { acceptSuggestion(suggestion) } else { closeSuggestions() }
     }
 
     func acceptSuggestion(_ suggestion: LinkSuggestion) {

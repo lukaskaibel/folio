@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import ScreenCaptureKit
 import SwiftUI
@@ -477,3 +478,4 @@ struct SwipeAnchor: NSViewRepresentable {
     func makeNSView(context: Context) -> SwipeAnchorView { swiper.anchor }
     func updateNSView(_ view: SwipeAnchorView, context: Context) {}
 }
+#endif

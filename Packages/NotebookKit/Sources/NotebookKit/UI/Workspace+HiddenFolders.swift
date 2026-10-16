@@ -3,6 +3,14 @@ import Foundation
 /// Hiding folders from the sidebar, and showing them again for a while, dimmed, as the Finder shows hidden files.
 /// Hidden folders also stay out of search and Move To; links to the notes in them still work.
 extension Workspace {
+    /// A folder's files and folders as the sidebar and the lists on iPhone and iPad show them: hidden folders left
+    /// out, unless their location shows them.
+    func shownChildren(of node: FileNode, in location: Location?) -> [FileNode] {
+        let children = node.visibleChildren()
+        guard !hidden.keys.isEmpty, let location, !showsHiddenFolders(in: location) else { return children }
+        return children.filter { !($0.isFolder && isHidden($0.url)) }
+    }
+
     func isHidden(_ url: URL) -> Bool {
         !hidden.keys.isEmpty && hidden.keys.contains(hiddenKey(for: url))
     }
@@ -54,7 +62,7 @@ extension Workspace {
             hidden.show(false, in: location.id)
         }
         updateHiddenPaths()
-        sidebar?.reloadAll()
+        sidebarReloadAll()
     }
 
     /// Where the hidden folders are on this device, for search and Move To to leave out.

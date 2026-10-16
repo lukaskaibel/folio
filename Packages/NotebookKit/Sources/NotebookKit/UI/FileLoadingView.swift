@@ -40,7 +40,7 @@ struct FileLoadingView<Loaded, Content: View>: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             // Up under the toolbar, but not under the sidebar's and the inspector's glass, which would take on its tint.
-            .background(Color(nsColor: background).ignoresSafeArea(.container, edges: .top))
+            .background(Color.theme(background).ignoresSafeArea(.container, edges: .top))
             .animation(.easeOut(duration: 0.2), value: loaded == nil)
             .animation(.easeOut(duration: 0.2), value: waiting != nil)
             .task { await load() }
@@ -92,7 +92,11 @@ extension FileKind {
     /// video, as in QuickTime Player.
     var pageBackground: NSColor {
         switch self {
+        #if os(macOS)
         case .pdf, .image: .underPageBackgroundColor
+        #else
+        case .pdf, .image: .secondarySystemBackground
+        #endif
         case .video: .black
         default: Theme.panel
         }

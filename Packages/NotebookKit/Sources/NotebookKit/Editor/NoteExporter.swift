@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import UniformTypeIdentifiers
 
@@ -159,3 +160,4 @@ public enum NoteExporter {
         DispatchQueue.main.asyncAfter(deadline: .now() + 600) { printing[key] = nil }
     }
 }
+#endif

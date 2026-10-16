@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 /// A Markdown file opened on its own (from the Finder, File › Open, or dropped on the Dock icon): just the note in a
@@ -207,3 +208,4 @@ public final class NotebookAppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 }
+#endif

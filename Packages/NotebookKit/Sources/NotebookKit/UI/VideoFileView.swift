@@ -19,6 +19,7 @@ struct VideoFileView: View {
     }
 }
 
+#if os(macOS)
 private struct PlayerView: NSViewRepresentable {
     let player: AVPlayer?
 
@@ -39,3 +40,25 @@ private struct PlayerView: NSViewRepresentable {
         view.player = nil
     }
 }
+#else
+/// The system's player, as Files and Photos play a video: fitted on black, with its controls.
+private struct PlayerView: UIViewControllerRepresentable {
+    let player: AVPlayer?
+
+    func makeUIViewController(context: Context) -> AVPlayerViewController {
+        let controller = AVPlayerViewController()
+        controller.videoGravity = .resizeAspect
+        controller.allowsPictureInPicturePlayback = true
+        return controller
+    }
+
+    func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
+        if controller.player !== player { controller.player = player }
+    }
+
+    static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: ()) {
+        controller.player?.pause()
+        controller.player = nil
+    }
+}
+#endif

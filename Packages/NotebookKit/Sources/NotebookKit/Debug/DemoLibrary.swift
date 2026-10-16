@@ -1,6 +1,8 @@
 #if DEBUG
-import AppKit
-import PDFKit
+import CoreText
+import Foundation
+import ImageIO
+import UniformTypeIdentifiers
 
 /// Sample notes and files for trying Notebook and for its screenshots and tests, written to a folder of your choice so
 /// your own files are never touched. Launch with `-NotebookLibrary <folder> -NotebookDemo YES`.
@@ -153,36 +155,41 @@ enum DemoLibrary {
     }
 
     private static func drawTorii(to url: URL, jpeg: Bool = false) {
-        let size = NSSize(width: 1400, height: 620)
-        let image = NSImage(size: size, flipped: false) { rect in
-            NSColor(hex: 0xF3CDB0).setFill(); rect.fill()
-            NSColor(hex: 0xFBE6CB).setFill(); NSBezierPath(ovalIn: NSRect(x: 960, y: 400, width: 140, height: 140)).fill()
-            NSColor(hex: 0xD29C84).setFill(); NSBezierPath(ovalIn: NSRect(x: -200, y: -380, width: 1200, height: 640)).fill()
-            NSColor(hex: 0xB97968).setFill(); NSBezierPath(ovalIn: NSRect(x: 600, y: -420, width: 1100, height: 620)).fill()
-            NSColor(hex: 0xB5321F).setFill()
-            NSRect(x: 260, y: 430, width: 600, height: 34).fill()
-            NSRect(x: 300, y: 370, width: 520, height: 22).fill()
-            NSRect(x: 340, y: 0, width: 36, height: 450).fill()
-            NSRect(x: 744, y: 0, width: 36, height: 450).fill()
-            return true
+        let width = 1400, height = 620
+        guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+        func fill(_ hex: UInt32) {
+            context.setFillColor(red: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255, blue: CGFloat(hex & 0xFF) / 255, alpha: 1)
         }
-        guard let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff),
-              let data = jpeg ? bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.85]) : bitmap.representation(using: .png, properties: [:]) else { return }
-        try? data.write(to: url)
+        fill(0xF3CDB0); context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        fill(0xFBE6CB); context.fillEllipse(in: CGRect(x: 960, y: 400, width: 140, height: 140))
+        fill(0xD29C84); context.fillEllipse(in: CGRect(x: -200, y: -380, width: 1200, height: 640))
+        fill(0xB97968); context.fillEllipse(in: CGRect(x: 600, y: -420, width: 1100, height: 620))
+        fill(0xB5321F)
+        context.fill([
+            CGRect(x: 260, y: 430, width: 600, height: 34), CGRect(x: 300, y: 370, width: 520, height: 22),
+            CGRect(x: 340, y: 0, width: 36, height: 450), CGRect(x: 744, y: 0, width: 36, height: 450),
+        ])
+        guard let image = context.makeImage(),
+              let destination = CGImageDestinationCreateWithURL(url as CFURL, (jpeg ? UTType.jpeg : UTType.png).identifier as CFString, 1, nil) else { return }
+        CGImageDestinationAddImage(destination, image, jpeg ? [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary : nil)
+        CGImageDestinationFinalize(destination)
     }
 
     private static func makePDF(at url: URL, title: String, lines: [String]) {
         var box = CGRect(x: 0, y: 0, width: 595, height: 842)
         guard let context = CGContext(url as CFURL, mediaBox: &box, nil) else { return }
         context.beginPDFPage(nil)
-        let graphics = NSGraphicsContext(cgContext: context, flipped: false)
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = graphics
-        NSAttributedString(string: title, attributes: [.font: NSFont.systemFont(ofSize: 26, weight: .bold)]).draw(at: CGPoint(x: 56, y: 760))
-        for (index, line) in lines.enumerated() {
-            NSAttributedString(string: line, attributes: [.font: NSFont.systemFont(ofSize: 13)]).draw(at: CGPoint(x: 56, y: 710 - CGFloat(index) * 26))
+        func draw(_ text: String, size: CGFloat, weight: CTFontUIFontType, at point: CGPoint) {
+            let font = CTFontCreateUIFontForLanguage(weight, size, nil)!
+            let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [.init(kCTFontAttributeName as String): font]))
+            context.textPosition = point
+            CTLineDraw(line, context)
         }
-        NSGraphicsContext.restoreGraphicsState()
+        draw(title, size: 26, weight: .emphasizedSystem, at: CGPoint(x: 56, y: 766))
+        for (index, line) in lines.enumerated() {
+            draw(line, size: 13, weight: .system, at: CGPoint(x: 56, y: 713 - CGFloat(index) * 26))
+        }
         context.endPDFPage()
         context.closePDF()
     }

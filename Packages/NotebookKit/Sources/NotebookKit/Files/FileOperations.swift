@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 
 /// Creating, renaming, moving and deleting files, coordinated so iCloud and other apps see each change whole.
 @MainActor
@@ -84,6 +88,17 @@ enum FileOperations {
         return trashed
     }
 
+    #if os(iOS)
+    /// Deletes for good: for places without a Recently Deleted, after asking.
+    static func delete(_ url: URL) -> Bool {
+        var deleted = false
+        NSFileCoordinator().coordinate(writingItemAt: url, options: .forDeleting, error: nil) { url in
+            deleted = (try? FileManager.default.removeItem(at: url)) != nil
+        }
+        return deleted
+    }
+    #endif
+
     static func duplicate(_ url: URL) -> URL? {
         let base = url.deletingPathExtension().lastPathComponent
         let ext = url.pathExtension.isEmpty ? nil : url.pathExtension
@@ -100,7 +115,7 @@ enum FileOperations {
     /// After a note was renamed, points every `[[Old]]` (and `[[Old|…]]`, `[[Old#…]]`, `![[Old]]`) in the notes
     /// under `root` at the new name. Returns how many notes changed.
     @discardableResult
-    static func updateLinks(from oldName: String, to newName: String, under root: URL, skipping: URL? = nil) -> Int {
+    nonisolated static func updateLinks(from oldName: String, to newName: String, under root: URL, skipping: URL? = nil) -> Int {
         guard oldName != newName, let expression = try? NSRegularExpression(
             pattern: "(!?\\[\\[)" + NSRegularExpression.escapedPattern(for: oldName) + "(\\.md)?(?=(\\]\\]|\\||#))",
             options: [.caseInsensitive]

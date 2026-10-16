@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 /// The note's text view. Mouse, keyboard and pasteboard go through the `EditorController`; this class only adds what
@@ -234,3 +235,4 @@ final class TitleField: NSTextField {
 
     override var acceptsFirstResponder: Bool { true }
 }
+#endif

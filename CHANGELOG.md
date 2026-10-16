@@ -7,12 +7,35 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- Notebook on iPhone and iPad, with the editor, search and files of the Mac. On the iPhone, one folder per screen as in
+  the Files app, with search and a new note at the bottom as in Notes; on the iPad, the Mac's sidebar, the note and its
+  outline.
+- A bar above the keyboard with the text styles and formatting, a checklist, a link, and pictures from the camera, the
+  document scanner, Photos or the Files app.
+- Swipe actions and menus on touch and hold for files, drag and drop of files and pictures, and the Mac's keyboard
+  shortcuts and menus on an iPad with a keyboard.
+- Notes as a PDF to share, or printed, on iPhone and iPad.
+- On iPhone and iPad, the bar above the keyboard floats over the note as in Notes and scrolls a page of tools at a
+  time; Settings › Writing Bar chooses its tools and their order. Aa opens the Format panel in the keyboard's place.
+- Touch and hold a picture or file in a note and drag it to another place in the note, or let go to copy, cut, share or
+  delete it.
 - Hide folders you don't want to see, such as the ones other apps keep in iCloud Drive: right-click one and choose
   Hide Folder. Hidden folders leave the sidebar, search and Move To, and stay hidden on your other Macs through iCloud.
   To see them again, dimmed, click the eye next to the location's name or press ⇧⌘.; links to notes in them keep
   working.
 - Add Location at the bottom of the sidebar, to show another folder there. A folder dropped from the Finder on the
   sidebar, between or below its sections, is added the same way.
+
+### Changed
+
+- Checkboxes are circles, as in Notes and Reminders, filled with the accent colour when done. On iPhone and iPad they
+  are bigger, for a fingertip.
+
+### Fixed
+
+- Links in a note opened while Notebook was still reading your folders showed as links to notes that don't exist yet.
+- Giving a new note its name could stop Notebook for a long time in a large folder in iCloud Drive. Renaming a note
+  still updates the links to it in other notes, now in the background.
 
 ## [0.1.0] – not released yet
 

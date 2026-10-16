@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 
 /// Typing as in a notes app: lists continue on Return and end on an empty item, Tab nests them, Backspace at the
 /// start of an item takes its bullet away, `[[` opens link suggestions, and the formatting shortcuts wrap Markdown
@@ -12,70 +16,33 @@ extension EditorController {
         guard range.upperBound <= storage.length else { return false }
         isPerformingEdit = true
         defer { isPerformingEdit = false }
-        guard textView.shouldChangeText(in: range, replacementString: string) else { return false }
-        storage.replaceCharacters(in: range, with: string)
-        textView.didChangeText()
+        guard performEdit(range, with: string) else { return false }
         if let actionName { textView.undoManager?.setActionName(actionName) }
         if let selection {
-            textView.setSelectedRange(NSRange(location: min(selection.location, storage.length), length: min(selection.length, storage.length - min(selection.location, storage.length))))
+            setSelection(NSRange(location: min(selection.location, storage.length), length: min(selection.length, storage.length - min(selection.location, storage.length))))
         }
         return true
     }
 
     func insert(_ string: String) {
-        let selection = textView.selectedRange()
+        let selection = self.selection
         replace(selection, with: string, select: NSRange(location: selection.location + (string as NSString).length, length: 0))
     }
 
-    // MARK: - Commands
+    // MARK: - Up into the title
 
-    func handleCommand(_ selector: Selector) -> Bool {
-        if suggestions.isVisible {
-            switch selector {
-            case #selector(NSResponder.moveUp(_:)):
-                suggestions.move(by: -1)
-                return true
-            case #selector(NSResponder.moveDown(_:)):
-                suggestions.move(by: 1)
-                return true
-            case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertTab(_:)):
-                if let suggestion = suggestions.selected { acceptSuggestion(suggestion) } else { closeSuggestions() }
-                return true
-            case #selector(NSResponder.cancelOperation(_:)):
-                closeSuggestions()
-                return true
-            default:
-                break
-            }
-        }
-        switch selector {
-        case #selector(NSResponder.insertNewline(_:)):
-            return insertNewline()
-        case #selector(NSResponder.insertLineBreak(_:)), #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)):
-            insert("\n")
-            return true
-        case #selector(NSResponder.deleteBackward(_:)):
-            return deleteBackward()
-        case #selector(NSResponder.deleteForward(_:)):
-            return deleteForward()
-        case #selector(NSResponder.insertTab(_:)):
-            return indent(by: 1)
-        case #selector(NSResponder.insertBacktab(_:)):
-            return indent(by: -1)
-        case #selector(NSResponder.moveUp(_:)):
-            return moveUpIntoTitle()
-        default:
-            return false
-        }
+    /// ↑ on the first line goes into the title.
+    func moveUpIntoTitle() -> Bool {
+        guard isCaretOnFirstLine else { return false }
+        focusTitle()
+        return true
     }
 
-    private func moveUpIntoTitle() -> Bool {
-        let selection = textView.selectedRange()
+    /// The caret rests on the note's first line, where ↑ goes into the title.
+    var isCaretOnFirstLine: Bool {
+        let selection = self.selection
         guard selection.length == 0 else { return false }
-        if storage.length == 0 {
-            focusTitle()
-            return true
-        }
+        if storage.length == 0 { return true }
         let first = layoutManager.lineFragmentRect(forGlyphAt: 0, effectiveRange: nil)
         let line: NSRect
         if selection.location >= storage.length, layoutManager.extraLineFragmentTextContainer != nil {
@@ -84,15 +51,13 @@ extension EditorController {
             let glyph = layoutManager.glyphIndexForCharacter(at: min(selection.location, storage.length - 1))
             line = layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
         }
-        guard line.minY <= first.minY + 0.5 else { return false }
-        focusTitle()
-        return true
+        return line.minY <= first.minY + 0.5
     }
 
     // MARK: - Return
 
-    private func insertNewline() -> Bool {
-        let selection = textView.selectedRange()
+    func insertNewline() -> Bool {
+        let selection = self.selection
         guard !document.lines.isEmpty else { return false }
         let index = document.lineIndex(containing: selection.location)
         let line = document.lines[index]
@@ -183,19 +148,19 @@ extension EditorController {
             index += 1
         }
         guard !edits.isEmpty else { return }
-        let selection = textView.selectedRange()
+        let selection = self.selection
         var shift = 0
         for (range, number) in edits.reversed() {
             replace(range, with: number)
             if range.location < selection.location { shift += (number as NSString).length - range.length }
         }
-        textView.setSelectedRange(NSRange(location: selection.location + shift, length: selection.length))
+        setSelection(NSRange(location: selection.location + shift, length: selection.length))
     }
 
     // MARK: - Delete
 
-    private func deleteBackward() -> Bool {
-        let selection = textView.selectedRange()
+    func deleteBackward() -> Bool {
+        let selection = self.selection
         guard selection.length == 0, selection.location > 0, !document.lines.isEmpty else { return false }
         let location = selection.location
         let index = document.lineIndex(containing: location)
@@ -250,19 +215,19 @@ extension EditorController {
         if location == line.range.location, index > 0, line.range.length > 0 {
             let above = document.lines[index - 1]
             if let block = above.block, document.blocks[block].isSwappable {
-                textView.setSelectedRange(document.blocks[block].range)
+                setSelection(document.blocks[block].range)
                 return true
             }
             if let object = blockObjectSpan(in: above) {
-                textView.setSelectedRange(object)
+                setSelection(object)
                 return true
             }
         }
         return false
     }
 
-    private func deleteForward() -> Bool {
-        let selection = textView.selectedRange()
+    func deleteForward() -> Bool {
+        let selection = self.selection
         guard selection.length == 0, selection.location < storage.length, !document.lines.isEmpty else { return false }
         let line = document.lines[document.lineIndex(containing: selection.location)]
         if let span = line.spans.first(where: { isAtomic($0) && $0.range.location == selection.location }) {
@@ -287,7 +252,7 @@ extension EditorController {
     /// Tab and Shift-Tab: nest or un-nest the list items the selection touches, or indent code.
     @discardableResult
     func indent(by direction: Int) -> Bool {
-        let selection = textView.selectedRange()
+        let selection = self.selection
         guard !document.lines.isEmpty else { return false }
         let first = document.lineIndex(containing: selection.location)
         let last = document.lineIndex(containing: max(selection.location, selection.upperBound - (selection.length > 0 ? 1 : 0)))
@@ -392,7 +357,7 @@ extension EditorController {
         if replacement == "]", range.length == 0, suggestionAnchor != nil, range.location + 2 <= text.length,
            text.substring(with: NSRange(location: range.location, length: 2)) == "]]" {
             closeSuggestions()
-            textView.setSelectedRange(NSRange(location: range.location + 2, length: 0))
+            setSelection(NSRange(location: range.location + 2, length: 0))
             return false
         }
         // Typing a marker with text selected wraps it.
@@ -420,7 +385,7 @@ extension EditorController {
 
     func toggleCheckbox(line index: Int) {
         guard let line = document.lines[safe: index], case .listItem(let item) = line.kind, let box = item.checkbox else { return }
-        let selection = textView.selectedRange()
+        let selection = self.selection
         replace(box, with: item.checked ? "[ ]" : "[x]", select: selection, actionName: item.checked ? "Uncheck" : "Check")
     }
 
@@ -449,7 +414,7 @@ extension EditorController {
 
     /// ⌘B and friends: takes the formatting off when the selection (or the caret) is in it, puts it on otherwise.
     func toggle(_ format: InlineFormat) {
-        let selection = textView.selectedRange()
+        let selection = self.selection
         guard !document.lines.isEmpty else { return }
         let line = document.lines[document.lineIndex(containing: selection.location)]
         if let span = line.spans.first(where: { format.matches($0.kind) && $0.range.location <= selection.location && $0.range.upperBound >= selection.upperBound }) {
@@ -480,7 +445,7 @@ extension EditorController {
 
     /// Turns the lines the selection touches into headings, list items, tasks, quotes or plain text.
     func setLineFormat(_ format: LineFormat) {
-        let selection = textView.selectedRange()
+        let selection = self.selection
         guard !document.lines.isEmpty else { return }
         let text = nsText
         let first = document.lineIndex(containing: selection.location)
@@ -527,14 +492,14 @@ extension EditorController {
 
     /// ⌘⇧U as in Notes: ticks or unticks the tasks the selection touches.
     func toggleChecked() {
-        let selection = textView.selectedRange()
+        let selection = self.selection
         guard !document.lines.isEmpty else { return }
         let index = document.lineIndex(containing: selection.location)
         toggleCheckbox(line: index)
     }
 
     func insertLink() {
-        let selection = textView.selectedRange()
+        let selection = self.selection
         if selection.length > 0 {
             let selected = nsText.substring(with: selection)
             replace(selection, with: "[" + selected + "]()", select: NSRange(location: selection.upperBound + 1, length: 0), actionName: "Add Link")

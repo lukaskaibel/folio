@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 
 /// Inline Markdown turned into the text you read, without its punctuation: for table cells, embedded notes and
 /// excerpts, where nothing is edited.

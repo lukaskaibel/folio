@@ -1,4 +1,4 @@
-#if DEBUG
+#if DEBUG && os(macOS)
 import AppKit
 import PDFKit
 import SwiftUI

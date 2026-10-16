@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 
 /// Copying a code block: a button in its corner while the pointer is over it, and Copy Code in its context menu.
 /// Only plain code blocks have them; diagrams and formulas don't.
@@ -6,7 +10,7 @@ extension EditorController {
     /// The plain code block under a point and the box drawn around it.
     func codeBlock(at point: NSPoint) -> (block: MarkdownBlock, box: NSRect)? {
         guard storage.length > 0, point.y >= visibleTop else { return nil }
-        let origin = textView.textContainerOrigin
+        let origin = textOrigin
         let glyph = layoutManager.glyphIndex(for: NSPoint(x: point.x - origin.x, y: point.y - origin.y), in: container)
         guard glyph < layoutManager.numberOfGlyphs else { return nil }
         let index = layoutManager.characterIndexForGlyph(at: glyph)
@@ -15,6 +19,15 @@ extension EditorController {
         return (document.blocks[blockIndex], box)
     }
 
+    /// Puts the code of the block that starts here on the pasteboard, without its fences.
+    @discardableResult
+    func copyCode(at start: Int) -> Bool {
+        guard let blockIndex = document.line(containing: start)?.block, case .code = document.blocks[blockIndex].kind else { return false }
+        copyToPasteboard(MarkdownStyler.blockContent(nsText, document, document.blocks[blockIndex]))
+        return true
+    }
+
+    #if os(macOS)
     /// Shows the copy button on the code block under the pointer, or hides it when there is none.
     func updateCopyButton(at point: NSPoint?) {
         let button = textView.copyButton
@@ -38,16 +51,6 @@ extension EditorController {
         updateCopyButton(at: textView.visibleRect.contains(point) ? point : nil)
     }
 
-    /// Puts the code of the block that starts here on the pasteboard, without its fences.
-    @discardableResult
-    func copyCode(at start: Int) -> Bool {
-        guard let blockIndex = document.line(containing: start)?.block, case .code = document.blocks[blockIndex].kind else { return false }
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(MarkdownStyler.blockContent(nsText, document, document.blocks[blockIndex]), forType: .string)
-        return true
-    }
-
     /// Copy Code first in the context menu of a code block.
     func addCopyCode(to menu: NSMenu, at point: NSPoint) {
         guard let (block, _) = codeBlock(at: point) else { return }
@@ -56,8 +59,10 @@ extension EditorController {
         menu.insertItem(item, at: 0)
         menu.insertItem(.separator(), at: 1)
     }
+    #endif
 }
 
+#if os(macOS)
 extension MarkdownTextView {
     @objc func copyCodeBlock(_ sender: Any?) {
         guard let start = (sender as? NSMenuItem)?.representedObject as? Int ?? controller?.layoutManager.copyButtonBlock,
@@ -111,3 +116,4 @@ final class CodeCopyButton: NSButton {
         return NSRect(x: box.maxX - size.width - 6, y: y, width: size.width, height: size.height)
     }
 }
+#endif

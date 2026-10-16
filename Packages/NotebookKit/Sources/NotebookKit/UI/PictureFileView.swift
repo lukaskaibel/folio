@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import ImageIO
 import SwiftUI
@@ -232,3 +233,4 @@ private final class PictureView: NSView {
         layer.minificationFilter = .trilinear
     }
 }
+#endif

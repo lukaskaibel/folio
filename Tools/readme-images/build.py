@@ -1,5 +1,5 @@
 # Lays out the README images from the captures that Tools/readme-images.sh takes.
-#   python3 Tools/readme-images/build.py <captures folder>
+#   python3 Tools/readme-images/build.py <captures folder> [devices]
 # Writes Design/screenshots/*.webp and Design/social-preview.png. Every image comes in light and dark; the README
 # shows the one that matches the reader's theme.
 import glob
@@ -12,9 +12,10 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 sys.path.insert(0, os.path.dirname(__file__))
-from compose import THEMES, backdrop, place, rounded, scaled, shadow_onto
+from compose import THEMES, backdrop, finish, place, rounded, scaled, shadow_onto
 
 raw = sys.argv[1]
+only = sys.argv[2] if len(sys.argv) > 2 else None
 out = "Design/screenshots"
 os.makedirs(out, exist_ok=True)
 
@@ -89,7 +90,7 @@ def search(theme):
 
 
 print("Mac")
-for theme in ["dark", "light"]:
+for theme in [] if only == "devices" else ["dark", "light"]:
     webp(place(window(f"note-{theme}"), theme, (160, 130), 2000), f"hero-{theme}")
     typing_animation(theme)
     webp(place(window(f"blocks-{theme}"), theme, (130, 110), 1800), f"blocks-{theme}")
@@ -99,11 +100,38 @@ for theme in ["dark", "light"]:
     webp(place(window(f"quicklook-{theme}"), theme, (130, 110), 1800), f"quicklook-{theme}")
     webp(search(theme), f"search-{theme}")
 
+def devices(theme):
+    """The iPad with the note and its outline, and the iPhone with the note, in front of it at the lower right."""
+    ipad = Image.open(f"{raw}/ipad-{theme}.png").convert("RGBA")
+    iphone = Image.open(f"{raw}/iphone-{theme}.png").convert("RGBA")
+    # The screens' own corners: 18 points on the iPad at 2x, 55 on the iPhone at 3x.
+    ipad = rounded(scaled(ipad, 1500 / ipad.height), round(36 * 1500 / ipad.height), THEMES[theme]["border"])
+    iphone = rounded(scaled(iphone, 1260 / iphone.height), round(165 * 1260 / iphone.height), THEMES[theme]["border"])
+    pad = (130, 120)
+    overlap = 300
+    size = (pad[0] * 2 + ipad.width + iphone.width - overlap, pad[1] * 2 + ipad.height + 70)
+    canvas = backdrop(size, theme).convert("RGBA")
+    canvas = shadow_onto(canvas, ipad, pad, theme, rim=True)
+    canvas = shadow_onto(canvas, iphone, (pad[0] + ipad.width - overlap, pad[1] + ipad.height + 70 - iphone.height), theme, rim=True)
+    return finish(canvas, 2000)
+
+
+print("iPhone and iPad")
+for theme in ["dark", "light"]:
+    webp(devices(theme), f"devices-{theme}")
+
+if only == "devices":
+    sys.exit(0)
+
 print("Social preview")
 S = 2  # drawn at 2x, saved at 1280 x 640
 canvas = backdrop((1280 * S, 640 * S), "dark").convert("RGBA")
 mac = scaled(window("note-dark"), 0.62)
 canvas = shadow_onto(canvas, mac, (600 * S, 150 * S), "dark", rim=True)
+# The iPhone in front of the window, at its lower left.
+phone = Image.open(f"{raw}/iphone-dark.png").convert("RGBA")
+phone = rounded(scaled(phone, 440 * S / phone.height), round(165 * 440 * S / phone.height), THEMES["dark"]["border"])
+canvas = shadow_onto(canvas, phone, (540 * S, 170 * S), "dark", rim=True)
 icon = Image.open("Design/icon.png").convert("RGBA")
 canvas.alpha_composite(icon.resize((176 * S, 176 * S), Image.LANCZOS), (66 * S, 128 * S))
 
@@ -117,7 +145,7 @@ def font(weight, size):
 d = ImageDraw.Draw(canvas)
 d.text((86 * S, 318 * S), "Notebook", font=font("Bold", 84), fill=(240, 240, 242))
 d.text((88 * S, 422 * S), "Your notes as Markdown files,", font=font("Medium", 32), fill=(206, 205, 210))
-d.text((88 * S, 462 * S), "native on the Mac.", font=font("Medium", 32), fill=(206, 205, 210))
+d.text((88 * S, 462 * S), "on Mac, iPhone and iPad.", font=font("Medium", 32), fill=(206, 205, 210))
 d.text((88 * S, 530 * S), "Written like in Notes, kept in", font=font("Regular", 22), fill=(146, 145, 152))
 d.text((88 * S, 560 * S), "your own folders.", font=font("Regular", 22), fill=(146, 145, 152))
 canvas.convert("RGB").resize((1280, 640), Image.LANCZOS).save("Design/social-preview.png", optimize=True)

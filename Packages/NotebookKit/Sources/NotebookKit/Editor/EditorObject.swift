@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 
 /// Something drawn in place of Markdown: a checkbox, a picture, a rendered table. It sits on the first character of
 /// the Markdown it stands for; that character is laid out as an empty box the object's size and the rest of the

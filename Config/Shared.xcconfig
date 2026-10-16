@@ -6,9 +6,11 @@ CURRENT_PROJECT_VERSION = 1
 
 PRODUCT_BUNDLE_IDENTIFIER = com.lukaskbl.Notebook
 
-// Without a team the Mac app is signed to run on this Mac only, which is all a local build needs.
+// Without a team the Mac app is signed to run on this Mac only, and the iPhone and iPad app runs in the Simulator,
+// which is all a local build needs. To run it on your own iPhone or iPad, set your team in Local.xcconfig.
 DEVELOPMENT_TEAM =
 CODE_SIGN_IDENTITY = -
+CODE_SIGN_IDENTITY[sdk=iphoneos*] = Apple Development
 
 // Debug and Release run without the sandbox, so tests can point the app at any folder. The App Store build is
 // sandboxed and reaches folders through the bookmarks of the locations you add. It also has iCloud's key-value store,

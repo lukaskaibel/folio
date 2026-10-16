@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 import BeautifulMermaid
 import ImageIO
 import QuickLookThumbnailing
@@ -45,7 +49,7 @@ final class ImageStore {
 
     /// The picture drawn `width` points wide, if it has been decoded; otherwise it starts decoding and calls `ready`.
     func image(for url: URL, width: CGFloat, ready: @escaping () -> Void) -> NSImage? {
-        let scale = NSScreen.main?.backingScaleFactor ?? 2
+        let scale = Screen.scale
         let pixels = Int((width * scale / 64).rounded(.up) * 64)
         let key = Key(path: url.path, modified: modified(url), width: pixels)
         if let image = images[key] { return image }
@@ -62,7 +66,7 @@ final class ImageStore {
             var image: NSImage?
             if let source = CGImageSourceCreateWithURL(url as CFURL, nil),
                let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) {
-                image = NSImage(cgImage: cgImage, size: CGSize(width: CGFloat(cgImage.width) / scale, height: CGFloat(cgImage.height) / scale))
+                image = NSImage.make(cgImage, scale: scale)
             }
             let decoded = image
             await MainActor.run {
@@ -91,9 +95,13 @@ final class ThumbnailStore {
         if let image = images[key] { return image }
         guard !loading.contains(key) else { return nil }
         loading.insert(key)
-        let request = QLThumbnailGenerator.Request(fileAt: url, size: size, scale: NSScreen.main?.backingScaleFactor ?? 2, representationTypes: .thumbnail)
+        let request = QLThumbnailGenerator.Request(fileAt: url, size: size, scale: Screen.scale, representationTypes: .thumbnail)
         QLThumbnailGenerator.shared.generateBestRepresentation(for: request) { representation, _ in
+            #if os(macOS)
             let image = representation?.nsImage
+            #else
+            let image = representation?.uiImage
+            #endif
             Task { @MainActor in
                 self.loading.remove(key)
                 if let image {
@@ -118,8 +126,13 @@ enum MathStore {
     private static var cache: [String: Rendered?] = [:]
 
     static func render(_ tex: String, display: Bool, size: CGFloat, color: NSColor) -> Rendered? {
+        #if os(macOS)
         let resolved = color.usingColorSpace(.sRGB) ?? color
-        let key = "\(display)|\(size)|\(resolved.redComponent),\(resolved.greenComponent),\(resolved.blueComponent)|\(tex)"
+        #else
+        let resolved = color
+        #endif
+        let rgba = resolved.rgba
+        let key = "\(display)|\(size)|\(rgba.red),\(rgba.green),\(rgba.blue)|\(tex)"
         if let cached = cache[key] { return cached }
         var math = MathImage(latex: tex, fontSize: size, textColor: resolved, labelMode: display ? .display : .text, textAlignment: .left)
         let (error, image, info) = math.asImage()
@@ -164,13 +177,13 @@ enum DiagramStore {
                 font: .systemFont(ofSize: 13),
                 transparent: true
             )
-            let scale = NSScreen.main?.backingScaleFactor ?? 2
+            let scale = Screen.scale
             Task.detached(priority: .userInitiated) {
                 var result: NSImage?
                 if let image = try? MermaidRenderer.renderImage(source: source, theme: theme, scale: scale),
-                   let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+                   let cgImage = image.pixels,
                    let trimmed = trimmed(cgImage) {
-                    result = NSImage(cgImage: trimmed, size: CGSize(width: CGFloat(trimmed.width) / scale, height: CGFloat(trimmed.height) / scale))
+                    result = NSImage.make(trimmed, scale: scale)
                 }
                 let drawn = result
                 await MainActor.run {
@@ -184,16 +197,18 @@ enum DiagramStore {
         return nil
     }
 
-    /// Turned the right way up (BeautifulMermaid 1.0.4 draws Mac images from the bottom) and without the empty
-    /// margin around the diagram.
+    /// Turned the right way up (BeautifulMermaid 1.0.4 draws Mac images from the bottom; its UIKit ones are upright)
+    /// and without the empty margin around the diagram.
     nonisolated private static func trimmed(_ image: CGImage) -> CGImage? {
         let width = image.width, height = image.height
         guard let context = CGContext(
             data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
             space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ), let data = context.data else { return nil }
+        #if os(macOS)
         context.translateBy(x: 0, y: CGFloat(height))
         context.scaleBy(x: 1, y: -1)
+        #endif
         context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
         let pixels = data.bindMemory(to: UInt8.self, capacity: width * height * 4)
         var minX = width, minY = height, maxX = -1, maxY = -1
@@ -214,10 +229,14 @@ enum DiagramStore {
 extension NSColor {
     /// The colour as it is in the light or dark appearance.
     func resolved(dark: Bool) -> NSColor {
+        #if os(macOS)
         var result = self
         (NSAppearance(named: dark ? .darkAqua : .aqua) ?? NSAppearance.currentDrawing()).performAsCurrentDrawingAppearance {
             result = self.usingColorSpace(.sRGB) ?? self
         }
         return result
+        #else
+        resolvedColor(with: UITraitCollection(userInterfaceStyle: dark ? .dark : .light))
+        #endif
     }
 }
