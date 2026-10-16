@@ -178,6 +178,15 @@ enum DebugRemote {
             log("current \(workspace.currentURL?.path ?? "none") editing \(workspace.isEditing) selection \(editor.selection) scroll \(editor.scrollTop) top \(editor.topInset) titleAway \(workspace.isTitleScrolledAway) heading \(String(describing: workspace.currentHeading))")
         case "text":
             log(editor.text)
+        case "autocorrect":
+            // The keyboard putting a word right: `autocorrect teh the` replaces the last "teh" through UITextInput.
+            let words = argument.split(separator: " ").map(String.init)
+            let range = (editor.text as NSString).range(of: words[0], options: .backwards)
+            guard words.count == 2, range.location != NSNotFound,
+                  let start = editor.textView.position(from: editor.textView.beginningOfDocument, offset: range.location),
+                  let end = editor.textView.position(from: start, offset: range.length),
+                  let textRange = editor.textView.textRange(from: start, to: end) else { return }
+            if editor.textView(editor.textView, shouldChangeTextIn: range, replacementText: words[1]) { editor.textView.replace(textRange, withText: words[1]) }
         case "qlclose":
             workspace.quickLookURL = nil
         case "resolve":

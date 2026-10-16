@@ -69,8 +69,8 @@ extension EditorController {
                 step.inserted += range.length
                 return
             }
-            if range.length == 0, range.location + (removed as NSString).length == step.end {
-                let count = (removed as NSString).length
+            let count = (removed as NSString).length
+            if range.length == 0, range.location + count == step.end {
                 if count <= step.inserted {
                     step.inserted -= count
                 } else {
@@ -78,6 +78,11 @@ extension EditorController {
                     step.location -= count - step.inserted
                     step.inserted = 0
                 }
+                return
+            }
+            // What the keyboard replaces in what was just typed: marked text being composed, a word corrected.
+            if range.location >= step.location, range.location + count <= step.end {
+                step.inserted += range.length - count
                 return
             }
         }
