@@ -94,11 +94,13 @@ final class DrawingCanvas: PKCanvasView {
         if contentOffset != .zero { contentOffset = .zero }
         if !isPlaced {
             isPlaced = true
-            layoutIfNeeded()
-            // An empty drawing first: a canvas whose first drawing already has strokes draws nothing at all once a
-            // stroke is added to it (iOS 27).
+            // The strokes once the canvas is on screen and has the tools, a moment later: given them before, a
+            // canvas shows them, but none drawn after (iOS 27), or loses them all at the first new stroke.
             setDrawing(PKDrawing())
-            setDrawing(file.drawing)
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.drawing.strokes.isEmpty else { return }
+                self.setDrawing(self.file.drawing)
+            }
         }
     }
 
@@ -179,6 +181,18 @@ extension EditorController: PKToolPickerObserver {
         guard let toolPicker = drawingSession?.toolPicker else { return }
         toolPicker.addObserver(canvas)
         toolPicker.setVisible(true, forFirstResponder: canvas)
+        takeTool(from: toolPicker, into: canvas)
+    }
+
+    /// A canvas hears of the tool picker's changes, but not which tool it has when the canvas comes: the one picked
+    /// last time (the tool picker keeps it) would show as picked while the canvas drew with its own pen.
+    private func takeTool(from toolPicker: PKToolPicker, into canvas: DrawingCanvas) {
+        switch toolPicker.selectedToolItem {
+        case let item as PKToolPickerInkingItem: canvas.tool = item.inkingTool
+        case let item as PKToolPickerEraserItem: canvas.tool = item.eraserTool
+        case is PKToolPickerLassoItem: canvas.tool = PKLassoTool()
+        default: break
+        }
     }
 
     func detachCanvas(_ canvas: DrawingCanvas) {
@@ -213,6 +227,10 @@ extension EditorController: PKToolPickerObserver {
 
     public func toolPickerVisibilityDidChange(_ toolPicker: PKToolPicker) {
         updateDrawingInset()
+    }
+
+    public func toolPickerSelectedToolItemDidChange(_ toolPicker: PKToolPicker) {
+        for canvas in drawingSession?.canvases.values ?? [:].values { takeTool(from: toolPicker, into: canvas) }
     }
 
     /// Room at the bottom of the note for the tool picker, to scroll a drawing up above it. It doesn't always tell
