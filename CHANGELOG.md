@@ -22,7 +22,7 @@ versions follow [semantic versioning](https://semver.org).
 
 ## [0.1.0] – not released yet
 
-The first version: a Mac app for Markdown notes in your own folders.
+The first version: a Mac app for Markdown notes in your own folders. While it was being built, it was called Folio.
 
 ### Added
 

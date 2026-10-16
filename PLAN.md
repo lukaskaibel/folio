@@ -5,7 +5,7 @@ macht Markdown-Dateien darin zu Notizen, die sich so selbstverständlich schreib
 zeigt sie mit Quick Look. Die Notizen sind normale `.md`-Dateien neben deinen anderen Dokumenten, ohne Export, ohne eigene
 Datenbank und ohne eigenen Sync.
 
-Arbeitstitel: **Notebook**. Stand: Planungssitzung vom 14.10.2026.
+Name: **Notebook** (bis zum 16.10.2026 hieß die App Folio). Stand: Planungssitzung vom 14.10.2026.
 
 ---
 
@@ -140,9 +140,9 @@ Aufbau wie bei Issues: eine schlanke App und ein lokales Swift-Paket, das die ei
 
 ```
 Notebook.xcodeproj
-├── Notebook/                     App (Mac, iPhone, iPad): App-Einstieg, Szenen, Einstellungen
-├── NotebookWidgets/              Widget, Control-Center-Control, Sperrbildschirm (WidgetKit + App Intents)
-├── NotebookShare/                Share Extension (iOS und Mac)
+├── Notebook/                  App (Mac, iPhone, iPad): App-Einstieg, Szenen, Einstellungen
+├── NotebookWidgets/           Widget, Control-Center-Control, Sperrbildschirm (WidgetKit + App Intents)
+├── NotebookShare/             Share Extension (iOS und Mac)
 └── Packages/NotebookKit/Sources/NotebookKit/
     ├── Files/                 Orte, Bookmarks, Baum, Datei-Operationen, Koordination, iCloud-Status
     ├── Markdown/              Parser (cmark-gfm) + Notebook-Erweiterungen, Link-Auflösung

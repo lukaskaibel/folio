@@ -23,7 +23,8 @@
   <a href="#how-notes-are-stored"><b>File format</b></a> &nbsp;·&nbsp;
   <a href="#getting-started"><b>Getting started</b></a> &nbsp;·&nbsp;
   <a href="#using-it"><b>Shortcuts</b></a> &nbsp;·&nbsp;
-  <a href="CHANGELOG.md"><b>Changelog</b></a>
+  <a href="CHANGELOG.md"><b>Changelog</b></a> &nbsp;·&nbsp;
+  <a href="https://lukaskaibel.github.io/notebook/"><b>Website</b></a>
 </p>
 
 <br>
@@ -127,7 +128,7 @@ share menu, an inspector, Settings, alerts, PDFKit, AVKit and Quick Look. It fol
 appearance. The inspector shows a note's outline, with the section you're reading marked and a word count; a click on
 a heading scrolls there. In Settings › Text you pick the typeface (San Francisco, New York, Rounded or Monospaced),
 the size, the line spacing and the line width. The icon is a leather notebook, and Settings › App Icon makes it yours:
-pick the leather, the elastic band, the ribbon and the background, and the Dock shows your notebook while Notebook is
+pick the leather, the elastic band, the ribbon and the background, and the Dock shows your notebook while the app is
 open.
 
 ### On iPhone and iPad
@@ -224,7 +225,7 @@ git clone https://github.com/lukaskaibel/notebook.git
 ```
 
 ```bash
-open folio/Notebook.xcodeproj
+open notebook/Notebook.xcodeproj
 ```
 
 Choose the **Notebook** scheme, then **My Mac** or an iPhone or iPad simulator as the destination, and press ⌘R. A local
@@ -320,7 +321,7 @@ The full plan, with what is deliberately left out (tags, backlinks, a database, 
 ## For contributors
 
 ```
-Notebook/                       The app target (Mac, iPhone and iPad): the entry point and the icon
+Notebook/                    The app target (Mac, iPhone and iPad): the entry point and the icon
 Packages/NotebookKit/
   Sources/NotebookKit/
     Editor/                  The live-preview editor on TextKit 1: styling, hidden marks, objects, typing, export;
@@ -337,6 +338,7 @@ Packages/NotebookKit/
   Tests/                     Parser, editor, merge, smoothness and app icon tests
 Config/                      Build settings, Info.plist and entitlements
 Design/                      The icon, the README pictures and the social preview
+Website/                     The website, published to GitHub Pages by .github/workflows/website.yml
 Tools/                       The app icon and the README pictures
 PLAN.md                      The plan: decisions, file format, architecture and milestones (in German)
 ```

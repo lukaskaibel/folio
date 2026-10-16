@@ -134,6 +134,21 @@ public final class NotebookSettings {
     }
 }
 
+public extension NotebookSettings {
+    /// The app was called Folio until October 2026. Takes over the settings it kept under its old bundle identifier,
+    /// once, before anything reads them. A sandboxed build can't see them and starts afresh.
+    nonisolated static func importFolioSettings() {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: "importedFolioSettings"),
+              let bundle = Bundle.main.bundleIdentifier else { return }
+        defaults.set(true, forKey: "importedFolioSettings")
+        guard let old = defaults.persistentDomain(forName: bundle.replacingOccurrences(of: "Notebook", with: "Folio")) else { return }
+        for (key, value) in old where defaults.object(forKey: key) == nil {
+            defaults.set(value, forKey: key)
+        }
+    }
+}
+
 public extension Notification.Name {
     static let notebookTypographyChanged = Notification.Name("NotebookTypographyChanged")
     static let notebookSidebarOptionsChanged = Notification.Name("NotebookSidebarOptionsChanged")

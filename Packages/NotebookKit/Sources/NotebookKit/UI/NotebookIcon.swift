@@ -3,7 +3,7 @@ import Accelerate
 import AppKit
 import Observation
 
-/// A colour of the notebook on Notebook's icon, in 8-bit sRGB.
+/// A colour of the notebook on the app's icon, in 8-bit sRGB.
 public struct NotebookColor: Codable, Hashable, Sendable {
     public var red: Int
     public var green: Int
@@ -69,7 +69,7 @@ public struct NotebookColor: Codable, Hashable, Sendable {
     }
 }
 
-/// The notebook on Notebook's icon: its leather, the ribbon, the elastic band and what it lies on.
+/// The notebook on the app's icon: its leather, the ribbon, the elastic band and what it lies on.
 public struct NotebookLook: Codable, Hashable, Sendable {
     public enum Band: String, Codable, CaseIterable, Identifiable, Sendable {
         /// The band in a dark shade of the leather, like a real notebook's.
@@ -91,7 +91,7 @@ public struct NotebookLook: Codable, Hashable, Sendable {
         self.ground = ground
     }
 
-    /// The notebook Notebook ships with. Notebook/AppIcon.icon is drawn from the same colours (Tools/AppIcon/notebook.py).
+    /// The notebook the app ships with. Notebook/AppIcon.icon is drawn from the same colours (Tools/AppIcon/notebook.py).
     public static let standard = NotebookLook(leather: NotebookColor(hex: 0xA8403F), ribbon: NotebookColor(hex: 0xE9B04A),
                                               band: .leather, ground: NotebookColor(hex: 0xEFEAE2))
 
@@ -321,7 +321,7 @@ final class NotebookRenderer {
     private static let decodeTable: [Float] = (0...255).map { Float(decode(Double($0) / 255)) }
 }
 
-/// The notebook you made in Settings › App Icon. Notebook shows it in the Dock while it runs, in light or dark with the
+/// The notebook you made in Settings › App Icon. The app shows it in the Dock while it runs, in light or dark with the
 /// system; the standard notebook is the app's own icon, so the Dock keeps that one with its glass and tinted looks.
 @MainActor
 @Observable

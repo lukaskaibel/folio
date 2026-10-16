@@ -3,7 +3,7 @@ import AppKit
 import SwiftUI
 import TipKit
 
-/// Settings › App Icon: the notebook on Notebook's icon, in the leather, ribbon and background you like.
+/// Settings › App Icon: the notebook on the app's icon, in the leather, ribbon and background you like.
 struct AppIconSettings: View {
     @Bindable private var store = AppIconStore.shared
 
@@ -32,7 +32,7 @@ struct AppIconSettings: View {
                 }
             } footer: {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("Notebook shows your notebook in the Dock while it’s open, in light or dark with your Mac.")
+                    Text("Your notebook shows in the Dock while the app is open, in light or dark with your Mac.")
                         .foregroundStyle(.secondary)
                     Spacer()
                     Button("Use Standard") { store.reset() }
@@ -103,7 +103,7 @@ private struct SwatchRow: View {
     }
 }
 
-/// The tip at the bottom of the sidebar that Notebook's icon can be made your own. It goes once you close it or open
+/// The tip at the bottom of the sidebar that the app's icon can be made your own. It goes once you close it or open
 /// Settings › App Icon.
 struct AppIconTip: Tip {
     var title: Text { Text("Make the icon yours") }

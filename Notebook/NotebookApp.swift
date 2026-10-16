@@ -7,6 +7,10 @@ struct NotebookApp: App {
     @NSApplicationDelegateAdaptor(NotebookAppDelegate.self) private var appDelegate
     #endif
 
+    init() {
+        NotebookSettings.importFolioSettings()
+    }
+
     var body: some Scene {
         NotebookScene()
     }
