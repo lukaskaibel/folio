@@ -40,6 +40,8 @@ struct FileRow: View {
         }
         .badge(isInCloud ? Text(Image(systemName: "icloud.and.arrow.down")) : nil)
         .accessibilityLabel(isHidden ? "\(name), hidden" : isInCloud ? "\(name), in iCloud" : name)
+        // Folders on screen are read ahead, so opening one shows its files straight away.
+        .onAppear { if kind == .folder { workspace.prefetch(url) } }
     }
 
     private var tint: Color {
@@ -97,11 +99,23 @@ extension FileNode {
 }
 
 extension Workspace {
-    /// What a folder shows, read when first asked for and again whenever files change in it. Hidden folders stay out
-    /// unless their location shows them.
+    /// What a folder shows: nothing until it has been read, which happens off the main thread when first asked for
+    /// (with the folders on the way to it), and again whenever files change in it. Hidden folders stay out unless their
+    /// location shows them.
     func visibleChildren(of folder: URL) -> [FileNode] {
         _ = treeVersion
-        return node(for: folder).map { shownChildren(of: $0, in: location(containing: folder)) } ?? []
+        guard let node = node(for: folder, reading: false) else {
+            readFolders(to: folder, including: true)
+            return []
+        }
+        read([node])
+        return shownChildren(of: node, in: location(containing: folder))
+    }
+
+    /// Whether a folder has been read, so a list says "Empty" only when it is.
+    func isRead(_ folder: URL) -> Bool {
+        _ = treeVersion
+        return hasRead(folder)
     }
 
     /// A row for any file, found again by its address.
@@ -112,6 +126,21 @@ extension Workspace {
         let isLocation = locations.contains { $0.url == url.standardizedFileURL }
         let symbol = isLocation ? (Location.isICloudDriveRoot(url) || url.path == Location.iCloudDrivePath ? "icloud" : "externaldrive") : favorite && kind == .folder ? "star" : nil
         return FileRow(workspace: self, url: url, name: name, kind: kind, symbol: symbol, showsDetail: showsDetail)
+    }
+}
+
+/// A folder still being read: nothing for a wait too short to notice, then a spinner, as for files.
+struct FolderLoadingIndicator: View {
+    @State private var isShown = false
+
+    var body: some View {
+        ProgressView()
+            .opacity(isShown ? 1 : 0)
+            .animation(.easeOut(duration: 0.2), value: isShown)
+            .task {
+                try? await Task.sleep(for: .seconds(0.6))
+                if !Task.isCancelled { isShown = true }
+            }
     }
 }
 

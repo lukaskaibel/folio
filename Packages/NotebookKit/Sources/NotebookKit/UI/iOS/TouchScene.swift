@@ -246,7 +246,7 @@ struct TouchSettings: View {
                 }
                 Section {
                     LabeledContent("Indexed") {
-                        Text(workspace.index.isBuilding ? "Reading your files…" : "\(workspace.index.entries.count) files")
+                        Text(workspace.index.isBuilding ? "Reading your files…" : "\(workspace.index.count) files")
                     }
                 } header: {
                     Text("Search")
