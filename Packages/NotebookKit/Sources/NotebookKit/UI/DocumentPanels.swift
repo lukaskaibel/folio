@@ -13,6 +13,11 @@ struct MoveToMenu: View {
 
     var body: some View {
         Menu {
+            #if os(macOS)
+            // The folders go in when the menu opens (`MoveToSubmenu`). Made here, an item for each of them would be
+            // made again every time a note opens.
+            Text("Folders")
+            #else
             ForEach(workspace.moveTargets(for: url), id: \.location.id) { target in
                 Section(target.location.name) {
                     ForEach(target.folders, id: \.url) { folder in
@@ -25,6 +30,7 @@ struct MoveToMenu: View {
                     }
                 }
             }
+            #endif
         } label: {
             Label("Move To", systemImage: "folder")
         }

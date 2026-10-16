@@ -25,6 +25,8 @@ public final class SearchIndex {
         public var text: String?
         var folded: String?
         var foldedName: String
+        /// The file's name with its extension, folded: what a link to a file other than a note gives.
+        var foldedFileName: String
         /// Its address and its folder's, as keys.
         var path: String
         var folder: String
@@ -44,8 +46,17 @@ public final class SearchIndex {
     @ObservationIgnored private var byPath: [String: Entry] = [:]
     /// The addresses of the files in each folder, so a folder read again is merged in without going through the rest.
     @ObservationIgnored private var byFolder: [String: Set<String>] = [:]
+    /// The addresses of the files by their folded names (a note's with and without ".md"), so a link finds its file at
+    /// once, without going through every file there is.
+    @ObservationIgnored private var byName: [String: Set<String>] = [:]
+    /// The addresses of every folder, for Move To.
+    @ObservationIgnored private var folderPaths: Set<String> = []
     /// Counts changes, for what shows the index to update.
     private(set) var version = 0
+    /// Counts the times folders came or went, which is far less often than files change.
+    private(set) var folderVersion = 0
+    /// Called when folders came or went.
+    @ObservationIgnored var onFoldersChanged: (() -> Void)?
     public private(set) var isBuilding = false
     /// Called when the index has been built: links in a note opened before resolve now.
     @ObservationIgnored var onBuilt: (() -> Void)?
@@ -58,6 +69,8 @@ public final class SearchIndex {
     /// The newest reading of each folder, so an older one finishing later doesn't undo it.
     @ObservationIgnored private var newestRefresh: [String: Int] = [:]
     @ObservationIgnored private var refreshes = 0
+    /// A folder went while folders were merged in (one replacing it keeps their number the same).
+    @ObservationIgnored private var foldersChanged = false
 
     public var count: Int {
         _ = version
@@ -71,7 +84,10 @@ public final class SearchIndex {
     }
 
     nonisolated static func fold(_ string: String) -> String {
-        string.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: nil)
+        var folded = string.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: nil)
+        // Made Swift's own, not left as Foundation's string, so search goes through it without copying it each time.
+        folded.makeContiguousUTF8()
+        return folded
     }
 
     // MARK: - Building
@@ -87,24 +103,32 @@ public final class SearchIndex {
         Task.detached(priority: .utility) {
             var byPath: [String: Entry] = [:]
             var byFolder: [String: Set<String>] = [:]
+            var byName: [String: Set<String>] = [:]
+            var folderPaths: Set<String> = []
             for (root, name, id) in roots {
                 for entry in Self.scan(root, locationName: name, locationID: id) {
                     byPath[entry.path] = entry
                     byFolder[entry.folder, default: []].insert(entry.path)
+                    for key in Self.nameKeys(of: entry) { byName[key, default: []].insert(entry.path) }
+                    if entry.kind == .folder { folderPaths.insert(entry.path) }
                 }
             }
             let pdfs = byPath.values.filter { $0.kind == .pdf && !$0.isInCloud }.map { PDFJob(url: $0.url, path: $0.path, modified: $0.modified) }
-            let found = byPath, folders = byFolder
+            let found = byPath, folders = byFolder, names = byName, allFolders = folderPaths
             await MainActor.run {
                 guard generation == self.generation else { return }
                 // The old index goes away on another thread: freeing the text of thousands of notes takes a while too.
-                let old = (self.byPath, self.byFolder)
+                let old = (self.byPath, self.byFolder, self.byName, self.folderPaths)
                 DispatchQueue.global(qos: .background).async { withExtendedLifetime(old) {} }
                 self.byPath = found
                 self.byFolder = folders
+                self.byName = names
+                self.folderPaths = allFolders
                 self.version += 1
+                self.folderVersion += 1
                 self.isBuilding = false
                 self.onBuilt?()
+                self.onFoldersChanged?()
                 self.readPDFs(pdfs)
                 let changed = self.changedWhileBuilding
                 self.changedWhileBuilding = []
@@ -164,7 +188,17 @@ public final class SearchIndex {
             }
         }
         return Entry(url: url, name: name, kind: kind, place: place, locationID: locationID, modified: modified, isInCloud: inCloud,
-                     text: text, folded: text.map(fold), foldedName: fold(name), path: url.standardizedFileURL.path, folder: folderPath)
+                     text: text, folded: text.map(fold), foldedName: fold(name), foldedFileName: fold(url.lastPathComponent),
+                     path: url.standardizedFileURL.path, folder: folderPath)
+    }
+
+    /// The names a link finds a file by: a note's with and without ".md", any other file's in full. None for folders.
+    nonisolated private static func nameKeys(of entry: Entry) -> [String] {
+        switch entry.kind {
+        case .folder: []
+        case .note: entry.foldedName == entry.foldedFileName ? [entry.foldedName] : [entry.foldedName, entry.foldedFileName]
+        default: [entry.foldedFileName]
+        }
     }
 
     /// Reads the files in some folders again, after changes there: in the background, then merged in by the files that
@@ -208,11 +242,17 @@ public final class SearchIndex {
             await MainActor.run {
                 guard generation == self.generation else { return }
                 var pdfs: [PDFJob] = []
+                let folders = self.folderPaths.count
                 for (folder, found) in scanned where self.newestRefresh[folder] == id {
                     self.newestRefresh[folder] = nil
                     pdfs += self.merge(found, into: folder)
                 }
                 self.version += 1
+                if self.foldersChanged || self.folderPaths.count != folders {
+                    self.foldersChanged = false
+                    self.folderVersion += 1
+                    self.onFoldersChanged?()
+                }
                 self.readPDFs(pdfs)
             }
         }
@@ -234,15 +274,29 @@ public final class SearchIndex {
                     pdfs.append(PDFJob(url: entry.url, path: entry.path, modified: entry.modified))
                 }
             }
-            byPath[entry.path] = updated
+            let old = byPath.updateValue(updated, forKey: entry.path)
+            if old?.kind != entry.kind {
+                if let old { forget(old) }
+                for key in Self.nameKeys(of: entry) { byName[key, default: []].insert(entry.path) }
+                if entry.kind == .folder { folderPaths.insert(entry.path) }
+            }
         }
         byFolder[folder] = paths.isEmpty ? nil : paths
         return pdfs
     }
 
     private func remove(_ path: String) {
-        byPath[path] = nil
+        if let entry = byPath.removeValue(forKey: path) { forget(entry) }
         for inside in byFolder.removeValue(forKey: path) ?? [] { remove(inside) }
+    }
+
+    /// Takes a file that is gone, or is something else now, out of the lookups by name and of the folders.
+    private func forget(_ entry: Entry) {
+        for key in Self.nameKeys(of: entry) {
+            byName[key]?.remove(entry.path)
+            if byName[key]?.isEmpty == true { byName[key] = nil }
+        }
+        if entry.kind == .folder, folderPaths.remove(entry.path) != nil { foldersChanged = true }
     }
 
     // MARK: - PDFs
@@ -266,10 +320,16 @@ public final class SearchIndex {
                 let read = await Task.detached(priority: .background) { Self.text(of: job) }.value
                 guard let self else { return }
                 guard let read, var entry = byPath[job.path], entry.modified == job.modified else { continue }
+                let hadText = entry.folded != nil
                 entry.text = read.text
                 entry.folded = read.folded
                 byPath[job.path] = entry
                 version += 1
+                // What search goes through stays as it was but for this PDF, rather than being made again for each one.
+                if madeLists?.version == version - 1 {
+                    madeLists?.version = version
+                    if !hadText { madeLists?.addText(job.path, modified: entry.modified ?? .distantPast) }
+                }
             }
             self?.pdfTask = nil
         }
@@ -295,6 +355,66 @@ public final class SearchIndex {
 
     // MARK: - Looking things up
 
+    /// What search goes through for every letter typed, made again only when files changed: every file's name, and
+    /// the notes and PDFs with text, newest first. Going through the index itself would copy every entry, text and
+    /// all, and sorting it by date every time took most of a second for a whole iCloud Drive.
+    private struct Lists {
+        struct File {
+            var foldedName: String
+            var isNote: Bool
+            var modified: Date
+            var path: String
+        }
+
+        var version: Int
+        var files: [File] = []
+        var newestWithText: [(modified: Date, path: String)] = []
+
+        mutating func addText(_ path: String, modified: Date) {
+            let index = newestWithText.firstIndex { $0.modified < modified } ?? newestWithText.count
+            newestWithText.insert((modified, path), at: index)
+        }
+    }
+
+    @ObservationIgnored private var madeLists: Lists?
+
+    private var lists: Lists {
+        if let madeLists, madeLists.version == version { return madeLists }
+        var lists = Lists(version: version)
+        lists.files.reserveCapacity(byPath.count)
+        for entry in byPath.values {
+            let modified = entry.modified ?? .distantPast
+            if entry.kind != .folder { lists.files.append(Lists.File(foldedName: entry.foldedName, isNote: entry.kind == .note, modified: modified, path: entry.path)) }
+            if entry.folded != nil { lists.newestWithText.append((modified, entry.path)) }
+        }
+        lists.newestWithText.sort { $0.modified > $1.modified }
+        madeLists = lists
+        return lists
+    }
+
+    /// The first few of many, in order, without sorting them all.
+    private struct Best<Item> {
+        let limit: Int
+        let isBefore: (Item, Item) -> Bool
+        private(set) var items: [Item] = []
+
+        init(_ limit: Int, by isBefore: @escaping (Item, Item) -> Bool) {
+            self.limit = limit
+            self.isBefore = isBefore
+        }
+
+        /// Whether `item` would be among them.
+        func takes(_ item: Item) -> Bool {
+            items.count < limit || items.last.map { isBefore(item, $0) } == true
+        }
+
+        mutating func add(_ item: Item) {
+            let index = items.firstIndex { isBefore(item, $0) } ?? items.count
+            items.insert(item, at: index)
+            if items.count > limit { items.removeLast() }
+        }
+    }
+
     public func entry(for url: URL) -> Entry? {
         _ = version
         return byPath[url.standardizedFileURL.path]
@@ -310,11 +430,7 @@ public final class SearchIndex {
         let pathPart = folded.contains("/") ? folded : nil
         let baseName = pathPart.map { String($0.split(separator: "/").last ?? "") } ?? folded
         _ = version
-        let candidates = byPath.values.filter { entry in
-            guard entry.kind != .folder else { return false }
-            let full = Self.fold(entry.url.lastPathComponent)
-            let matches = entry.kind == .note ? (entry.foldedName == baseName || full == baseName) : full == baseName
-            guard matches else { return false }
+        let candidates = (byName[baseName] ?? []).compactMap { byPath[$0] }.filter { entry in
             if let pathPart {
                 let path = Self.fold(entry.url.deletingPathExtension().path)
                 return path.hasSuffix("/" + pathPart) || Self.fold(entry.url.path).hasSuffix("/" + pathPart)
@@ -338,19 +454,23 @@ public final class SearchIndex {
     public func files(matching query: String, limit: Int = 8) -> [Entry] {
         let q = Self.fold(query.trimmingCharacters(in: .whitespaces))
         guard !q.isEmpty else { return [] }
-        var scored: [(Int, Entry)] = []
-        _ = version
-        for entry in byPath.values where entry.kind != .folder {
-            guard let score = Self.score(entry.foldedName, q), !isHidden(entry.url) else { continue }
-            var total = score
-            if entry.kind == .note { total += 5 }
-            scored.append((total, entry))
+        var best = Best<(score: Int, file: Lists.File)>(limit) { a, b in
+            if a.score != b.score { return a.score > b.score }
+            if a.file.modified != b.file.modified { return a.file.modified > b.file.modified }
+            return a.file.path < b.file.path
         }
-        return scored.sorted { a, b in
-            if a.0 != b.0 { return a.0 > b.0 }
-            if a.1.modified != b.1.modified { return (a.1.modified ?? .distantPast) > (b.1.modified ?? .distantPast) }
-            return a.1.path < b.1.path
-        }.prefix(limit).map(\.1)
+        for file in lists.files {
+            guard let score = Self.score(file.foldedName, q) else { continue }
+            let candidate = (score: score + (file.isNote ? 5 : 0), file: file)
+            if best.takes(candidate), !Self.isHidden(file.path, in: hiddenPaths) { best.add(candidate) }
+        }
+        return best.items.compactMap { byPath[$0.file.path] }
+    }
+
+    /// Every folder, in no particular order, hidden ones too: for Move To.
+    func allFolders() -> [(url: URL, name: String, path: String)] {
+        _ = folderVersion
+        return folderPaths.compactMap { path in byPath[path].map { ($0.url, $0.name, path) } }
     }
 
     public func folders(matching query: String, limit: Int = 12) -> [Entry] {
@@ -364,8 +484,12 @@ public final class SearchIndex {
 
     /// In a hidden folder, or one itself.
     func isHidden(_ url: URL) -> Bool {
+        Self.isHidden(url.path, in: hiddenPaths)
+    }
+
+    nonisolated static func isHidden(_ path: String, in hiddenPaths: [String]) -> Bool {
         guard !hiddenPaths.isEmpty else { return false }
-        let path = HiddenFolders.withoutPrivate(url.path)
+        let path = HiddenFolders.withoutPrivate(path)
         return hiddenPaths.contains { folder in
             let folder = HiddenFolders.withoutPrivate(folder)
             return path == folder || path.hasPrefix(folder + "/")
@@ -374,17 +498,33 @@ public final class SearchIndex {
 
     nonisolated static func score(_ name: String, _ query: String) -> Int? {
         if name == query { return 100 }
-        if name.hasPrefix(query) { return 80 }
-        if let range = name.range(of: query) {
-            let before = name[..<range.lowerBound].last
-            return before == " " || before == "-" || before == "_" ? 60 : 40
+        if query.isEmpty { return 80 }
+        if let offset = offset(of: query, in: name) {
+            guard offset > 0 else { return 80 }
+            let before = name.utf8[name.utf8.index(name.utf8.startIndex, offsetBy: offset - 1)]
+            return before == UInt8(ascii: " ") || before == UInt8(ascii: "-") || before == UInt8(ascii: "_") ? 60 : 40
         }
-        var index = name.startIndex
-        for character in query {
-            guard let found = name[index...].firstIndex(of: character) else { return nil }
-            index = name.index(after: found)
+        var letters = name.unicodeScalars.makeIterator()
+        for wanted in query.unicodeScalars {
+            while true {
+                guard let letter = letters.next() else { return nil }
+                if letter == wanted { break }
+            }
         }
         return 10
+    }
+
+    /// Where `query` is in `text`, in bytes. Both are folded alike, so their bytes match where their letters do; this
+    /// is far faster than String's own search, and it runs on every file for every letter typed.
+    nonisolated static func offset(of query: String, in text: String) -> Int? {
+        var text = text, query = query
+        return text.withUTF8 { text in
+            query.withUTF8 { query -> Int? in
+                guard !query.isEmpty, query.count <= text.count, let start = text.baseAddress,
+                      let found = memmem(start, text.count, query.baseAddress, query.count) else { return nil }
+                return UnsafeRawPointer(found) - UnsafeRawPointer(start)
+            }
+        }
     }
 
     /// Notes and PDFs that contain the query, with the line it is in.
@@ -392,9 +532,8 @@ public final class SearchIndex {
         let q = Self.fold(query.trimmingCharacters(in: .whitespacesAndNewlines))
         guard q.count >= 2 else { return [] }
         var hits: [TextHit] = []
-        _ = version
-        for entry in byPath.values.sorted(by: { ($0.modified ?? .distantPast) > ($1.modified ?? .distantPast) }) {
-            guard let folded = entry.folded, folded.contains(q), let text = entry.text, !isHidden(entry.url) else { continue }
+        for (_, path) in lists.newestWithText {
+            guard let entry = byPath[path], let folded = entry.folded, Self.offset(of: q, in: folded) != nil, let text = entry.text, !isHidden(entry.url) else { continue }
             hits.append(Self.hit(entry, text: text, query: query))
             if hits.count >= limit { break }
         }
@@ -452,8 +591,12 @@ public final class SearchIndex {
         var items: [LinkSuggestion] = []
         let candidates: [Entry]
         if query.trimmingCharacters(in: .whitespaces).isEmpty {
-            _ = version
-            candidates = byPath.values.filter { $0.kind == .note && $0.url != note && !isHidden($0.url) }.sorted { ($0.modified ?? .distantPast) > ($1.modified ?? .distantPast) }.prefix(6).map { $0 }
+            let current = note?.standardizedFileURL.path
+            var newest = Best<Lists.File>(6) { $0.modified > $1.modified }
+            for file in lists.files where file.isNote && file.path != current && newest.takes(file) && !Self.isHidden(file.path, in: hiddenPaths) {
+                newest.add(file)
+            }
+            candidates = newest.items.compactMap { byPath[$0.path] }
         } else {
             candidates = files(matching: query, limit: 7).filter { $0.url != note }
         }

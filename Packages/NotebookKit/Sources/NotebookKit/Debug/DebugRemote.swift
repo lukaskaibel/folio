@@ -28,6 +28,8 @@ enum DebugRemote {
     }
 
     private static var waitUntil: Date?
+    /// The menu `movetomenu more` opened.
+    private static weak var trackedMenu: NSMenu?
 
     private static func poll(_ path: String) {
         if let waitUntil, Date() < waitUntil { return }
@@ -82,6 +84,19 @@ enum DebugRemote {
             guard let workspace, let location = workspace.locations.first else { return }
             let url = argument.hasPrefix("/") ? URL(fileURLWithPath: argument) : location.url.appendingPathComponent(argument)
             workspace.open(url)
+        case "timeopen":
+            // timeopen <path>: opens a note and logs how long the main thread was busy with it, until the window had
+            // drawn it and the main thread was free again.
+            guard let workspace, let location = workspace.locations.first else { return }
+            let url = argument.hasPrefix("/") ? URL(fileURLWithPath: argument) : location.url.appendingPathComponent(argument)
+            let start = CACurrentMediaTime()
+            workspace.open(url)
+            let opened = CACurrentMediaTime()
+            let timer = Timer(timeInterval: 0.001, repeats: false) { _ in
+                let done = CACurrentMediaTime()
+                MainActor.assumeIsolated { log(String(format: "timeopen %@: open %.1f ms, until free %.1f ms", url.lastPathComponent, (opened - start) * 1000, (done - start) * 1000)) }
+            }
+            RunLoop.main.add(timer, forMode: .common)
         case "activate":
             window?.orderFront(nil)
         case "focus":
@@ -382,8 +397,9 @@ enum DebugRemote {
             // search <text>: what the suggestions menu lists for it.
             if let search = workspace?.search {
                 search.field.stringValue = argument
+                let start = CACurrentMediaTime()
                 let sections = search.sections(for: argument)
-                log("search \(argument): " + sections.map { "[\($0.title ?? "")] " + $0.items.map { $0.title + ($0.secondaryTitle.map { " (\($0))" } ?? "") }.joined(separator: " | ") }.joined(separator: " "))
+                log(String(format: "search %@ (%.1f ms): ", argument, (CACurrentMediaTime() - start) * 1000) + sections.map { "[\($0.title ?? "")] " + $0.items.map { $0.title + ($0.secondaryTitle.map { " (\($0))" } ?? "") }.joined(separator: " | ") }.joined(separator: " "))
             }
         case "searchfield":
             // searchfield: where the search field, its buttons and the text you type in it are, in the field's points.
@@ -423,6 +439,64 @@ enum DebugRemote {
                 log("movetargets: " + workspace.moveTargets(for: url).map { target in
                     "[\(target.location.name)] " + target.folders.map { String(repeating: "·", count: max(0, $0.depth)) + $0.name }.joined(separator: ", ")
                 }.joined(separator: " "))
+            }
+        case "movetomenu":
+            // movetomenu file|more|row <name> [> <folder>]: what Move To holds in the File menu, the toolbar's More menu
+            // or a sidebar row's menu once that menu opens, and with a folder, chooses it. More is opened for real (its
+            // menu shows for a moment); the File menu is told it opens, as AppKit tells it.
+            let bits = argument.components(separatedBy: " > ")
+            let which = bits[0], pick = bits.count > 1 ? bits[1] : nil
+            func report(_ menu: NSMenu) {
+                guard let item = menu.items.first(where: { $0.title == "Move To" }), let submenu = item.submenu else {
+                    log("movetomenu: no Move To in \(menu.items.map(\.title))"); return
+                }
+                let start = CACurrentMediaTime()
+                submenu.delegate?.menuNeedsUpdate?(submenu)
+                let titles = submenu.items.map { ($0.isEnabled ? "" : "~") + String(repeating: "·", count: $0.indentationLevel) + $0.title }
+                log(String(format: "movetomenu: %@ %d items in %.1f ms: ", String(describing: type(of: submenu)), titles.count, (CACurrentMediaTime() - start) * 1000) + titles.prefix(12).joined(separator: ", "))
+                if let pick, let index = submenu.items.firstIndex(where: { $0.title == pick && $0.isEnabled }) {
+                    submenu.performActionForItem(at: index)
+                    log("movetomenu: moved to \(pick), now \(workspace?.currentURL?.path ?? "nothing")")
+                }
+            }
+            if which == "file" {
+                guard let file = NSApp.mainMenu?.item(withTitle: "File")?.submenu, let main = NSApp.mainMenu else { break }
+                NotificationCenter.default.post(name: NSMenu.didBeginTrackingNotification, object: main)
+                file.delegate?.menuNeedsUpdate?(file)
+                report(file)
+                NotificationCenter.default.post(name: NSMenu.didEndTrackingNotification, object: main)
+            } else if which.hasPrefix("row "), let sidebar = workspace?.sidebar {
+                let name = String(which.dropFirst(4))
+                let outline = sidebar.outline
+                for row in 0..<outline.numberOfRows {
+                    guard let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView, cell.textField?.stringValue == name else { continue }
+                    let menu = NSMenu()
+                    sidebar.fill(menu, row: row)
+                    report(menu)
+                    break
+                }
+            } else {
+                guard let more = window?.toolbar?.items.first(where: { $0.label == "More" }), let view = more.view, let content = window?.contentView else {
+                    log("movetomenu: no More in \(window?.toolbar?.items.map(\.label) ?? [])"); break
+                }
+                let observer = NotificationCenter.default.addObserver(forName: NSMenu.didBeginTrackingNotification, object: nil, queue: nil) { notification in
+                    MainActor.assumeIsolated { trackedMenu = notification.object as? NSMenu }
+                    // Once the menu is up: report, then close it.
+                    let timer = Timer(timeInterval: 0.05, repeats: false) { _ in
+                        MainActor.assumeIsolated {
+                            guard let menu = trackedMenu else { return }
+                            report(menu)
+                            menu.cancelTracking()
+                        }
+                    }
+                    RunLoop.main.add(timer, forMode: .common)
+                }
+                // A click reaches the toolbar of a key window only; the app stays in the background.
+                window?.makeKey()
+                let frame = view.convert(view.bounds, to: nil)
+                click(at: CGPoint(x: frame.midX, y: content.bounds.height - frame.midY))
+                // SwiftUI opens the menu a moment later.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { NotificationCenter.default.removeObserver(observer) }
             }
         case "searchpick":
             // searchpick <n>: chooses the nth suggestion, counted over all sections.

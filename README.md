@@ -416,7 +416,7 @@ Packages/NotebookKit/
                              pictures, videos and Quick Look; what both share, such as the outline and search results
     UI/iOS/                  The iPhone's and iPad's screens: folders, the sidebar, the note, search and Settings
     Debug/                   The debug remotes and the sample notes (Debug builds only)
-  Tests/                     Parser, editor, merge, smoothness, drawing, reminder and app icon tests
+  Tests/                     Parser, editor, merge, smoothness, search index, drawing, reminder and app icon tests
 Config/                      Build settings, Info.plist and entitlements
 Design/                      The icon, the README pictures and the social preview
 Website/                     The website, published to GitHub Pages by .github/workflows/website.yml
@@ -466,7 +466,8 @@ such as `remind 2 Personal/Questions for Dr. Weber.md` (in two minutes) and `not
 `Debug/DebugReminders.swift`. In the Simulator the file is in the app's own folder (`-debugCommandFile
 ~/Documents/cmd`), where `xcrun simctl get_app_container` finds it, and `xcrun simctl io <device> screenshot` takes the
 pictures. `-NotebookSlowFolders 2` makes every folder take two seconds to read, as a slow iCloud might, to see that
-nothing waits for it, and `-NotebookSlowFiles 2` does the same for every note, PDF, picture and video you open. macOS
+nothing waits for it, and `-NotebookSlowFiles 2` does the same for every note, PDF, picture and video you open.
+`timeopen <note>` logs how long opening a note keeps the window busy, and `search <text>` how long search takes. macOS
 shows notifications only from an app in a lasting place, not from one in `/tmp`.
 
 Builds for TestFlight are made and uploaded with [fastlane](https://fastlane.tools), signed in with an App Store
