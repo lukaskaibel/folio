@@ -74,21 +74,21 @@ public final class FileNode: NSObject {
     /// What the sidebar sorts by: the file's name with its extension, a linked folder's own name.
     var sortName: String { isLinked ? name : url.lastPathComponent }
 
-    /// The folder's contents, read from disk the first time they are asked for.
+    /// The folder's contents, read from disk now if they haven't been yet. Only for what you just did yourself (a note
+    /// you made, a folder you renamed): everything else reads folders off the main thread, with `apply`.
     func loadedChildren() -> [FileNode] {
         if let children { return children }
-        let loaded = Self.read(url, parent: self)
-        children = loaded
-        return loaded
+        apply(Self.list(url, linked: linked))
+        return children ?? []
     }
 
     var hasLoadedChildren: Bool { children != nil }
 
     /// The folder's contents as the sidebar and the lists show them: only notes and folders if you chose so, and
-    /// folders on top or sorted in with the files.
+    /// folders on top or sorted in with the files. Nothing until the folder has been read.
     func visibleChildren() -> [FileNode] {
         let settings = NotebookSettings.shared
-        var children = loadedChildren()
+        var children = children ?? []
         if settings.showsOnlyNotes { children = children.filter { $0.isFolder || $0.kind == .note } }
         if !settings.foldersFirst {
             children.sort { $0.sortName.localizedStandardCompare($1.sortName) == .orderedAscending }
@@ -99,35 +99,77 @@ public final class FileNode: NSObject {
     /// Reads the folder again, keeping the nodes of files that are still there (so open folders stay open).
     @discardableResult
     func reload() -> Bool {
-        guard isFolder, let old = children else { return false }
-        let fresh = Self.read(url, parent: self)
+        guard isFolder, children != nil else { return false }
+        return apply(Self.list(url, linked: linked))
+    }
+
+    /// Takes in what reading the folder found, keeping the nodes of files that are still there. Says whether anything
+    /// changed, which a folder read for the first time always has.
+    @discardableResult
+    func apply(_ listing: [Listing]) -> Bool {
+        guard let old = children else {
+            children = listing.map { FileNode($0, parent: self) }
+            return true
+        }
         var byPath: [String: FileNode] = [:]
         for node in old { byPath[node.url.path] = node }
-        var changed = fresh.count != old.count
-        let merged = fresh.map { node -> FileNode in
-            if let existing = byPath[node.url.path], existing.kind == node.kind, existing.name == node.name {
-                if existing.isInCloud != node.isInCloud || existing.modified != node.modified { changed = true }
-                existing.isInCloud = node.isInCloud
-                existing.modified = node.modified
+        var changed = listing.count != old.count
+        let merged = listing.map { item -> FileNode in
+            let name = item.linkedName ?? Self.name(of: item.url, kind: item.kind)
+            if let existing = byPath[item.url.path], existing.kind == item.kind, existing.name == name {
+                if existing.isInCloud != item.isInCloud || existing.modified != item.modified { changed = true }
+                existing.isInCloud = item.isInCloud
+                existing.modified = item.modified
                 return existing
             }
             changed = true
-            return node
+            return FileNode(item, parent: self)
         }
         if !changed { changed = zip(merged, old).contains { $0 !== $1 } }
         children = merged
         return changed
     }
 
+    private convenience init(_ item: Listing, parent: FileNode) {
+        self.init(url: item.url, kind: item.kind, isInCloud: item.isInCloud, modified: item.modified, parent: parent, linkedAs: item.linkedName)
+    }
+
+    private static func name(of url: URL, kind: FileKind) -> String {
+        kind == .note ? url.deletingPathExtension().lastPathComponent : url.lastPathComponent
+    }
+
     func child(named name: String) -> FileNode? {
         loadedChildren().first { !$0.isLinked && $0.url.lastPathComponent == name }
     }
 
-    static let keys: [URLResourceKey] = [.isDirectoryKey, .isPackageKey, .isHiddenKey, .ubiquitousItemDownloadingStatusKey, .contentModificationDateKey]
+    // MARK: - Reading folders
 
-    static func read(_ folder: URL, parent: FileNode?) -> [FileNode] {
+    /// One file as reading its folder found it: what a node is made from, on the main thread, afterwards.
+    struct Listing: Sendable, Equatable {
+        var url: URL
+        var kind: FileKind
+        var isInCloud = false
+        var modified: Date?
+        /// For a folder from elsewhere shown in a location: its name there.
+        var linkedName: String?
+    }
+
+    nonisolated static let keys: [URLResourceKey] = [.isDirectoryKey, .isPackageKey, .isHiddenKey, .ubiquitousItemDownloadingStatusKey, .contentModificationDateKey]
+
+    /// Reads a folder: its files and folders in the sidebar's order, with `linked` among them. This can take a while
+    /// (iCloud Drive may have to ask the server first), so apart from what you just did yourself it runs off the main
+    /// thread.
+    nonisolated static func list(_ folder: URL, linked: [LinkedFolder] = []) -> [Listing] {
+        #if DEBUG
+        // A slow disk or a slow iCloud, for trying out that nothing waits for it. Reads on the main thread (what you
+        // just did yourself) aren't slowed down but logged, to find any that shouldn't be there.
+        let delay = UserDefaults.standard.double(forKey: "NotebookSlowFolders")
+        if delay > 0 {
+            if Thread.isMainThread { NSLog("Notebook: read %@ on the main thread", folder.path) } else { Thread.sleep(forTimeInterval: delay) }
+        }
+        #endif
         let contents = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: keys, options: [])) ?? []
-        var nodes: [FileNode] = []
+        var items: [(listing: Listing, sortName: String)] = []
         for item in contents {
             var url = item
             var name = item.lastPathComponent
@@ -144,15 +186,16 @@ public final class FileNode: NSObject {
             if values?.isHidden == true, !inCloud { continue }
             let isDirectory = (values?.isDirectory ?? false) && !(values?.isPackage ?? false)
             if let status = values?.ubiquitousItemDownloadingStatus, status == .notDownloaded { inCloud = true }
-            nodes.append(FileNode(url: url, kind: FileKind(url: url, isDirectory: isDirectory), isInCloud: inCloud, modified: values?.contentModificationDate, parent: parent))
+            items.append((Listing(url: url, kind: FileKind(url: url, isDirectory: isDirectory), isInCloud: inCloud, modified: values?.contentModificationDate),
+                          url.lastPathComponent))
         }
-        for folder in parent?.linked ?? [] {
-            nodes.append(FileNode(url: folder.url, kind: .folder, parent: parent, linkedAs: folder.name))
+        for folder in linked {
+            items.append((Listing(url: folder.url, kind: .folder, linkedName: folder.name), folder.name))
         }
-        nodes.sort { a, b in
-            if a.isFolder != b.isFolder { return a.isFolder }
+        items.sort { a, b in
+            if (a.listing.kind == .folder) != (b.listing.kind == .folder) { return a.listing.kind == .folder }
             return a.sortName.localizedStandardCompare(b.sortName) == .orderedAscending
         }
-        return nodes
+        return items.map(\.listing)
     }
 }
