@@ -111,8 +111,8 @@ struct PhoneBrowser: View {
     /// The folders from the top of a location down to the one a file is in, below the location itself, whose
     /// folders the first screen shows.
     private func folders(to url: URL) -> [Page] {
-        guard let found = workspace.nodes(to: url) else { return [] }
-        return found.nodes.dropFirst().filter(\.isFolder).map { Page(url: $0.url, isFolder: true) }
+        guard let found = workspace.folders(to: url) else { return [] }
+        return found.folders.dropFirst().map { Page(url: $0, isFolder: true) }
     }
 }
 
@@ -154,7 +154,7 @@ struct HomeScreen: View {
                                 .fileDragAndDrop(node.url, isFolder: node.isFolder, workspace: workspace)
                                 .contextMenu { FileActions(workspace: workspace, url: node.url) { newFolderIn = $0 } }
                         }
-                        if children.isEmpty {
+                        if children.isEmpty, workspace.isRead(location.url) {
                             Text("Empty").foregroundStyle(.secondary)
                         }
                     } header: {
@@ -266,14 +266,21 @@ struct FolderScreen: View {
                 }
             }
         }
+        // Grey, empty or not: a folder still being read doesn't turn from white to grey when its files come in.
+        .scrollContentBackground(.hidden)
+        .background(Color(.systemGroupedBackground))
         .overlay {
             if children.isEmpty, !isSearching {
-                ContentUnavailableView {
-                    Label("No Notes", systemImage: "doc.text")
-                } description: {
-                    Text("Notes and files you put in this folder show here.")
-                } actions: {
-                    Button("New Note") { workspace.newNote(in: page.url) }
+                if workspace.isRead(page.url) {
+                    ContentUnavailableView {
+                        Label("No Notes", systemImage: "doc.text")
+                    } description: {
+                        Text("Notes and files you put in this folder show here.")
+                    } actions: {
+                        Button("New Note") { workspace.newNote(in: page.url) }
+                    }
+                } else {
+                    FolderLoadingIndicator()
                 }
             }
         }

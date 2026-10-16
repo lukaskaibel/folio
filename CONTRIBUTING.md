@@ -31,6 +31,9 @@ Every pull request is reviewed and merged by the maintainer; nothing lands on `m
   the Trash.
 - **Nothing jumps.** Text never moves under a selection or the mouse, and scrolling never jumps. If you touch the
   editor's styling or layout, type in a long note and scroll it before and after; `EditorSmoothnessTests` has to pass.
+- **Nothing waits.** The window never stops for the disk or for iCloud: folders, bookmarks and the search index are
+  read off the main thread (`Files/FolderReader.swift`, `Files/LocationSurvey.swift`, `Index/SearchIndex.swift`), and
+  what the main thread does with the result is only the part that changed. Try a change with `-NotebookSlowFolders 2`.
 - **Markdown is a file format, not the interface.** Pictures, links and embeds are objects; marks show only next to
   the caret.
 - **Use what the Mac has.** System components and layout (split view, source list, inspector, toolbar, search field,

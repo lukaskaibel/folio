@@ -93,6 +93,14 @@ public final class Workspace: NSObject {
     /// The last file or folder renamed or moved, so screens showing it follow it to its new place.
     private(set) var relocation: (from: URL, to: URL, id: UUID)?
     @ObservationIgnored private var watcher: FileWatcher?
+    /// Reads folders off the main thread.
+    @ObservationIgnored let reader = FolderReader()
+    /// Counts the lookups of the locations (`survey`), and what waits until the newest is done.
+    @ObservationIgnored private var surveys = 0
+    @ObservationIgnored private var surveysDone = 0
+    @ObservationIgnored private var afterSurvey: [() -> Void] = []
+    /// The file to show in the sidebar once the folders down to it have been read.
+    @ObservationIgnored private var revealing: URL?
     @ObservationIgnored private var pendingFolders = Set<String>()
     @ObservationIgnored private var refreshScheduled = false
     /// `.assets` files the open note used, so the ones it drops can go to the Trash when you leave it.
@@ -142,41 +150,117 @@ public final class Workspace: NSObject {
         }
         #endif
         hidden.onChange = { [weak self] in self?.hiddenFoldersChanged() }
-        locationsChanged()
-        if !temporaryLocations, let last = UserDefaults.standard.string(forKey: "lastOpened"), FileManager.default.fileExists(atPath: last) {
+        let last = temporaryLocations ? nil : UserDefaults.standard.string(forKey: "lastOpened")
+        locationsChanged(resolving: true, reading: last.map { [$0] } ?? [])
+        if let last, FileManager.default.fileExists(atPath: last) {
             open(URL(fileURLWithPath: last))
         }
     }
 
-    private func locationsChanged() {
-        for index in locations.indices { locations[index].findLinkedFolders() }
+    /// Shows the locations at once, by name and with the files already read, and looks at them again off the main
+    /// thread (`survey`).
+    private func locationsChanged(resolving: Bool = false, reading files: [String] = [], new: UUID? = nil) {
         var fresh: [UUID: FileNode] = [:]
         for location in locations {
-            let root = roots[location.id] ?? FileNode(url: location.url, kind: .folder, parent: nil)
-            if root.linked != location.linked {
-                root.linked = location.linked
-                root.reload()
-            }
-            fresh[location.id] = root
+            fresh[location.id] = roots[location.id] ?? FileNode(url: location.url, kind: .folder, parent: nil)
         }
         roots = fresh
+        // First, so the sidebar doesn't read a new location's top itself, without its linked folders.
+        survey(resolving: resolving, reading: files, new: new)
+        sidebarReloadAll()
+    }
+
+    /// Looks at every location off the main thread: where a saved one is now (`resolving`), its bookmark if it is
+    /// `new`, iCloud Drive's linked folders, and the files at its top, with the folders that were open and those down
+    /// to `files` for a location not read yet. Then shows it all at once, starts watching and builds the index. Reading
+    /// folders meanwhile waits for it, so nothing is read twice or without its linked folders.
+    private func survey(resolving: Bool, reading files: [String], new: UUID?) {
+        surveys += 1
+        let count = surveys
+        var folders = UserDefaults.standard.stringArray(forKey: "expandedFolders") ?? []
+        for file in files {
+            var folder = URL(fileURLWithPath: file).deletingLastPathComponent()
+            while folder.pathComponents.count > 1 {
+                folders.append(folder.path)
+                folder = folder.deletingLastPathComponent()
+            }
+        }
+        let jobs = locations.map { location in
+            LocationSurvey.Job(id: location.id, url: location.url, bookmark: resolving ? location.bookmark : nil, isNew: location.id == new,
+                               linked: location.linked, isRead: roots[location.id]?.hasLoadedChildren ?? false, folders: folders)
+        }
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let surveys = jobs.map(LocationSurvey.run)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.surveyed(surveys, count: count) }
+            }
+        }
+    }
+
+    private func surveyed(_ surveys: [LocationSurvey], count: Int) {
+        var changed: [FileNode] = []
+        var reloadsAll = false
+        var saves = false
+        for survey in surveys {
+            guard let index = locations.firstIndex(where: { $0.id == survey.id }) else { continue }
+            if survey.url.path != locations[index].path {
+                // Moved since last time: the bookmark found it.
+                locations[index].path = survey.url.path
+                roots[survey.id] = FileNode(url: locations[index].url, kind: .folder, parent: nil)
+                reloadsAll = true
+                saves = true
+            }
+            if let bookmark = survey.bookmark {
+                locations[index].bookmark = bookmark
+                saves = true
+            }
+            if let name = survey.name, name != locations[index].name {
+                locations[index].name = name
+                saves = true
+                reloadsAll = true
+            }
+            locations[index].linked = survey.linked
+            guard let root = roots[survey.id] else { continue }
+            root.linked = survey.linked
+            if let top = survey.top, root.apply(top) { changed.append(root) }
+            for folder in survey.folders {
+                if let node = node(for: URL(fileURLWithPath: folder.path), reading: false), node.isFolder, node.apply(folder.listing) {
+                    changed.append(node)
+                }
+            }
+        }
+        if saves, !temporaryLocations { LocationStore.save(locations) }
+        // An older lookup's files are as good as any, but only the newest knows every location.
+        surveysDone = max(surveysDone, count)
+        if reloadsAll { sidebarReloadAll() } else if !changed.isEmpty { sidebarReload(changed) }
+        guard count == self.surveys else { return }
         watcher = FileWatcher(paths: locations.flatMap { $0.folders.map(\.url.path) }) { [weak self] paths in
             MainActor.assumeIsolated { self?.filesChanged(paths) }
         }
         updateHiddenPaths()
         index.rebuild(locations)
-        sidebarReloadAll()
+        let waiting = afterSurvey
+        afterSurvey = []
+        waiting.forEach { $0() }
     }
 
+    /// True while the locations are being looked up (`survey`).
+    var isSurveying: Bool { surveysDone < surveys }
+    /// True once they have been, and their tops read.
+    var hasReadLocations: Bool { surveysDone > 0 && !isSurveying }
+
+    /// Adds a folder to the sidebar at once, by its name; its files show a moment later, read off the main thread
+    /// like everything inside it, so even all of iCloud Drive never makes you wait.
     public func addLocation(_ url: URL) {
         let url = url.standardizedFileURL
         guard !locations.contains(where: { $0.path == url.path }) else { return }
-        locations.append(LocationStore.make(for: url))
+        let location = LocationStore.make(for: url)
+        locations.append(location)
         if !temporaryLocations { LocationStore.save(locations) }
-        locationsChanged()
+        locationsChanged(new: location.id)
         #if os(macOS)
-        // At the end of a long sidebar it would be out of sight.
-        sidebar?.reveal(url, select: false)
+        // At the end of a long sidebar it would be out of sight: once its files show, it scrolls into view.
+        reveal(url, select: false)
         #endif
     }
 
@@ -267,10 +351,91 @@ public final class Workspace: NSObject {
         return (location, nodes, true)
     }
 
-    /// The node for a file, reading folders on the way to it.
-    func node(for url: URL) -> FileNode? {
-        guard let found = nodes(to: url), found.complete else { return nil }
+    /// The node for a file: reading folders on the way to it, or with `reading` false only if they have been read.
+    func node(for url: URL, reading: Bool = true) -> FileNode? {
+        guard let found = nodes(to: url, reading: reading), found.complete else { return nil }
         return found.nodes.last
+    }
+
+    /// The folders from a location's top down to the one a file is in, worked out from its address alone.
+    func folders(to url: URL) -> (location: Location, folders: [URL])? {
+        let path = url.standardizedFileURL.path
+        guard let location = location(containing: url), let folder = location.folder(containing: path) else { return nil }
+        guard path != location.url.path else { return (location, []) }
+        var folders = [location.url]
+        if folder.linked != nil, path != folder.url.path { folders.append(folder.url) }
+        var current = folder.url
+        for component in path.dropFirst(folder.url.path.count).split(separator: "/").dropLast() {
+            current = current.appendingPathComponent(String(component), isDirectory: true)
+            folders.append(current)
+        }
+        return (location, folders)
+    }
+
+    // MARK: - Reading folders
+
+    /// Reads folders off the main thread and shows what they hold: those not read yet, or with `again` (files changed
+    /// in them) all of them. A folder already waiting to be read ahead of time is read next instead.
+    func read(_ nodes: [FileNode], again: Bool = false, ahead: Bool = false) {
+        guard !isSurveying else {
+            afterSurvey.append { [weak self] in self?.read(nodes, again: again, ahead: ahead) }
+            return
+        }
+        var folders: [FileNode] = []
+        for node in nodes where node.isFolder && (again || !node.hasLoadedChildren) {
+            if !again, reader.isReading(node.url) {
+                if !ahead { reader.hurry(node.url) }
+            } else {
+                folders.append(node)
+            }
+        }
+        guard !folders.isEmpty else { return }
+        read(folders.map { FolderReader.Request(url: $0.url, linked: $0.linked) }, ahead: ahead, then: nil)
+    }
+
+    /// Reads a folder's contents ahead of time, after everything else, so they are there when you open it.
+    func prefetch(_ node: FileNode) {
+        guard node.isFolder, !node.hasLoadedChildren else { return }
+        read([node], ahead: true)
+    }
+
+    func prefetch(_ folder: URL) {
+        if let node = node(for: folder, reading: false) { prefetch(node) }
+    }
+
+    /// Reads the folders down to a file that haven't been read yet (with the file itself, if it is a folder and
+    /// `including`), then does `done`: at once when there is nothing to read. Without `done`, folders already being
+    /// read are left to that.
+    func readFolders(to url: URL, including: Bool = false, then done: (() -> Void)? = nil) {
+        guard !isSurveying else {
+            afterSurvey.append { [weak self] in self?.readFolders(to: url, including: including, then: done) }
+            return
+        }
+        guard let found = folders(to: url) else { done?(); return }
+        var folders = found.folders
+        if including { folders.append(url.standardizedFileURL) }
+        let missing = folders.filter { node(for: $0, reading: false)?.hasLoadedChildren != true && (done != nil || !reader.isReading($0)) }
+        guard !missing.isEmpty else { done?(); return }
+        let root = roots[found.location.id]
+        read(missing.map { FolderReader.Request(url: $0, linked: $0 == root?.url ? root?.linked ?? [] : []) }, then: done)
+    }
+
+    private func read(_ requests: [FolderReader.Request], ahead: Bool = false, then done: (() -> Void)?) {
+        reader.read(requests, ahead: ahead) { [weak self] results in
+            guard let self else { return }
+            var changed: [FileNode] = []
+            for result in results {
+                guard let listing = result.listing, let node = node(for: URL(fileURLWithPath: result.path), reading: false), node.isFolder else { continue }
+                if node.apply(listing) { changed.append(node) }
+            }
+            if !changed.isEmpty { sidebarReload(changed) }
+            done?()
+        }
+    }
+
+    /// Whether a folder's contents have been read, for lists that say "Empty" only when it is.
+    func hasRead(_ folder: URL) -> Bool {
+        node(for: folder, reading: false)?.hasLoadedChildren ?? false
     }
 
     // MARK: - Files changing
@@ -288,6 +453,8 @@ public final class Workspace: NSObject {
         }
     }
 
+    /// Reads the folders where files changed again, off the main thread: iCloud changes thousands of files while it
+    /// syncs, and the sidebar and search follow without the window waiting.
     private func applyFileChanges() {
         refreshScheduled = false
         let folders = pendingFolders
@@ -296,13 +463,11 @@ public final class Workspace: NSObject {
         var indexFolders: [URL] = []
         for path in folders {
             let url = URL(fileURLWithPath: path)
-            var isDirectory: ObjCBool = false
-            guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue else { continue }
             if url.lastPathComponent == ".assets" { continue }
             indexFolders.append(url)
-            if let node = existingNode(for: url), node.hasLoadedChildren, node.reload() { changed.append(node) }
+            if let node = existingNode(for: url), node.isFolder, node.hasLoadedChildren { changed.append(node) }
         }
-        if !changed.isEmpty { sidebarReload(changed) }
+        read(changed, again: true)
         index.refresh(folders: indexFolders, locations: locations)
         editor.refreshLinks()
         if let current = currentURL, !FileManager.default.fileExists(atPath: current.path), note == nil {
@@ -422,16 +587,15 @@ public final class Workspace: NSObject {
     /// down (`thoroughly`) reads every folder for search again too.
     public func refresh(thoroughly: Bool = false) {
         guard isStarted, !locations.isEmpty else { return }
-        var folders: [URL] = []
-        var changed: [FileNode] = []
+        var loaded: [FileNode] = []
         func visit(_ node: FileNode) {
-            guard node.hasLoadedChildren else { return }
-            folders.append(node.url)
-            if node.reload() { changed.append(node) }
-            node.loadedChildren().filter(\.isFolder).forEach(visit)
+            guard let children = node.children else { return }
+            loaded.append(node)
+            children.filter(\.isFolder).forEach(visit)
         }
         roots.values.forEach(visit)
-        if !changed.isEmpty { sidebarReload(changed) }
+        let folders = loaded.map(\.url)
+        read(loaded, again: true)
         if thoroughly { index.rebuild(locations) } else { index.refresh(folders: folders, locations: locations) }
         editor.refreshLinks()
     }
@@ -610,10 +774,11 @@ public final class Workspace: NSObject {
         guard let parent = parent ?? selectedFolder ?? currentURL?.deletingLastPathComponent() ?? locations.first?.url,
               let url = FileOperations.createFolder(in: parent, name: name.map(FileOperations.fileName(from:)) ?? "New Folder") else { return nil }
         refreshNow(parent)
-        reveal(url, select: true)
-        #if os(macOS)
-        sidebar?.beginRenaming(url)
-        #endif
+        reveal(url, select: true) { [weak self] in
+            #if os(macOS)
+            self?.sidebar?.beginRenaming(url)
+            #endif
+        }
         return url
     }
 
@@ -839,13 +1004,18 @@ public final class Workspace: NSObject {
         #endif
     }
 
-    /// Opens the folders down to a file in the sidebar, and selects it there.
-    func reveal(_ url: URL, select: Bool) {
-        #if os(macOS)
-        sidebar?.reveal(url, select: select)
-        #else
-        revealRequest = (url, select, UUID())
-        #endif
+    /// Opens the folders down to a file in the sidebar, and selects it there: once they have been read, then `done`.
+    func reveal(_ url: URL, select: Bool, then done: (() -> Void)? = nil) {
+        revealing = url
+        readFolders(to: url) { [weak self] in
+            guard let self, self.revealing == url else { return }
+            #if os(macOS)
+            sidebar?.reveal(url, select: select)
+            #else
+            revealRequest = (url, select, UUID())
+            #endif
+            done?()
+        }
     }
 
     func sidebarReloadAll() {
