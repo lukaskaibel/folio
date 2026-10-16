@@ -17,6 +17,12 @@ final class DrawingTests: XCTestCase {
         h.editor.drawingObjects().map(\.picture)
     }
 
+    /// Drawings are written in the background: waits until they are, and the main thread has heard.
+    private func written(_ h: EditorHarness) {
+        DrawingFile.writing.sync {}
+        h.settle(0.05)
+    }
+
     // MARK: - Files
 
     func testStrokesAndPictureAreWrittenTogether() throws {
@@ -31,7 +37,6 @@ final class DrawingTests: XCTestCase {
         let read = try XCTUnwrap(DrawingFile.read(picture: picture))
         XCTAssertEqual(read.size, CGSize(width: 320, height: 160))
         XCTAssertEqual(read.drawing.strokes.count, 1)
-        XCTAssertEqual(DrawingFile.readSize(picture), CGSize(width: 320, height: 160))
 
         // The picture: two pixels a point, marked as such, on white so it reads in dark mode elsewhere too.
         let source = try XCTUnwrap(CGImageSourceCreateWithURL(picture as CFURL, nil))
@@ -68,8 +73,7 @@ final class DrawingTests: XCTestCase {
         let picture = try XCTUnwrap(drawings(in: h).first)
         XCTAssertEqual(h.text, "Hello world\n![Drawing](\(EditorController.markdownPath(picture.lastPathComponent)))\nSecond line")
         XCTAssertTrue(picture.lastPathComponent.hasPrefix("Kyoto trip drawing "), "named after the note, as pasted pictures are")
-        XCTAssertTrue(FileManager.default.fileExists(atPath: picture.path))
-        XCTAssertTrue(DrawingFile.isDrawing(picture))
+        XCTAssertTrue(DrawingFile.isDrawing(picture), "its strokes are there before the note points at it")
         let file = try XCTUnwrap(DrawingFile.read(picture: picture))
         XCTAssertEqual(file.size.width, floor(h.editor.container.size.width - 2), "as wide as the text")
 
@@ -136,6 +140,7 @@ final class DrawingTests: XCTestCase {
         canvas.addStroke(through: [CGPoint(x: 20, y: 20), CGPoint(x: 120, y: 60)], ink: PKInk(.pen), width: 3)
         XCTAssertTrue(canvas.hasUnsavedChanges)
         h.editor.endDrawing()
+        written(h)
 
         let file = try XCTUnwrap(DrawingFile.read(picture: picture))
         XCTAssertEqual(file.drawing.strokes.count, 1)
@@ -143,6 +148,7 @@ final class DrawingTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(file.size.height, EditorController.drawingMinimumHeight)
         XCTAssertEqual(ImageStore.shared.size(of: picture)?.height, file.size.height, "the picture is made again")
         XCTAssertTrue(h.text.contains("![Drawing]("), "a drawing with strokes stays")
+        XCTAssertNil(DrawingStore.shared.liveRevision(of: picture), "once written, the files count again")
 
         // In the text again, the drawing is drawn there, at its new height.
         h.settle()
@@ -306,6 +312,25 @@ final class DrawingTests: XCTestCase {
         XCTAssertTrue(h.editor.drawingSession?.created.isEmpty ?? false, "no new drawing")
         h.editor.endDrawing()
         XCTAssertEqual(h.text, "Before\n![Drawing](.assets/Map.png)\nAfter", "a drawing that was there stays, drawn in or not")
+    }
+
+    func testADrawingNotReadYetOpensOnceItsStrokesAreThere() throws {
+        let h = EditorHarness("Before\n")
+        let picture = h.folder.appendingPathComponent(".assets/Late \(UUID().uuidString).png")
+        XCTAssertTrue(DrawingFile(drawing: PKDrawing(strokes: [stroke([CGPoint(x: 10, y: 10), CGPoint(x: 300, y: 150)])]), size: CGSize(width: 320, height: 160)).write(picture: picture))
+        h.editor.load(text: "Before\n![Drawing](\(EditorController.markdownPath(picture.lastPathComponent)))\nAfter", folder: h.folder, title: "Kyoto trip", meta: "")
+        XCTAssertNil(DrawingStore.shared.file(for: picture), "laid out from the picture's size, without reading the strokes")
+        let index = try XCTUnwrap(h.editor.drawingObjects().first?.index)
+        let rect = try XCTUnwrap(h.editor.layoutManager.blockObjectRect(at: index, origin: h.textView.textContainerOrigin))
+        XCTAssertEqual(rect.height, (160 * rect.width / 320).rounded(), accuracy: 1)
+
+        h.editor.beginDrawing(in: try XCTUnwrap(drawings(in: h).first))
+        XCTAssertTrue(h.editor.isDrawing)
+        for _ in 0..<40 where h.editor.drawingSession?.canvases.isEmpty ?? true { h.settle(0.05) }
+        let canvas = try XCTUnwrap(h.editor.drawingSession?.canvases.values.first, "the strokes were read in the background")
+        XCTAssertEqual(canvas.file.drawing.strokes.count, 1)
+        XCTAssertTrue(h.window.firstResponder === canvas)
+        XCTAssertEqual(canvas.frame, rect)
     }
 
     func testDrawingsInDarkModeAreDrawnLight() throws {

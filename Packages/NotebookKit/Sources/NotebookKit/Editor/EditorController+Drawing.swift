@@ -46,7 +46,8 @@ extension EditorController {
 
     /// Starts drawing mode: in `picture`, in the drawing at the caret, or in a new drawing put in there.
     public func beginDrawing(in picture: URL? = nil) {
-        guard !isDrawing, !isLoading, assetsFolder != nil else { return }
+        // Not while the note is between screens: the canvases and the tools need it on one.
+        guard !isDrawing, !isLoading, isInWindow, assetsFolder != nil else { return }
         closeSuggestions()
         let session = DrawingSession()
         var target = picture ?? drawingAtCaret()
@@ -71,13 +72,17 @@ extension EditorController {
     public func endDrawing(keeping anchor: Int? = nil) {
         guard let session = drawingSession else { return }
         session.saveWork?.cancel()
-        for canvas in session.canvases.values where canvas.isEdited { trim(canvas) }
-        saveDrawings(waiting: true)
         let empty = session.created.filter { picture, _ in session.canvases[picture]?.file.drawing.strokes.isEmpty ?? true }
         let dark = isDarkAppearance
         for (picture, canvas) in session.canvases {
-            DrawingStore.shared.setLive(nil, for: picture)
-            DrawingStore.shared.prepare(picture, file: canvas.file, width: canvas.frame.width, dark: dark)
+            if empty[picture] == nil {
+                if canvas.isEdited { trim(canvas) }
+                if canvas.hasUnsavedChanges { save(canvas) }
+                DrawingStore.shared.prepare(picture, width: canvas.frame.width, dark: dark)
+            } else {
+                DrawingStore.shared.close(picture)
+            }
+            DrawingStore.shared.setOpen(false, picture)
         }
         drawingSession = nil
         stopDrawingInput(session)
@@ -113,10 +118,11 @@ extension EditorController {
         }
     }
 
-    /// Writes what was drawn now: the app is going to the background or quitting.
-    public func saveDrawingsNow() {
+    /// Writes what was drawn now: the app is going to the background, or (`waiting` until it is written) quitting.
+    public func saveDrawingsNow(waiting: Bool = false) {
         drawingSession?.saveWork?.cancel()
-        saveDrawings(waiting: true)
+        saveDrawings()
+        if waiting { DrawingFile.writing.sync {} }
     }
 
     func showsCanvas(for picture: URL) -> Bool {
@@ -146,7 +152,7 @@ extension EditorController {
     /// The drawing on the caret's line, or selected, while you are in the text.
     func drawingAtCaret() -> URL? {
         let selection = self.selection
-        guard isFocused || selection.length > 0, selection.location <= storage.length else { return nil }
+        guard isFocused && caretWasPlaced || selection.length > 0, selection.location <= storage.length else { return nil }
         let line = nsText.lineRange(for: NSRange(location: selection.location, length: 0))
         return drawingObjects().first { NSLocationInRange($0.index, line) }?.picture
     }
@@ -166,7 +172,11 @@ extension EditorController {
         guard let picture = newDrawingURL() else { return nil }
         let width = floor(max(40, container.size.width - 2))
         let height = min(max(visibleRect.height * 0.42, 220), 420).rounded()
-        guard DrawingFile(size: CGSize(width: width, height: height)).write(picture: picture) else { return nil }
+        // The strokes make the picture a drawing, so they are there before the note points at it; the picture comes
+        // with the first save.
+        let file = DrawingFile(size: CGSize(width: width, height: height))
+        guard file.writeStrokes(picture: picture) else { return nil }
+        DrawingStore.shared.setLive(file, for: picture)
         let markdown = "![Drawing](\(Self.markdownPath(picture.lastPathComponent)))"
         let caret = isFocused && caretWasPlaced ? min(selection.location, storage.length) : storage.length
         let line = nsText.lineRange(for: NSRange(location: caret, length: 0))
@@ -242,13 +252,20 @@ extension EditorController {
             let canvas: DrawingCanvas
             if let existing = session.canvases[picture] {
                 canvas = existing
-            } else {
-                guard let file = DrawingFile.read(picture: picture) else { continue }
+            } else if let file = DrawingStore.shared.file(for: picture) {
                 canvas = DrawingCanvas(picture: picture, file: file, editor: self)
                 session.canvases[picture] = canvas
                 session.bottoms[picture] = file.drawing.bottom
-                DrawingStore.shared.setLive(file, for: picture)
+                DrawingStore.shared.setOpen(true, picture)
                 attachCanvas(canvas)
+            } else {
+                // Its strokes come from the disk, or from iCloud, in the background; the canvas once they are here.
+                DrawingStore.shared.read(picture) { [weak self, weak session] file in
+                    guard let self, let session, file != nil, self.drawingSession === session else { return }
+                    self.updateDrawingCanvases()
+                    if session.focused == picture { self.focusCanvas(picture) }
+                }
+                continue
             }
             canvas.place(in: rect)
         }
@@ -256,7 +273,7 @@ extension EditorController {
             if canvas.hasUnsavedChanges { save(canvas) }
             detachCanvas(canvas)
             session.canvases[picture] = nil
-            DrawingStore.shared.setLive(nil, for: picture)
+            DrawingStore.shared.setOpen(false, picture)
         }
     }
 
@@ -331,22 +348,36 @@ extension EditorController {
     private func scheduleDrawingSave() {
         guard let session = drawingSession else { return }
         session.saveWork?.cancel()
-        let work = DispatchWorkItem { [weak self] in self?.saveDrawings(waiting: false) }
+        let work = DispatchWorkItem { [weak self] in self?.saveDrawings() }
         session.saveWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
     }
 
-    /// Writes the drawings that changed, in the background; `waiting` until they are written.
-    private func saveDrawings(waiting: Bool) {
+    /// Writes the drawings that changed, in the background.
+    private func saveDrawings() {
         guard let session = drawingSession else { return }
         for canvas in session.canvases.values where canvas.hasUnsavedChanges { save(canvas) }
-        if waiting { DrawingFile.writing.sync {} }
     }
 
     private func save(_ canvas: DrawingCanvas) {
         canvas.hasUnsavedChanges = false
         let file = canvas.file, picture = canvas.picture
-        DrawingFile.writing.async { file.write(picture: picture) }
+        DrawingStore.shared.setLive(file, for: picture)
+        guard let revision = DrawingStore.shared.liveRevision(of: picture) else { return }
+        #if os(iOS)
+        // Written even when the app goes to the background right now.
+        let task = UIApplication.shared.beginBackgroundTask(withName: "Saving a drawing")
+        #endif
+        DrawingFile.writing.async {
+            let written = file.write(picture: picture)
+            let modified = try? DrawingFile.strokesURL(for: picture).resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+            DispatchQueue.main.async {
+                if written { DrawingStore.shared.didSave(file, picture: picture, revision: revision, modified: modified) }
+                #if os(iOS)
+                UIApplication.shared.endBackgroundTask(task)
+                #endif
+            }
+        }
     }
 }
 

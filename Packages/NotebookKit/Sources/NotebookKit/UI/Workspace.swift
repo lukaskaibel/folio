@@ -781,9 +781,10 @@ public final class Workspace: NSObject {
         return FileKind(url: currentURL, isDirectory: false) == .note ? currentURL.deletingPathExtension().lastPathComponent : currentURL.lastPathComponent
     }
 
-    /// Saves everything; called when the app goes to the background or quits.
-    public func saveAll() {
-        editor.saveDrawingsNow()
+    /// Saves everything; called when the app goes to the background or (`quitting`) quits, when drawings are written
+    /// before it goes on.
+    public func saveAll(quitting: Bool = false) {
+        editor.saveDrawingsNow(waiting: quitting)
         guard let note else { return }
         note.update(text: editor.text)
         note.saveNow()

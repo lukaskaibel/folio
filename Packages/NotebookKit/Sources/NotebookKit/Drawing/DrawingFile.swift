@@ -33,9 +33,12 @@ struct DrawingFile: Equatable, Sendable {
         picture.deletingPathExtension().appendingPathExtension(fileExtension)
     }
 
-    /// Whether a picture is a drawing Notebook can go on drawing in.
+    /// Whether a picture is a drawing Notebook can go on drawing in: its strokes are there, or in iCloud.
     static func isDrawing(_ picture: URL) -> Bool {
-        picture.pathExtension.lowercased() == "png" && FileManager.default.fileExists(atPath: strokesURL(for: picture).path)
+        guard picture.pathExtension.lowercased() == "png" else { return false }
+        let strokes = strokesURL(for: picture)
+        let inCloud = strokes.deletingLastPathComponent().appendingPathComponent(".\(strokes.lastPathComponent).icloud")
+        return FileManager.default.fileExists(atPath: strokes.path) || FileManager.default.fileExists(atPath: inCloud.path)
     }
 
     // MARK: - The strokes file
@@ -64,12 +67,6 @@ struct DrawingFile: Equatable, Sendable {
         guard let list = Self.list(data), let size = Self.size(in: list), let strokes = list["strokes"] as? Data,
               let drawing = try? PKDrawing(data: strokes) else { return nil }
         self.init(drawing: drawing, size: size)
-    }
-
-    /// Only the drawing's area, which is all laying out a note needs: the strokes aren't decoded.
-    static func readSize(_ picture: URL) -> CGSize? {
-        guard let data = read(strokesURL(for: picture)), let list = list(data) else { return nil }
-        return size(in: list)
     }
 
     static func read(picture: URL) -> DrawingFile? {
@@ -111,7 +108,8 @@ struct DrawingFile: Equatable, Sendable {
         return data as Data
     }
 
-    /// Writes the strokes and the picture made from them, together, as other devices and apps read them.
+    /// Writes the strokes and the picture made from them, together, as other devices and apps read them. Making the
+    /// picture takes a moment: not on the main thread.
     @discardableResult
     func write(picture: URL) -> Bool {
         guard let strokes = strokesData(), let png = pictureData() else { return false }
@@ -121,6 +119,18 @@ struct DrawingFile: Equatable, Sendable {
                                        writingItemAt: picture, options: .forReplacing, error: nil) { strokesURL, pictureURL in
             written = (try? strokes.write(to: strokesURL, options: .atomic)) != nil
             written = written && (try? png.write(to: pictureURL, options: .atomic)) != nil
+        }
+        return written
+    }
+
+    /// Only the strokes: what makes a picture a drawing, small and quick to write.
+    @discardableResult
+    func writeStrokes(picture: URL) -> Bool {
+        guard let strokes = strokesData() else { return false }
+        try? FileManager.default.createDirectory(at: picture.deletingLastPathComponent(), withIntermediateDirectories: true)
+        var written = false
+        NSFileCoordinator().coordinate(writingItemAt: Self.strokesURL(for: picture), options: .forReplacing, error: nil) { url in
+            written = (try? strokes.write(to: url, options: .atomic)) != nil
         }
         return written
     }

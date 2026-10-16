@@ -61,6 +61,15 @@ final class DrawingCanvas: PKCanvasView {
     private let noAccessory = UIView(frame: .zero)
     override var inputAccessoryView: UIView? { noAccessory }
 
+    /// UIKit hands the focus of a view that lets go of it to the text view it is in, which would bring up the
+    /// keyboard when drawing stops: the text view doesn't take it (as for the title).
+    override func resignFirstResponder() -> Bool {
+        let textView = superview as? MarkdownTextView
+        textView?.refusesFocus = true
+        defer { textView?.refusesFocus = false }
+        return super.resignFirstResponder()
+    }
+
     private func setDrawing(_ drawing: PKDrawing) {
         isSettingDrawing = true
         self.drawing = drawing

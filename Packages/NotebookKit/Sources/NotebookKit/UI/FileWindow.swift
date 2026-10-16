@@ -95,6 +95,7 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
     }
 
     func windowWillClose(_ notification: Notification) {
+        editor.endDrawing()
         note.update(text: editor.text)
         note.close()
         onClose?()

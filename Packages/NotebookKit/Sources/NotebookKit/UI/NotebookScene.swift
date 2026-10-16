@@ -22,7 +22,7 @@ public struct NotebookScene: Scene {
                     #endif
                 }
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.willResignActiveNotification)) { _ in workspace.saveAll() }
-                .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in workspace.saveAll() }
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in workspace.saveAll(quitting: true) }
         }
         .windowToolbarStyle(.unified)
         .defaultSize(width: 1280, height: 820)
