@@ -211,6 +211,54 @@ extension Workspace {
     }
 }
 
+/// A file to move, chosen with a swipe.
+struct MovingFile: Identifiable {
+    let url: URL
+    var id: URL { url }
+}
+
+/// Move, as Notes and Files ask for it on the iPhone: every folder of every location, indented under its location,
+/// the one the file is in greyed.
+struct MoveSheet: View {
+    let workspace: Workspace
+    let url: URL
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(workspace.moveTargets(for: url), id: \.location.id) { target in
+                    Section(target.location.name) {
+                        ForEach(target.folders, id: \.url) { folder in
+                            let isHere = folder.url.standardizedFileURL == url.deletingLastPathComponent().standardizedFileURL
+                            Button {
+                                workspace.move(url, into: folder.url)
+                                dismiss()
+                            } label: {
+                                Label {
+                                    Text(folder.depth < 0 ? target.location.name : folder.name)
+                                        .foregroundStyle(isHere ? .secondary : .primary)
+                                } icon: {
+                                    Image(systemName: folder.depth >= 0 ? "folder" : target.location.isICloudDrive ? "icloud" : "externaldrive")
+                                        .foregroundStyle(Color.accentColor)
+                                }
+                                .padding(.leading, CGFloat(max(0, folder.depth)) * 18)
+                            }
+                            .tint(.primary)
+                            .disabled(isHere)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Move “\(SearchSection.displayName(url))”")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+            }
+        }
+    }
+}
+
 /// The search results as a list's content: Recent with an empty field, then Files, In Notes and PDFs, and New Note.
 struct SearchResultsList: View {
     let workspace: Workspace

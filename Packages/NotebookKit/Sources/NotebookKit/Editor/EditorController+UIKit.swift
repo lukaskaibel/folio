@@ -113,13 +113,43 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
     /// The keyboard comes up for the text, or for the title, once the note is on screen if it isn't yet: a new
     /// note is made before its screen slides in.
     func makeTextFirstResponder() {
+        requestedFocus = (.text, Date())
         pendingFocus = nil
         if textView.window == nil { pendingFocus = .text } else { _ = textView.becomeFirstResponder() }
     }
 
     func makeTitleFirstResponder() {
+        requestedFocus = (.title, Date())
         pendingFocus = nil
         if textView.window == nil { pendingFocus = .title } else { _ = textView.titleField.becomeFirstResponder() }
+    }
+
+    /// The editor is about to move to another screen: leaving the window takes the keyboard away, and with it
+    /// comes back on the new screen.
+    func beginMove() {
+        isMoving = true
+        // What was asked for a moment ago counts over what has the focus now: as the old screen slides away, UIKit
+        // hands the title's focus to the text view it is in.
+        if let (focus, date) = requestedFocus, Date().timeIntervalSince(date) < 1.5 {
+            pendingFocus = focus
+        } else if textView.titleField.isFirstResponder {
+            pendingFocus = .title
+        } else if textView.isFirstResponder {
+            pendingFocus = .text
+        }
+    }
+
+    func endMove() {
+        isMoving = false
+        focusWhenShown()
+    }
+
+    /// No screen took the editor (you went back to a folder): the keyboard stays away.
+    func finishMoveIfNowhere() {
+        guard isMoving, textView.window == nil else { return }
+        isMoving = false
+        pendingFocus = nil
+        delegate?.editorEditingDidChange(self)
     }
 
     func focusWhenShown() {
@@ -245,6 +275,7 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
     }
 
     public func textViewDidEndEditing(_ textView: UITextView) {
+        guard !isMoving else { return }
         delegate?.editorEditingDidChange(self)
     }
 
@@ -273,6 +304,9 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
     }
 
     public func textFieldDidEndEditing(_ textField: UITextField) {
+        // Moving to another screen isn't leaving the title: it stays as it is being typed. Nor is loading another
+        // note, whose title it now is.
+        guard !isMoving, !isLoading else { return }
         commitTitle()
         delegate?.editorEditingDidChange(self)
     }
@@ -379,7 +413,7 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
             field.clearButtonMode = .whileEditing
         }
         let location = range.location
-        let entered = { alert.textFields?.first?.text ?? "" }
+        let entered = { [weak alert] in alert?.textFields?.first?.text ?? "" }
         if !isNew {
             alert.addAction(UIAlertAction(title: "Open", style: .default) { [weak self] _ in
                 self?.finishEditingLink(at: location, outcome: .open(entered()), isNew: isNew)
@@ -468,12 +502,14 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         guard isFileDrop(drop) else { return }
         let location = textView.offset(from: textView.beginningOfDocument, to: drop.dropPosition)
         let providers = drop.dropSession.items.map(\.itemProvider)
+        let note = loadCount
         Task { @MainActor in
             var markdown: [String] = []
             for provider in providers {
                 if let stored = await self.store(provider) { markdown.append(stored) }
             }
-            guard !markdown.isEmpty else { return }
+            // Large files take a while: by then another note may be open, which they aren't for.
+            guard !markdown.isEmpty, self.loadCount == note else { return }
             self.insertOnOwnLines(markdown.joined(separator: "\n"), at: NSRange(location: min(location, self.storage.length), length: 0))
         }
     }

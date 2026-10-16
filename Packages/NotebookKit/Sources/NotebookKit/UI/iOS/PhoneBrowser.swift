@@ -69,7 +69,14 @@ struct PhoneBrowser: View {
     /// Back to a folder leaves the note (it is saved); back to a note opens it again where you were.
     private func pathChanged(_ path: [Page]) {
         if let top = path.last, !top.isFolder {
-            if workspace.currentURL != top.url { workspace.reopen(top.url) }
+            if workspace.currentURL != top.url {
+                workspace.reopen(top.url)
+                // Gone in the meantime (deleted or renamed on another device): its screen goes too.
+                if workspace.currentURL != top.url {
+                    if workspace.currentURL != nil { workspace.closeFile() }
+                    self.path.removeLast()
+                }
+            }
         } else if workspace.currentURL != nil {
             workspace.closeFile()
         }
@@ -101,10 +108,11 @@ struct PhoneBrowser: View {
         return url
     }
 
-    /// The folders from the top of a location down to the one a file is in.
+    /// The folders from the top of a location down to the one a file is in, below the location itself, whose
+    /// folders the first screen shows.
     private func folders(to url: URL) -> [Page] {
         guard let found = workspace.nodes(to: url) else { return [] }
-        return found.nodes.filter(\.isFolder).map { Page(url: $0.url, isFolder: true) }
+        return found.nodes.dropFirst().filter(\.isFolder).map { Page(url: $0.url, isFolder: true) }
     }
 }
 
@@ -226,6 +234,7 @@ struct FolderScreen: View {
     @Binding var newFolderIn: URL?
     @State private var query = ""
     @State private var isSearching = false
+    @State private var moving: MovingFile?
     @Bindable private var settings = NotebookSettings.shared
 
     var body: some View {
@@ -243,6 +252,8 @@ struct FolderScreen: View {
                     .swipeActions(edge: .trailing) {
                         if !node.isLinked {
                             Button(role: .destructive) { workspace.moveToTrash(node.url) } label: { Label("Delete", systemImage: "trash") }
+                            Button { moving = MovingFile(url: node.url) } label: { Label("Move", systemImage: "folder") }
+                                .tint(.indigo)
                         }
                     }
                     .swipeActions(edge: .leading) {
@@ -273,6 +284,14 @@ struct FolderScreen: View {
             if let first = SearchSection.sections(for: query, in: workspace).first?.items.first { open(first.result) }
         }
         .refreshable { workspace.refreshNow(page.url) }
+        .sheet(item: $moving) { file in MoveSheet(workspace: workspace, url: file.url) }
+        #if DEBUG
+        .onReceive(NotificationCenter.default.publisher(for: .notebookDebug)) { notification in
+            guard notification.userInfo?["command"] as? String == "movesheet", let path = notification.userInfo?["argument"] as? String,
+                  let root = workspace.locations.first?.url else { return }
+            moving = MovingFile(url: root.appendingPathComponent(path))
+        }
+        #endif
         .onAppear { workspace.selectedFolder = page.url }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

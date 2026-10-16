@@ -99,6 +99,10 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     var pendingPlace: Place?
     enum Focus { case title, text }
     var pendingFocus: Focus?
+    var requestedFocus: (Focus, Date)?
+    var isMoving = false
+    /// Counts the notes loaded, so pictures that finish loading late go only into the note they were meant for.
+    var loadCount = 0
     /// The editor's own record of changes, for undo (`EditorUndo+UIKit`).
     let undoStack = EditorUndoManager()
     var openStep: UndoStep?
@@ -169,6 +173,13 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         #if os(iOS)
         undoStack.clear()
         openStep = nil
+        previousSelection = NSRange(location: 0, length: 0)
+        layoutManager.selectedRanges = []
+        loadCount += 1
+        // Another note: the keyboard goes, unless this one asks for it below.
+        pendingFocus = nil
+        requestedFocus = nil
+        if textView.isFirstResponder || textView.titleField.isFirstResponder { textView.endEditing(true) }
         #else
         textView.undoManager?.removeAllActions()
         #endif

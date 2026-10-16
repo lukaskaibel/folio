@@ -9,6 +9,12 @@ final class EditorUndoManager: UndoManager {
     /// Off while UIKit's text view would register its own record of typing, which this manager doesn't keep.
     fileprivate var acceptsRegistrations = false
     fileprivate var allowsClearing = false
+    /// Takes what is sent to an invocation target this manager doesn't keep, and keeps none of it.
+    private let sink: UndoManager = {
+        let manager = UndoManager()
+        manager.disableUndoRegistration()
+        return manager
+    }()
 
     override func registerUndo(withTarget target: Any, selector: Selector, object anObject: Any?) {
         guard acceptsRegistrations else { return }
@@ -16,7 +22,7 @@ final class EditorUndoManager: UndoManager {
     }
 
     override func prepare(withInvocationTarget target: Any) -> Any {
-        acceptsRegistrations ? super.prepare(withInvocationTarget: target) : self
+        acceptsRegistrations ? super.prepare(withInvocationTarget: target) : sink.prepare(withInvocationTarget: target)
     }
 
     override func removeAllActions() {
@@ -74,7 +80,7 @@ extension EditorController {
                 if count <= step.inserted {
                     step.inserted -= count
                 } else {
-                    step.removed = removed.prefix(count - step.inserted) + step.removed
+                    step.removed = (removed as NSString).substring(to: count - step.inserted) + step.removed
                     step.location -= count - step.inserted
                     step.inserted = 0
                 }

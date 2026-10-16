@@ -126,7 +126,11 @@ final class MarkdownTextView: UITextView {
 
     // MARK: - Focus
 
+    /// While the title lets go of the focus (see `TitleField`).
+    var refusesFocus = false
+
     override func becomeFirstResponder() -> Bool {
+        guard !refusesFocus else { return false }
         let result = super.becomeFirstResponder()
         if result { controller?.focusChanged() }
         return result
@@ -209,5 +213,18 @@ final class MarkdownTextView: UITextView {
 }
 
 /// The title above the note: the file's name, renamed when you change it.
-final class TitleField: UITextField {}
+final class TitleField: UITextField {
+    /// The title's own, so that undo while you rename a note undoes the renaming, not a change in the text below.
+    private let titleUndo = UndoManager()
+    override var undoManager: UndoManager? { titleUndo }
+
+    /// UIKit gives the focus a text field lets go of to the text view it is in, which would bring the keyboard
+    /// back for the text when you leave the title or the note.
+    override func resignFirstResponder() -> Bool {
+        let textView = superview as? MarkdownTextView
+        textView?.refusesFocus = true
+        defer { textView?.refusesFocus = false }
+        return super.resignFirstResponder()
+    }
+}
 #endif

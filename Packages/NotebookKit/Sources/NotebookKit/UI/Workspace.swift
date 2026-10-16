@@ -427,6 +427,10 @@ public final class Workspace: NSObject {
     /// Saves the note being left; a new note left empty goes away, and pictures it no longer uses go to the Trash.
     private func leaveCurrentNote() {
         guard let note else { return }
+        #if os(iOS)
+        // Back while typing a new name: the name counts, as it would once the title is left.
+        if editor.isEditingTitle { editor.commitTitle() }
+        #endif
         note.update(text: editor.text)
         note.close()
         let folder = note.url.deletingLastPathComponent()
@@ -533,6 +537,9 @@ public final class Workspace: NSObject {
         history = history.map { URL(fileURLWithPath: fix($0.path)) }
         relocation = (old.standardizedFileURL, new.standardizedFileURL, UUID())
         if let current = currentURL { currentURL = URL(fileURLWithPath: fix(current.path)) }
+        #if os(iOS)
+        pageSnapshots = Dictionary(pageSnapshots.map { (URL(fileURLWithPath: fix($0.key.path)), $0.value) }, uniquingKeysWith: { a, _ in a })
+        #endif
         if !temporaryLocations {
             UserDefaults.standard.set(favorites, forKey: "favorites")
             UserDefaults.standard.set(recents, forKey: "recents")
@@ -876,6 +883,8 @@ extension Workspace: EditorControllerDelegate {
     public func editor(_ editor: EditorController, commitTitle title: String) {
         guard let note else { return }
         let current = note.url.deletingPathExtension().lastPathComponent
+        // A new note's title left empty keeps its placeholder, rather than "Untitled" to type over.
+        if title.isEmpty, note.isNew { return }
         let wanted = title.isEmpty ? current : title
         if wanted.isEmpty || FileOperations.fileName(from: wanted) == current {
             editor.setTitle(current)

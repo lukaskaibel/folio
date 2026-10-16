@@ -254,19 +254,30 @@ final class EditorContainer: UIView {
 
     required init?(coder: NSCoder) { fatalError() }
 
-    /// Takes the editor from the screen that had it.
+    /// Takes the editor from the screen that had it, with the keyboard if it was up (a new note made from a note
+    /// gets its title focused while still on the old screen).
     func claim() {
         let view = editor.view
-        guard view.superview !== self else { return }
+        guard window != nil, view.superview !== self else { return }
+        editor.beginMove()
         view.removeFromSuperview()
         view.frame = bounds
         view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         addSubview(view)
+        editor.endMove()
     }
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
-        if window != nil { claim() }
+        claim()
+    }
+
+    /// The screen with the editor goes, often before the next one takes the editor: the keyboard is kept for it.
+    override func willMove(toWindow newWindow: UIWindow?) {
+        super.willMove(toWindow: newWindow)
+        guard newWindow == nil, editor.view.superview === self else { return }
+        editor.beginMove()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [editor] in editor.finishMoveIfNowhere() }
     }
 }
 

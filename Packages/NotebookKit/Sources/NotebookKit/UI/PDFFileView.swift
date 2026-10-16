@@ -69,8 +69,9 @@ private struct PDFKitView: UIViewRepresentable {
     let url: URL
     let document: PDFDocument?
 
-    /// Where each PDF was left: the page and the point on it at the top of the view, and its zoom unless it fit.
-    @MainActor private static var places: [URL: (destination: PDFDestination, scale: CGFloat?)] = [:]
+    /// Where each PDF was left: the page (by number, as each visit reads the file anew) and the point on it at the
+    /// top of the view, and its zoom unless it fit.
+    @MainActor private static var places: [URL: (page: Int, point: CGPoint, scale: CGFloat?)] = [:]
 
     func makeCoordinator() -> URL { url }
 
@@ -94,13 +95,15 @@ private struct PDFKitView: UIViewRepresentable {
             view.autoScales = false
             view.scaleFactor = scale
         }
-        if let destination = place?.destination { view.go(to: destination) }
+        if let place, let document, let page = document.page(at: min(place.page, document.pageCount - 1)) {
+            view.go(to: PDFDestination(page: page, at: place.point))
+        }
     }
 
     static func dismantleUIView(_ view: PDFView, coordinator url: URL) {
-        guard view.document != nil, let page = view.currentPage else { return }
+        guard let document = view.document, let page = view.currentPage else { return }
         let top = view.convert(CGPoint(x: 0, y: view.safeAreaInsets.top), to: page)
-        places[url] = (PDFDestination(page: page, at: top), view.autoScales ? nil : view.scaleFactor)
+        places[url] = (document.index(for: page), top, view.autoScales ? nil : view.scaleFactor)
     }
 }
 #endif

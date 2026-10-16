@@ -48,11 +48,14 @@ final class AttachmentPicker: NSObject, PHPickerViewControllerDelegate, UIImageP
     VNDocumentCameraViewControllerDelegate, UIDocumentPickerDelegate {
     static let shared = AttachmentPicker()
     private weak var editor: EditorController?
+    /// The note the picker was opened for: what comes back goes into it only.
+    private var note = 0
 
     func present(_ source: AttachmentSource, for editor: EditorController) {
         guard let presenter = editor.textView.window?.rootViewController?.topmostPresented
             ?? UIApplication.shared.connectedScenes.compactMap({ ($0 as? UIWindowScene)?.keyWindow?.rootViewController }).first?.topmostPresented else { return }
         self.editor = editor
+        note = editor.loadCount
         let controller: UIViewController
         switch source {
         case .photos:
@@ -81,7 +84,7 @@ final class AttachmentPicker: NSObject, PHPickerViewControllerDelegate, UIImageP
     }
 
     private func insert(_ images: [UIImage]) {
-        guard let editor, !images.isEmpty else { return }
+        guard let editor, editor.loadCount == note, !images.isEmpty else { return }
         editor.makeTextFirstResponder()
         editor.insertPictures(images)
     }
@@ -143,7 +146,7 @@ final class AttachmentPicker: NSObject, PHPickerViewControllerDelegate, UIImageP
 
     nonisolated func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
         Task { @MainActor in
-            guard let editor else { return }
+            guard let editor, editor.loadCount == note else { return }
             editor.makeTextFirstResponder()
             editor.insertFiles(urls)
         }

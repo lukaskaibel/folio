@@ -118,9 +118,18 @@ enum DebugRemote {
         case "scrollto":
             editor.scroll(to: editor.outline[safe: Int(numbers.first ?? 0)], animated: false)
         case "undo":
-            editor.textView.undoManager?.undo()
+            // As ⌘Z or shaking does: in whatever has the focus.
+            (editor.isEditingTitle ? editor.textView.titleField.undoManager : editor.textView.undoManager)?.undo()
         case "redo":
-            editor.textView.undoManager?.redo()
+            (editor.isEditingTitle ? editor.textView.titleField.undoManager : editor.textView.undoManager)?.redo()
+        case "titlereturn":
+            // Return in the title, as the keyboard sends it: the field lets go, then says so.
+            _ = editor.textView.titleField.resignFirstResponder()
+            editor.textView.titleField.sendActions(for: .editingDidEndOnExit)
+        case "typetitle":
+            editor.textView.titleField.insertText(argument)
+        case "title":
+            log("title “\(editor.titleText)” editing \(editor.isEditingTitle) text \(editor.textView.isFirstResponder)")
         case "outline":
             workspace.isOutlineVisible.toggle()
         case "sidebar":
