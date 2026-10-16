@@ -377,10 +377,11 @@ cd Packages/NotebookKit && swift test
 ```
 
 The pictures in this README are made by a script. It builds the app, runs it in the background on the sample notes,
-takes the scenes in light and dark, and lays them out together with `Design/social-preview.png`. The iPhone and iPad
-pictures come from two simulators of its own, without the Simulator app's window. It doesn't take over your Mac (only
-the search suggestions show on screen for a moment) and leaves your own Notebook's settings alone. Run it again when a
-change shows in one of them (`devices` takes only the iPhone and iPad picture, which works with the screen asleep):
+takes the scenes in light and dark, and lays them out together with `Design/social-preview.png`; the website uses the
+window and the iPhone's screen from them too. The iPhone and iPad pictures come from two simulators of its own, without
+the Simulator app's window. It doesn't take over your Mac (only the search suggestions show on screen for a moment) and
+leaves your own Notebook's settings alone. Run it again when a change shows in one of them (`devices` takes only the
+iPhone and iPad picture, which works with the screen asleep):
 
 ```bash
 Tools/readme-images.sh
@@ -388,7 +389,8 @@ Tools/readme-images.sh
 
 The app icon is drawn by `Tools/AppIcon/notebook.py`. After changing it, run the script below: it writes
 `Notebook/AppIcon.icon` and renders, with Icon Composer's `ictool`, the grey passes that Settings › App Icon colours in
-any leather (it needs Python 3 with NumPy and Pillow, and `brew install librsvg`):
+any leather, and the cover's grain for the website's button (it needs Python 3 with NumPy and Pillow, and
+`brew install librsvg`):
 
 ```bash
 Tools/AppIcon/make.sh

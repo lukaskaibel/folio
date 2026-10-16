@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Notebook: Markdown notes for the Mac</title>
-  <meta name="description" content="A native Mac app for Markdown notes that writes like Apple Notes. Every note stays a plain file in your own folders, iCloud Drive included.">
+  <title>Notebook: Markdown notes for Mac, iPhone and iPad</title>
+  <meta name="description" content="A native app for Markdown notes on Mac, iPhone and iPad that writes like Apple Notes. Every note stays a plain file in your own folders, iCloud Drive included.">
   <meta name="theme-color" content="#F1ECE4" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#191715" media="(prefers-color-scheme: dark)">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Notebook">
-  <meta property="og:description" content="Markdown notes for the Mac that write like Apple Notes, kept as plain files in your own folders.">
+  <meta property="og:description" content="Markdown notes for Mac, iPhone and iPad that write like Apple Notes, kept as plain files in your own folders.">
   <meta property="og:url" content="https://lukaskaibel.github.io/notebook/">
   <meta property="og:image" content="https://lukaskaibel.github.io/notebook/social-preview.png">
   <meta property="og:image:width" content="1280">
@@ -19,9 +19,10 @@
   <link rel="icon" href="images/favicon-dark.png" media="(prefers-color-scheme: dark)">
   <link rel="apple-touch-icon" href="images/apple-touch-icon.png">
   <link rel="stylesheet" href="style.css">
+  <script src="ribbon.js" defer></script>
 </head>
 <body class="home">
-  <!-- The bookmark ribbon from the icon, marking your place on the page. -->
+  <!-- The bookmark ribbon from the icon, marking your place on the page. ribbon.js makes it fabric. -->
   <div class="ribbon" aria-hidden="true"></div>
 
   <main class="hero">
@@ -32,8 +33,8 @@
       </picture>
       <h1>Notebook</h1>
       <p class="lead">Notes that write like Apple Notes, <span>kept as Markdown files in your own folders.</span></p>
-      <p class="sub">iCloud Drive, or any folder you choose, is the library. No database, no import and no sync of its
-        own: what you write is a file that every other Markdown app reads too.</p>
+      <p class="sub">On Mac, iPhone and iPad, iCloud Drive or any folder you choose is the library. No database, no
+        import and no sync of its own: what you write is a file that every other Markdown app reads too.</p>
 
       <div class="actions">
         <a class="button primary" href="https://github.com/lukaskaibel/notebook">
@@ -42,7 +43,7 @@
         </a>
         <span class="soon">
           <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path d="M8 4.5V8l2.5 1.5"/></svg>
-          Mac App Store, later
+          App Store, later
         </span>
       </div>
 
@@ -56,10 +57,18 @@
     <figure class="stage" data-view="app">
       <div class="window-frame">
         <picture>
-          <source srcset="images/hero-dark.webp" media="(prefers-color-scheme: dark)">
-          <img class="shot" src="images/hero-light.webp" width="2000" height="1319" fetchpriority="high"
+          <source srcset="images/window-dark.webp" media="(prefers-color-scheme: dark)">
+          <img class="shot" src="images/window-light.webp" width="1800" height="1153" fetchpriority="high"
             alt="Notebook showing the note Kyoto trip: links to Budget and Flight tickets.pdf, a picture of a torii gate and a packing checklist, with the folders of iCloud Drive in the sidebar">
         </picture>
+
+        <!-- And on the iPhone, from the same folder in iCloud Drive. -->
+        <div class="phone">
+          <picture>
+            <source srcset="images/iphone-dark.webp" media="(prefers-color-scheme: dark)">
+            <img src="images/iphone-light.webp" width="600" height="1304" alt="The same note on an iPhone">
+          </picture>
+        </div>
 
         <!-- The same note as the file on disk: what Notebook saves, character for character. -->
         <div class="file" id="file" aria-hidden="true">

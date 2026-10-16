@@ -1,5 +1,5 @@
 # Publishes Website/ to GitHub Pages (https://lukaskaibel.github.io/notebook/) when it changes on main.
-# The social preview and the window pictures come from Design/, so the README and the website share them.
+# The social preview, the window and the iPhone's screen come from Design/, where the README's pictures are made.
 name: Website
 
 on:
@@ -8,7 +8,8 @@ on:
     paths:
       - Website/**
       - Design/social-preview.png
-      - Design/screenshots/hero-*.webp
+      - Design/screenshots/window-*.webp
+      - Design/screenshots/iphone-*.webp
       - .github/workflows/website.yml
   workflow_dispatch:
 
@@ -34,7 +35,8 @@ jobs:
           mkdir _site
           cp -R Website/. _site/
           cp Design/social-preview.png _site/
-          cp Design/screenshots/hero-light.webp Design/screenshots/hero-dark.webp _site/images/
+          cp Design/screenshots/window-light.webp Design/screenshots/window-dark.webp _site/images/
+          cp Design/screenshots/iphone-light.webp Design/screenshots/iphone-dark.webp _site/images/
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
