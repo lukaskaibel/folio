@@ -72,6 +72,9 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     /// The block the caret is in, if it shows its Markdown then (tables, math, diagrams, frontmatter).
     private(set) var activeBlock: Int?
     private(set) var isLoading = false
+    /// True while the note's text is still on its way (from iCloud): its title shows, and nothing can be typed or
+    /// changed until it is loaded with its text.
+    public private(set) var isWaitingForText = false
     private var isApplyingStyle = false
     /// True while the editor changes the text itself, so its own changes aren't taken for typing.
     var isPerformingEdit = false
@@ -169,9 +172,14 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
 
     // MARK: - Loading
 
-    /// Shows a note. `title` is its name; `focusTitle` puts the caret in the title (for a new note).
-    public func load(text: String, folder: URL?, title: String, meta: String, focusTitle: Bool = false) {
+    /// Shows a note. `title` is its name; `focusTitle` puts the caret in the title (for a new note). Without its
+    /// `text`, which is still on its way, only the title shows, and nothing can be changed; the text fades in when the
+    /// note is loaded again with it.
+    public func load(text: String?, folder: URL?, title: String, meta: String, focusTitle: Bool = false) {
         endDrawing()
+        if isWaitingForText, text != nil, isInWindow { fadeInNextChange() }
+        let waiting = text == nil
+        let text = text ?? ""
         isLoading = true
         self.folder = folder
         closeSuggestions()
@@ -201,9 +209,13 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         #endif
         isLoading = false
         caretWasPlaced = false
+        if isWaitingForText != waiting {
+            isWaitingForText = waiting
+            updateEditability()
+        }
         scrollToTop()
         updateOutline()
-        if focusTitle {
+        if focusTitle, !waiting {
             self.focusTitle()
         }
     }

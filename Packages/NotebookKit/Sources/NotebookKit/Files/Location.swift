@@ -3,6 +3,7 @@ import AppKit
 #else
 import UIKit
 #endif
+import Synchronization
 
 /// A folder Notebook shows in the sidebar: iCloud Drive or any folder you add. In the sandboxed build the app can only
 /// reach it through the security-scoped bookmark made when you picked it.
@@ -131,36 +132,26 @@ public struct LinkedFolder: Equatable, Sendable {
     public var alias: URL
 }
 
-/// The locations, kept in the app's settings, with their bookmarks.
+/// The locations, kept in the app's settings, with their bookmarks. Making a bookmark and finding where one points
+/// can wait on iCloud for seconds, so both happen off the main thread, after the location is already shown.
 @MainActor
 enum LocationStore {
     private static let key = "locations"
-    private static var accessing: Set<String> = []
+    nonisolated private static let accessing = Mutex<Set<String>>([])
 
     #if os(macOS)
-    private static let resolving: URL.BookmarkResolutionOptions = [.withSecurityScope]
-    private static let creating: URL.BookmarkCreationOptions = [.withSecurityScope]
+    nonisolated private static let resolving: URL.BookmarkResolutionOptions = [.withSecurityScope]
+    nonisolated private static let creating: URL.BookmarkCreationOptions = [.withSecurityScope]
     #else
     // On iOS a bookmark made from a URL the document picker gave carries its access along.
-    private static let resolving: URL.BookmarkResolutionOptions = []
-    private static let creating: URL.BookmarkCreationOptions = []
+    nonisolated private static let resolving: URL.BookmarkResolutionOptions = []
+    nonisolated private static let creating: URL.BookmarkCreationOptions = []
     #endif
 
+    /// The saved locations, where they were last time; `resolve` finds where they are now.
     static func load() -> [Location] {
         guard let data = UserDefaults.standard.data(forKey: key),
-              var locations = try? JSONDecoder().decode([Location].self, from: data) else { return [] }
-        for index in locations.indices {
-            if let bookmark = locations[index].bookmark {
-                var stale = false
-                if let url = try? URL(resolvingBookmarkData: bookmark, options: resolving, bookmarkDataIsStale: &stale) {
-                    locations[index].path = url.standardizedFileURL.path
-                    startAccessing(url)
-                    if stale, let fresh = try? url.bookmarkData(options: creating, includingResourceValuesForKeys: nil, relativeTo: nil) {
-                        locations[index].bookmark = fresh
-                    }
-                }
-            }
-        }
+              let locations = try? JSONDecoder().decode([Location].self, from: data) else { return [] }
         return locations
     }
 
@@ -168,16 +159,36 @@ enum LocationStore {
         if let data = try? JSONEncoder().encode(locations) { UserDefaults.standard.set(data, forKey: key) }
     }
 
+    /// A location for a folder you just chose, to show at once: its bookmark comes from `bookmark(for:)`.
     static func make(for url: URL) -> Location {
         startAccessing(url)
-        let bookmark = try? url.bookmarkData(options: creating, includingResourceValuesForKeys: nil, relativeTo: nil)
-        let name = url.path == Location.iCloudDrivePath || Location.isICloudDriveRoot(url) ? "iCloud Drive" : FileManager.default.displayName(atPath: url.path)
-        return Location(id: UUID(), name: name, path: url.standardizedFileURL.path, bookmark: bookmark)
+        let name = url.path == Location.iCloudDrivePath || Location.isICloudDriveRoot(url) ? "iCloud Drive" : url.lastPathComponent
+        return Location(id: UUID(), name: name, path: url.standardizedFileURL.path, bookmark: nil)
     }
 
-    static func startAccessing(_ url: URL) {
-        guard !accessing.contains(url.path) else { return }
-        if url.startAccessingSecurityScopedResource() { accessing.insert(url.path) }
+    /// The bookmark that finds the folder again next time, and the name the Finder gives it ("Dokumente" for
+    /// Documents in German). Off the main thread.
+    nonisolated static func bookmark(for url: URL) -> (bookmark: Data?, name: String) {
+        let bookmark = try? url.bookmarkData(options: creating, includingResourceValuesForKeys: nil, relativeTo: nil)
+        let name = url.path == Location.iCloudDrivePath || Location.isICloudDriveRoot(url) ? "iCloud Drive" : FileManager.default.displayName(atPath: url.path)
+        return (bookmark, name)
+    }
+
+    /// Where a saved location's folder is now, with a fresh bookmark when the old one is stale, and access to it
+    /// started. Off the main thread.
+    nonisolated static func resolve(_ bookmark: Data) -> (url: URL, fresh: Data?)? {
+        var stale = false
+        guard let url = try? URL(resolvingBookmarkData: bookmark, options: resolving, bookmarkDataIsStale: &stale) else { return nil }
+        startAccessing(url)
+        let fresh = stale ? try? url.bookmarkData(options: creating, includingResourceValuesForKeys: nil, relativeTo: nil) : nil
+        return (url.standardizedFileURL, fresh)
+    }
+
+    nonisolated static func startAccessing(_ url: URL) {
+        accessing.withLock { accessing in
+            guard !accessing.contains(url.path) else { return }
+            if url.startAccessingSecurityScopedResource() { accessing.insert(url.path) }
+        }
     }
 
     #if os(macOS)

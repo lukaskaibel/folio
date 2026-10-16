@@ -35,6 +35,7 @@ struct MainView: View {
             VStack(spacing: 0) {
                 SidebarOutline(workspace: workspace)
                 AppIconTipView()
+                AddLocationButton(workspace: workspace)
             }
             .navigationSplitViewColumnWidth(min: 200, ideal: 250, max: 400)
                 .toolbar {
@@ -98,10 +99,10 @@ struct DocumentToolbar: ToolbarContent {
 
         ToolbarSpacer(.flexible)
         if let url = workspace.currentURL {
-            if workspace.note != nil {
+            if let note = workspace.note {
                 ToolbarItemGroup {
-                    FormatMenu()
-                    DrawingToggle(workspace: workspace)
+                    FormatMenu().disabled(!note.isLoaded)
+                    DrawingToggle(workspace: workspace).disabled(!note.isLoaded)
                 }
                 ToolbarSpacer(.fixed)
             } else {
@@ -185,13 +186,13 @@ struct MoreMenu: View {
             }
             Divider()
             Button { workspace.editor.focusTitle() } label: { Label("Rename", systemImage: "pencil") }
-                .disabled(workspace.note == nil)
+                .disabled(workspace.note?.isLoaded != true)
             MoveToMenu(workspace: workspace, url: url)
             Button { workspace.duplicate(url) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
             Divider()
             Button { workspace.copyLink(url) } label: { Label("Copy Link", systemImage: "link") }
             Button { workspace.revealInFinder(url) } label: { Label("Show in Finder", systemImage: "finder") }
-            if workspace.note != nil {
+            if let note = workspace.note {
                 Divider()
                 Menu {
                     Button("PDF…") { workspace.export(as: .pdf) }
@@ -199,7 +200,9 @@ struct MoreMenu: View {
                 } label: {
                     Label("Export As", systemImage: "square.and.arrow.up.on.square")
                 }
+                .disabled(!note.isLoaded)
                 Button { workspace.printNote() } label: { Label("Print…", systemImage: "printer") }
+                    .disabled(!note.isLoaded)
             }
             Divider()
             Button(role: .destructive) { workspace.trash(url) } label: { Label("Move to Trash", systemImage: "trash") }
@@ -220,8 +223,12 @@ struct DetailColumn: View {
         Group {
             if let url = workspace.currentURL {
                 if workspace.note != nil {
-                    NoteEditorView(editor: workspace.editor)
-                        .ignoresSafeArea(.container, edges: .top)
+                    // The wait for a note still in iCloud shows below the toolbar, as a PDF's does.
+                    ZStack {
+                        NoteEditorView(editor: workspace.editor)
+                            .ignoresSafeArea(.container, edges: .top)
+                        NoteWaitingView(note: workspace.note)
+                    }
                 } else {
                     // What Preview and QuickTime Player open, Notebook draws itself; everything else is Quick Look's.
                     switch FileKind(url: url, isDirectory: false) {
@@ -308,7 +315,7 @@ struct WelcomeView: View {
                 .foregroundStyle(Color.theme(Theme.textSecondary))
                 .padding(.top, 14)
             Spacer()
-            Text("You can add more folders later with File › Add Location. Notebook only sees the folders you choose.")
+            Text("You can add more folders later with Add Location at the bottom of the sidebar. Notebook only sees the folders you choose.")
                 .font(.system(size: 12))
                 .foregroundStyle(Color.theme(Theme.textTertiary))
                 .padding(.bottom, 22)

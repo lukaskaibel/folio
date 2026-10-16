@@ -76,6 +76,12 @@ struct TouchCommands: Commands {
                 .keyboardShortcut("n", modifiers: .command)
                 .disabled(workspace.locations.isEmpty)
         }
+        // The Finder's shortcut for its hidden files, as on the Mac.
+        CommandGroup(after: .sidebar) {
+            Button(workspace.showsAllHiddenFolders ? "Hide Hidden Folders" : "Show Hidden Folders") { withAnimation { workspace.toggleAllHiddenFolders() } }
+                .keyboardShortcut(".", modifiers: [.command, .shift])
+                .disabled(!workspace.hasHiddenFolders)
+        }
         CommandMenu("Go") {
             Button("Search") { workspace.searchRequest += 1 }
                 .keyboardShortcut("f", modifiers: .command)
@@ -240,7 +246,7 @@ struct TouchSettings: View {
                 }
                 Section {
                     LabeledContent("Indexed") {
-                        Text(workspace.index.isBuilding ? "Reading your files…" : "\(workspace.index.entries.count) files")
+                        Text(workspace.index.isBuilding ? "Reading your files…" : "\(workspace.index.count) files")
                     }
                 } header: {
                     Text("Search")

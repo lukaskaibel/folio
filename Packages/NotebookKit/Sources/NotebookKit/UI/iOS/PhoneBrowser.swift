@@ -111,8 +111,8 @@ struct PhoneBrowser: View {
     /// The folders from the top of a location down to the one a file is in, below the location itself, whose
     /// folders the first screen shows.
     private func folders(to url: URL) -> [Page] {
-        guard let found = workspace.nodes(to: url) else { return [] }
-        return found.nodes.dropFirst().filter(\.isFolder).map { Page(url: $0.url, isFolder: true) }
+        guard let found = workspace.folders(to: url) else { return [] }
+        return found.folders.dropFirst().map { Page(url: $0, isFolder: true) }
     }
 }
 
@@ -154,11 +154,11 @@ struct HomeScreen: View {
                                 .fileDragAndDrop(node.url, isFolder: node.isFolder, workspace: workspace)
                                 .contextMenu { FileActions(workspace: workspace, url: node.url) { newFolderIn = $0 } }
                         }
-                        if children.isEmpty {
+                        if children.isEmpty, workspace.isRead(location.url) {
                             Text("Empty").foregroundStyle(.secondary)
                         }
                     } header: {
-                        Text(location.name)
+                        LocationHeader(workspace: workspace, location: location)
                             .contextMenu { FileActions(workspace: workspace, url: location.url) { newFolderIn = $0 } }
                     }
                 }
@@ -177,6 +177,7 @@ struct HomeScreen: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button { addsLocation = true } label: { Label("Add Location", systemImage: "folder.badge.plus") }
+                    ShowHiddenFoldersMenu(workspace: workspace)
                     Button { showsSettings = true } label: { Label("Settings", systemImage: "gearshape") }
                 } label: {
                     Label("More", systemImage: "ellipsis")
@@ -262,18 +263,29 @@ struct FolderScreen: View {
                             Label(favorite ? "Unfavorite" : "Favorite", systemImage: favorite ? "star.slash" : "star")
                         }
                         .tint(.orange)
+                        if node.isFolder, workspace.canHide(node.url) {
+                            HideFolderButton(workspace: workspace, url: node.url, isShort: true)
+                                .tint(.gray)
+                        }
                     }
                 }
             }
         }
+        // Grey, empty or not: a folder still being read doesn't turn from white to grey when its files come in.
+        .scrollContentBackground(.hidden)
+        .background(Color(.systemGroupedBackground))
         .overlay {
             if children.isEmpty, !isSearching {
-                ContentUnavailableView {
-                    Label("No Notes", systemImage: "doc.text")
-                } description: {
-                    Text("Notes and files you put in this folder show here.")
-                } actions: {
-                    Button("New Note") { workspace.newNote(in: page.url) }
+                if workspace.isRead(page.url) {
+                    ContentUnavailableView {
+                        Label("No Notes", systemImage: "doc.text")
+                    } description: {
+                        Text("Notes and files you put in this folder show here.")
+                    } actions: {
+                        Button("New Note") { workspace.newNote(in: page.url) }
+                    }
+                } else {
+                    FolderLoadingIndicator()
                 }
             }
         }
@@ -302,6 +314,9 @@ struct FolderScreen: View {
                     Section {
                         Toggle(isOn: $settings.showsOnlyNotes) { Label("Show Only Notes", systemImage: "doc.text") }
                         Toggle(isOn: $settings.foldersFirst) { Label("Keep Folders on Top", systemImage: "folder") }
+                        if let location = workspace.location(containing: page.url), workspace.hasHiddenFolders(in: location) {
+                            ShowHiddenFoldersToggle(workspace: workspace, location: location)
+                        }
                     }
                     Section {
                         let favorite = workspace.isFavorite(page.url)

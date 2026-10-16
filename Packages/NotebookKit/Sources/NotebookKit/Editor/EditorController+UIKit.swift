@@ -118,6 +118,22 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
 
     /// The keyboard comes up for the text, or for the title, once the note is on screen if it isn't yet: a new
     /// note is made before its screen slides in.
+    /// Nothing can be typed while the note's text is on its way, in the note or its title.
+    func updateEditability() {
+        textView.isEditable = !isWaitingForText
+        textView.titleField.isEnabled = !isWaitingForText
+    }
+
+    /// The next change to the note fades in, as a file read in the background does (`FileLoadingView`): above all the
+    /// text arriving under its title, which stays as it is.
+    func fadeInNextChange() {
+        let fade = CATransition()
+        fade.type = .fade
+        fade.duration = 0.2
+        fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        textView.layer.add(fade, forKey: "textArrived")
+    }
+
     func makeTextFirstResponder() {
         requestedFocus = (.text, Date())
         pendingFocus = nil
@@ -205,7 +221,7 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
 
     /// Changes the text as one step to undo (see `EditorUndo+UIKit`).
     func performEdit(_ range: NSRange, with string: String) -> Bool {
-        guard range.upperBound <= storage.length else { return false }
+        guard range.upperBound <= storage.length, !isWaitingForText else { return false }
         storage.replaceCharacters(in: range, with: string)
         setSelection(NSRange(location: range.location + (string as NSString).length, length: 0))
         textChanged()

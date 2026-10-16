@@ -49,6 +49,8 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     /// A folder's files as the sidebar shows them (only notes, folders first or not), worked out once per reload.
     private var visible: [ObjectIdentifier: [FileNode]] = [:]
     private var collapsedSections = Set(UserDefaults.standard.stringArray(forKey: "collapsedSections") ?? [])
+    /// The folders open last time, opened again as their rows appear: the locations are read after the window is up.
+    private var wantedExpansion = Set(UserDefaults.standard.stringArray(forKey: "expandedFolders") ?? [])
     private var isExpandingSections = false
 
     init(workspace: Workspace) {
@@ -93,13 +95,18 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         rebuildTop()
         outline.reloadData()
         expandSections()
-        expandDefaults()
+        restoreExpansion([])
     }
 
     // MARK: - Items
 
     func visibleChildren(of node: FileNode) -> [FileNode] {
         if let cached = visible[ObjectIdentifier(node)] { return cached }
+        // Not read yet: it is read off the main thread now, and its files appear when they are there (`reload`).
+        guard node.hasLoadedChildren else {
+            workspace.read([node])
+            return []
+        }
         let children = workspace.shownChildren(of: node, in: location(of: node))
         visible[ObjectIdentifier(node)] = children
         return children
@@ -166,16 +173,36 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         selectCurrent()
     }
 
-    /// Folders whose contents changed.
+    /// Folders whose contents changed, or were read for the first time: then their files fade in below them, and
+    /// nothing else in the sidebar moves.
     func reload(_ nodes: [FileNode]) {
         let expanded = expandedPaths()
         var topChanged = false
+        var shown = false
         for node in nodes {
+            let wasEmpty = visible[ObjectIdentifier(node)]?.isEmpty ?? true
+            visible[ObjectIdentifier(node)] = nil
             if node.parent == nil {
-                topChanged = true
+                guard let section = section(forRoot: node), section.children.isEmpty, wasEmpty else { topChanged = true; continue }
+                section.children = visibleChildren(of: node)
+                guard !section.children.isEmpty else { continue }
+                if outline.isItemExpanded(section) {
+                    outline.insertItems(at: IndexSet(integersIn: 0..<section.children.count), inParent: section, withAnimation: .effectFade)
+                } else if !collapsedSections.contains(section.sectionKey ?? "") {
+                    isExpandingSections = true
+                    outline.expandItem(section)
+                    isExpandingSections = false
+                }
+                shown = true
             } else if outline.row(forItem: node) >= 0 {
-                visible[ObjectIdentifier(node)] = nil
-                outline.reloadItem(node, reloadChildren: true)
+                let count = visibleChildren(of: node).count
+                if outline.isItemExpanded(node), wasEmpty, count > 0 {
+                    outline.insertItems(at: IndexSet(integersIn: 0..<count), inParent: node, withAnimation: .effectFade)
+                    shown = true
+                } else {
+                    outline.reloadItem(node, reloadChildren: true)
+                    shown = shown || outline.isItemExpanded(node)
+                }
             }
         }
         if topChanged {
@@ -183,8 +210,14 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             outline.reloadData()
             expandSections()
         }
+        // A folder read ahead of time, still closed, changes nothing on screen.
+        guard topChanged || shown || !wantedExpansion.isEmpty else { return }
         restoreExpansion(expanded)
         selectCurrent()
+    }
+
+    private func section(forRoot root: FileNode) -> SidebarEntry? {
+        workspace.locations.first { workspace.root(for: $0) === root }.flatMap(section(for:))
     }
 
     private func expandedPaths() -> Set<String> {
@@ -195,19 +228,19 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         return paths
     }
 
+    /// Opens the folders that were open, and those open last time whose rows are there now.
     private func restoreExpansion(_ paths: Set<String>) {
+        let paths = paths.union(wantedExpansion)
         var row = 0
         while row < outline.numberOfRows {
             if let node = outline.item(atRow: row) as? FileNode, paths.contains(node.url.path), !outline.isItemExpanded(node) {
                 outline.expandItem(node)
+                wantedExpansion.remove(node.url.path)
             }
             row += 1
         }
-    }
-
-    private func expandDefaults() {
-        let saved = Set(UserDefaults.standard.stringArray(forKey: "expandedFolders") ?? [])
-        restoreExpansion(saved)
+        // Once every location has been read, folders from last time that aren't there any more are forgotten.
+        if workspace.hasReadLocations { wantedExpansion = [] }
     }
 
     private func saveExpansion() {
@@ -216,7 +249,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
 
     /// Opens the folders down to a file and scrolls it into view. For a location itself, its section.
     func reveal(_ url: URL, select: Bool) {
-        guard let found = workspace.nodes(to: url) else { return }
+        guard let found = workspace.nodes(to: url, reading: false) else { return }
         let header = section(for: found.location)
         if let header, !outline.isItemExpanded(header) {
             collapsedSections.remove(header.sectionKey ?? "")
@@ -244,7 +277,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     }
 
     private func selectCurrent() {
-        guard let current = workspace.currentURL, let node = workspace.node(for: current) else { return }
+        guard let current = workspace.currentURL, let node = workspace.node(for: current, reading: false) else { return }
         selectRow(for: node)
     }
 
@@ -299,6 +332,8 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         let cell = outlineView.makeView(withIdentifier: SidebarFileCell.identifier, owner: nil) as? SidebarFileCell ?? SidebarFileCell()
         cell.label.delegate = self
         if let node = item as? FileNode {
+            // Folders on screen are read ahead, so opening one shows its files straight away.
+            workspace.prefetch(node)
             // Hidden folders show dimmed while their location shows them, as hidden files in the Finder.
             let dimmed = NotebookSettings.shared.dimsOtherFiles && !node.isFolder && node.kind != .note || node.isFolder && workspace.isHidden(node.url)
             cell.configure(name: node.name, kind: node.kind, inCloud: node.isInCloud, url: node.url, dimmed: dimmed)
@@ -523,8 +558,14 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     }
 
     func outlineView(_ outlineView: NSOutlineView, validateDrop info: NSDraggingInfo, proposedItem item: Any?, proposedChildIndex index: Int) -> NSDragOperation {
-        guard let folder = dropFolder(for: item) else { return [] }
         let urls = info.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
+        // Between the sections or below them, a folder from elsewhere becomes a location, shown where it is. The
+        // whole sidebar lights up, not a place in a section.
+        if isBetweenSections(info, proposedItem: item), workspace.newLocations(in: urls) != nil {
+            outlineView.setDropItem(nil, dropChildIndex: NSOutlineViewDropOnItemIndex)
+            return info.draggingSourceOperationMask.contains(.link) ? .link : .generic
+        }
+        guard let folder = dropFolder(for: item) else { return [] }
         guard !urls.isEmpty, !urls.contains(where: { folder.path == $0.path || folder.path.hasPrefix($0.path + "/") }) else { return [] }
         if let node = folderNode(for: item) { outlineView.setDropItem(node, dropChildIndex: NSOutlineViewDropOnItemIndex) }
         let local = urls.allSatisfy { workspace.location(containing: $0) != nil }
@@ -532,10 +573,18 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     }
 
     func outlineView(_ outlineView: NSOutlineView, acceptDrop info: NSDraggingInfo, item: Any?, childIndex index: Int) -> Bool {
-        guard let folder = dropFolder(for: item) else { return false }
         let urls = info.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
+        // Only a drop that adds locations is on the sidebar as a whole.
+        if item == nil { return workspace.addLocations(urls) }
+        guard let folder = dropFolder(for: item) else { return false }
         workspace.drop(urls, into: folder, copying: NSEvent.modifierFlags.contains(.option))
         return true
+    }
+
+    /// Between two sections, above the first or in the empty space below the last. Below the last the outline
+    /// proposes the end of whatever is open there, so that is told by where the pointer is.
+    private func isBetweenSections(_ info: NSDraggingInfo, proposedItem item: Any?) -> Bool {
+        item == nil || outline.row(at: outline.convert(info.draggingLocation, from: nil)) < 0
     }
 
     private func folderNode(for item: Any?) -> FileNode? {
@@ -766,5 +815,31 @@ struct SidebarOutline: NSViewRepresentable {
     func makeNSView(context: Context) -> NSScrollView { context.coordinator.scrollView }
 
     func updateNSView(_ view: NSScrollView, context: Context) {}
+}
+
+/// At the bottom of the sidebar, where Notes has New Folder and Reminders Add List: another folder for the sidebar,
+/// picked or dropped on it.
+struct AddLocationButton: View {
+    let workspace: Workspace
+    @State private var isTargeted = false
+
+    var body: some View {
+        Button { workspace.chooseLocation(iCloud: false) } label: {
+            Label("Add Location", systemImage: "plus.circle")
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.tint.opacity(isTargeted ? 0.18 : 0), in: .rect(cornerRadius: 6))
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+        .help("Show another folder in the sidebar. You can also drop a folder here.")
+        .dropDestination(for: URL.self) { urls, _ in
+            workspace.addLocations(urls)
+        } isTargeted: { isTargeted = $0 }
+        .padding(.horizontal, 10)
+        .padding(.bottom, 10)
+    }
 }
 #endif

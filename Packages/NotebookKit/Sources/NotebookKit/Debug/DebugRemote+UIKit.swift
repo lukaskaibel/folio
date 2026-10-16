@@ -191,6 +191,23 @@ enum DebugRemote {
             // move <file> > <folder>
             let paths = argument.components(separatedBy: " > ")
             if paths.count == 2, let file = url(paths[0]), let folder = url(paths[1]) { workspace.drop([file], into: folder) }
+        case "hide", "unhide":
+            // hide <path>, unhide <path>: what Hide Folder and Unhide Folder in a folder's menu do.
+            if let url = url(argument) { withAnimation { workspace.setHidden(url, command == "hide") } }
+            log("\(command) \(argument): \(workspace.hidden.keys.sorted())")
+        case "showhidden":
+            // showhidden <location name> <1|0>: the eye on that location's header; showhidden all: ⇧⌘. and the ⋯ menu.
+            if argument == "all" {
+                withAnimation { workspace.toggleAllHiddenFolders() }
+            } else if let space = argument.lastIndex(of: " "), let location = workspace.locations.first(where: { $0.name == argument[..<space] }) {
+                withAnimation { workspace.showHiddenFolders(argument[argument.index(after: space)...] == "1", in: location) }
+            }
+            log("showhidden \(argument): \(workspace.locations.filter(workspace.showsHiddenFolders(in:)).map(\.name))")
+        case "rows":
+            // rows [folder]: the folders and files a list shows for a folder (a location's top without one), hidden ones marked.
+            guard let folder = url(argument) ?? workspace.locations.first?.url else { break }
+            let rows = workspace.visibleChildren(of: folder).map { $0.name + ($0.isFolder && workspace.isHidden($0.url) ? " (hidden)" : "") }
+            log("rows \(argument): \(rows.joined(separator: ", "))")
         case "exists":
             log("exists \(argument): \(url(argument).map { FileManager.default.fileExists(atPath: $0.path) } ?? false)")
         case "ls":
@@ -217,7 +234,7 @@ enum DebugRemote {
         case "qlclose":
             workspace.quickLookURL = nil
         case "resolve":
-            log("resolve \(argument): \(workspace.index.resolve(argument, from: workspace.currentURL)?.path ?? "nothing") building \(workspace.index.isBuilding) entries \(workspace.index.entries.count)")
+            log("resolve \(argument): \(workspace.index.resolve(argument, from: workspace.currentURL)?.path ?? "nothing") building \(workspace.index.isBuilding) entries \(workspace.index.count)")
         case "suggestions":
             log("suggestions \(editor.suggestions.isVisible) \(editor.suggestions.model.items.map(\.title))")
         case "views":

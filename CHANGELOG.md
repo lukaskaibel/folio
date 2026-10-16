@@ -27,20 +27,33 @@ versions follow [semantic versioning](https://semver.org).
   and eraser at the bottom of the note. Each drawing is a PNG in `.assets` that other apps show, with its strokes in a
   `.drawing` file next to it, so it stays a drawing you can go on with in Notebook.
 - Hide folders you don't want to see, such as the ones other apps keep in iCloud Drive: right-click one and choose
-  Hide Folder. Hidden folders leave the sidebar, search and Move To, and stay hidden on your other Macs through iCloud.
-  To see them again, dimmed, click the eye next to the location's name or press ⇧⌘.; links to notes in them keep
-  working.
+  Hide Folder, or on iPhone and iPad touch and hold it. Hidden folders leave the sidebar, the lists, search and Move
+  To, and stay hidden on your other Macs, iPhones and iPads through iCloud. To see them again, dimmed, click the eye
+  next to the location's name or press ⇧⌘.; on iPhone and iPad, choose Show Hidden Folders in the ⋯ menu. Links to
+  notes in them keep working.
+- Add Location at the bottom of the sidebar, to show another folder there. A folder dropped from the Finder on the
+  sidebar, between or below its sections, is added the same way.
 
 ### Changed
 
 - Checkboxes are circles, as in Notes and Reminders, filled with the accent colour when done. On iPhone and iPad they
   are bigger, for a fingertip.
+- Folders are read in the background, on the Mac, iPhone and iPad. A location you add shows at once and its files a
+  moment later, together with the folders you had open; a folder opens straight away and fills in as it is read; and
+  iCloud syncing thousands of files doesn't hold up the window. Folders on screen are read ahead, so they usually open
+  with everything already in them.
+- On iPhone, a folder that takes a while to read shows a spinner instead of "No Notes".
 
 ### Fixed
 
 - Links in a note opened while Notebook was still reading your folders showed as links to notes that don't exist yet.
 - Giving a new note its name could stop Notebook for a long time in a large folder in iCloud Drive. Renaming a note
   still updates the links to it in other notes, now in the background.
+- Adding iCloud Drive as a location kept Notebook busy for a few seconds.
+- Opening a note that was only in iCloud, not yet downloaded, stopped Notebook until iCloud had brought it down, on the
+  Mac, iPhone and iPad. The note now opens at once with its title, and its text fades in when it has come, with
+  "Downloading from iCloud…" if that takes a moment. Nothing can be typed into it before then, so nothing is lost or
+  saved over it.
 
 ## [0.1.0] – not released yet
 

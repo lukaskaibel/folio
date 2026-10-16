@@ -449,7 +449,8 @@ enum DebugRemote {
         case "redo":
             window?.firstResponder?.undoManager?.redo()
         case "loaddelay", "pdfdelay":
-            // loaddelay <seconds>: reading a PDF, picture or video takes this long (0 for as long as it really takes).
+            // loaddelay <seconds>: reading a note, PDF, picture or video takes this long (0 for as long as it really
+            // takes).
             FileLoading.debugDelay = numbers.first.flatMap { $0 > 0 ? $0 : nil }
         case "pictureinfo":
             // pictureinfo: the open picture's size, zoom and where it sits.
@@ -496,6 +497,7 @@ enum DebugRemote {
         log("""
         --- dump
         file: \(workspace?.currentURL?.path ?? "none")
+        title: \(editor.titleText) waiting: \(editor.isWaitingForText) pending: \(workspace?.note?.pending.map { "\($0)" } ?? "none")
         selection: \(selection.location) \(selection.length)
         revealed: \(editor.revealed.map { "\($0.location)+\($0.length)" }.joined(separator: " "))
         activeBlock: \(editor.activeBlock.map(String.init) ?? "none")

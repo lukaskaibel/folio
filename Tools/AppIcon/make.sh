@@ -1,6 +1,7 @@
 #!/bin/bash
-# Builds Notebook's app icon (Notebook/AppIcon.icon) and the passes Settings › App Icon colours at runtime
-# (Packages/NotebookKit/Sources/NotebookKit/Resources/NotebookIcon). Run it after changing Tools/AppIcon/notebook.py.
+# Builds Notebook's app icon (Notebook/AppIcon.icon), the passes Settings › App Icon colours at runtime
+# (Packages/NotebookKit/Sources/NotebookKit/Resources/NotebookIcon) and the leather of the website's button
+# (Website/images/leather.webp). Run it after changing Tools/AppIcon/notebook.py.
 #   Tools/AppIcon/make.sh
 # Needs Xcode (for Icon Composer's ictool), Python 3 with NumPy and Pillow, and rsvg-convert (brew install librsvg).
 set -euo pipefail
@@ -17,6 +18,7 @@ rm -rf Notebook/AppIcon.icon "$work"
 mkdir -p "$work" "$passes"
 python3 Tools/AppIcon/notebook.py icon Notebook
 python3 Tools/AppIcon/notebook.py passes "$work"
+python3 Tools/AppIcon/notebook.py leather Website/images/leather.webp
 
 # Each pass at 512 px, light and dark, in 8 bits: plenty for the Dock and the preview in Settings.
 for part in base ground cover band ribbon; do
@@ -33,3 +35,4 @@ EOF
   done
 done
 echo "Wrote Notebook/AppIcon.icon and $(ls "$passes" | wc -l | tr -d ' ') passes to $passes"
+echo "Wrote Website/images/leather.webp"

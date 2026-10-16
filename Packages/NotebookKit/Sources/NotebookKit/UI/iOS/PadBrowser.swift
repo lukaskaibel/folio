@@ -73,6 +73,7 @@ struct PadBrowser: View {
                             }
                             Button { addsLocation = true } label: { Label("Add Location", systemImage: "plus.rectangle.on.folder") }
                             Divider()
+                            ShowHiddenFoldersMenu(workspace: workspace)
                             Button { showsSettings = true } label: { Label("Settings", systemImage: "gearshape") }
                         } label: {
                             Label("More", systemImage: "ellipsis")
@@ -147,7 +148,7 @@ struct PadSidebar: View {
                         Section(isExpanded: sectionBinding(location.id.uuidString)) {
                             FolderTree(workspace: workspace, folder: location.url, expanded: $expanded, newFolderIn: $newFolderIn)
                         } header: {
-                            Text(location.name)
+                            LocationHeader(workspace: workspace, location: location)
                                 .fileDragAndDrop(location.url, isFolder: true, workspace: workspace, canDrag: false)
                                 .contextMenu { FileActions(workspace: workspace, url: location.url) { newFolderIn = $0 } }
                         }
@@ -199,15 +200,12 @@ struct PadSidebar: View {
 
     /// Opens the folders down to a file, and its location's section.
     private func reveal(_ url: URL) {
-        guard let found = workspace.nodes(to: url) else { return }
+        guard let found = workspace.folders(to: url) else { return }
         collapsedSections.remove(found.location.id.uuidString)
-        for node in found.nodes.dropFirst() where node.isFolder && node.url != url.standardizedFileURL {
-            expanded.insert(node.url.path)
-        }
+        for folder in found.folders.dropFirst() { expanded.insert(folder.path) }
         // A folder opened from a link or a favourite opens too.
-        if found.complete, found.nodes.last?.isFolder == true, let folder = found.nodes.last, found.nodes.count > 1 {
-            expanded.insert(folder.url.path)
-        }
+        let target = url.standardizedFileURL
+        if target != found.location.url, workspace.node(for: target, reading: false)?.isFolder ?? false { expanded.insert(target.path) }
     }
 }
 

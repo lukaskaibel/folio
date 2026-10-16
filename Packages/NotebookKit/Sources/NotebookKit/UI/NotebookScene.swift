@@ -187,7 +187,7 @@ struct GeneralSettings: View {
             }
             Section("Search") {
                 LabeledContent("Indexed") {
-                    Text(workspace.index.isBuilding ? "Reading your files…" : "\(workspace.index.entries.count) files")
+                    Text(workspace.index.isBuilding ? "Reading your files…" : "\(workspace.index.count) files")
                         .foregroundStyle(.secondary)
                 }
             }

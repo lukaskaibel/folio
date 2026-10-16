@@ -54,7 +54,7 @@ extension EditorController {
     /// drawing on screen, or in a new drawing put in at the caret or on screen.
     public func beginDrawing(in picture: URL? = nil) {
         // Not while the note is between screens: the canvases and the tools need it on one.
-        guard !isDrawing, !isLoading, isInWindow, assetsFolder != nil else { return }
+        guard !isDrawing, !isLoading, !isWaitingForText, isInWindow, assetsFolder != nil else { return }
         closeSuggestions()
         let top = scrollTop
         let session = DrawingSession()

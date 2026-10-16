@@ -15,6 +15,7 @@
 		F10000000000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		F10000000000000000000021 /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Shared.xcconfig; sourceTree = "<group>"; };
 		F10000000000000000000024 /* Notebook-macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Notebook-macOS.entitlements"; sourceTree = "<group>"; };
+		F10000000000000000000025 /* Notebook-iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Notebook-iOS.entitlements"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -60,6 +61,7 @@
 				F10000000000000000000003 /* Info.plist */,
 				F10000000000000000000021 /* Shared.xcconfig */,
 				F10000000000000000000024 /* Notebook-macOS.entitlements */,
+				F10000000000000000000025 /* Notebook-iOS.entitlements */,
 			);
 			path = Config;
 			sourceTree = "<group>";

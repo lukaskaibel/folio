@@ -94,6 +94,8 @@ def search(theme):
 print("Mac")
 for theme in [] if only == "devices" else ["dark", "light"]:
     webp(place(window(f"note-{theme}"), theme, (160, 130), 2000), f"hero-{theme}")
+    # The same window alone, with its rounded corners, for the website, which lays it on its own paper.
+    webp(scaled(window(f"note-{theme}"), 1800 / 2560), f"window-{theme}")
     typing_animation(theme)
     webp(place(window(f"blocks-{theme}"), theme, (130, 110), 1800), f"blocks-{theme}")
     webp(place(crop_card(window(f"math-{theme}"), MATH_BOX, theme), theme, (110, 90), 1400, rim=False), f"math-{theme}")
@@ -120,9 +122,16 @@ def devices(theme):
     return finish(canvas, 2000)
 
 
+def phone_screen(theme):
+    """The iPhone's screen alone, for the website, which draws the phone around it."""
+    screen = Image.open(f"{raw}/iphone-{theme}.png").convert("RGB")
+    return scaled(screen, 600 / screen.width)
+
+
 print("iPhone and iPad")
 for theme in ["dark", "light"]:
     webp(devices(theme), f"devices-{theme}")
+    webp(phone_screen(theme), f"iphone-{theme}")
 
 if only == "devices":
     sys.exit(0)

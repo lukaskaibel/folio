@@ -16,6 +16,8 @@ struct DocumentScreen: View {
     private var kind: FileKind { FileKind(url: url, isDirectory: false) }
     private var isNote: Bool { kind == .note }
     private var isOpen: Bool { workspace.currentURL == url }
+    /// The note's text is in, so it can be changed: until then only its title shows.
+    private var isLoaded: Bool { isOpen && workspace.note?.isLoaded == true }
     private var name: String { SearchSection.displayName(url) }
 
     var body: some View {
@@ -65,18 +67,24 @@ struct DocumentScreen: View {
     private var content: some View {
         switch kind {
         case .note:
-            Group {
-                if isOpen, workspace.note != nil {
-                    NoteEditorHost(editor: workspace.editor)
-                } else if let snapshot = workspace.pageSnapshots[url] {
-                    SnapshotView(snapshot: snapshot)
-                } else {
-                    Color.theme(Theme.panel)
+            ZStack {
+                Group {
+                    if isOpen, workspace.note != nil {
+                        NoteEditorHost(editor: workspace.editor)
+                    } else if let snapshot = workspace.pageSnapshots[url] {
+                        SnapshotView(snapshot: snapshot)
+                    } else {
+                        Color.theme(Theme.panel)
+                    }
+                }
+                .background(Color.theme(Theme.panel))
+                .ignoresSafeArea(.container, edges: [.top, .bottom])
+                .ignoresSafeArea(.keyboard)
+                // The wait for a note still in iCloud, between the bars, as a PDF's.
+                if isOpen {
+                    NoteWaitingView(note: workspace.note)
                 }
             }
-            .background(Color.theme(Theme.panel))
-            .ignoresSafeArea(.container, edges: [.top, .bottom])
-            .ignoresSafeArea(.keyboard)
         case .pdf: PDFFileView(url: url).id(url)
         case .image: PictureFileView(url: url).id(url)
         case .video: VideoFileView(url: url).id(url)
@@ -100,8 +108,11 @@ struct DocumentScreen: View {
         if isNote, isInSplitView || sizeClass == .regular {
             ToolbarItemGroup(placement: .primaryAction) {
                 FormatMenu(editor: workspace.editor)
+                    .disabled(!isLoaded)
                 AttachmentMenu(editor: workspace.editor)
+                    .disabled(!isLoaded)
                 DrawingButton(workspace: workspace)
+                    .disabled(!isLoaded)
             }
             ToolbarSpacer(.fixed, placement: .primaryAction)
         }
@@ -135,12 +146,15 @@ struct DocumentScreen: View {
         if isNote, !isInSplitView, sizeClass == .compact, !workspace.isEditing, !workspace.isDrawing {
             ToolbarItem(placement: .bottomBar) {
                 Button { workspace.editor.beginEditing(then: .checklist) } label: { Label("Checklist", systemImage: "checklist") }
+                    .disabled(!isLoaded)
             }
             ToolbarItem(placement: .bottomBar) {
                 AttachmentMenu(editor: workspace.editor)
+                    .disabled(!isLoaded)
             }
             ToolbarItem(placement: .bottomBar) {
                 DrawingButton(workspace: workspace)
+                    .disabled(!isLoaded)
             }
             ToolbarSpacer(.flexible, placement: .bottomBar)
             ToolbarItem(placement: .bottomBar) {
@@ -154,6 +168,7 @@ struct DocumentScreen: View {
             if isNote {
                 Section {
                     Button { workspace.editor.findInNote() } label: { Label("Find in Note", systemImage: "magnifyingglass") }
+                        .disabled(!isLoaded)
                     if !isInSplitView {
                         Button { showsOutline = true } label: { Label("Outline", systemImage: "list.bullet.indent") }
                     }
@@ -164,13 +179,16 @@ struct DocumentScreen: View {
                         Label(favorite ? "Remove from Favorites" : "Add to Favorites", systemImage: favorite ? "star.slash" : "star")
                     }
                     Button { workspace.editor.focusTitle() } label: { Label("Rename", systemImage: "pencil") }
+                        .disabled(!isLoaded)
                     MoveToMenu(workspace: workspace, url: url)
                     Button { workspace.duplicate(url) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
                 }
                 Section {
                     Button { workspace.copyLink(url) } label: { Label("Copy Link", systemImage: "link") }
                     Button { export() } label: { Label("Export as PDF", systemImage: "doc.richtext") }
+                        .disabled(!isLoaded)
                     Button { NoteExporter.print(workspace.editor, title: name) } label: { Label("Print", systemImage: "printer") }
+                        .disabled(!isLoaded)
                 }
                 Section {
                     Button(role: .destructive) { workspace.moveToTrash(url) } label: { Label("Delete", systemImage: "trash") }
