@@ -138,8 +138,8 @@ screen, as in the Files app, and a note opens on a screen of its own; swipe from
 has your favourites, what you opened last and the folders of each location. Search and a new note sit at the bottom,
 as in Notes, and search finds names, notes and PDFs as on the Mac. While you write, a bar above the keyboard has the
 text styles and formatting, a checklist, a link, and pictures from the camera, the document scanner, your photos or
-the Files app. Tap a checkbox to tick it, a link to follow it, a picture to look at it. Swipe a file to delete it or
-make it a favourite; touch and hold it for everything else.
+the Files app. Tap a checkbox to tick it, a link to follow it, a picture to look at it. Swipe a file to move or delete
+it, or to make it a favourite; touch and hold it for everything else.
 
 The iPad has the Mac's layout: the sidebar with its folders opening in place, the note next to it, and the outline in
 an inspector. In portrait the sidebar steps aside once you have picked a note. With a keyboard, the Mac's shortcuts
@@ -294,7 +294,7 @@ and iPad:
 | Gesture | Action |
 | --- | --- |
 | Swipe from the left edge | Back to the folder or the note you came from (iPhone) |
-| Swipe a file to the left or right | Delete it, or add it to your favourites |
+| Swipe a file to the left or right | Move or delete it, or add it to your favourites |
 | Touch and hold a file or folder | Rename, move, duplicate, copy a link, share and more |
 | Pull a list down | Read the folder again |
 | Tap a checkbox, a link or a picture | Tick it, follow it, or look at it in Quick Look |
