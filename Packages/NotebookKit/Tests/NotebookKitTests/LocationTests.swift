@@ -123,6 +123,59 @@ final class LocationTests: XCTestCase {
         XCTAssertEqual(workspace.locations.map(\.name), ["Library", "iCloud Drive", "Elsewhere"])
     }
 
+    func testOnlyFoldersTheSidebarDoesntShowAreAddedByDropping() async throws {
+        let workspace = try await makeWorkspace()
+        let elsewhere = base.appendingPathComponent("Elsewhere")
+        try make(elsewhere)
+        let file = base.appendingPathComponent("Loose.md")
+        try "# Loose\n".write(to: file, atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(workspace.newLocations(in: [elsewhere])?.map(\.path), [elsewhere.path])
+        XCTAssertNil(workspace.newLocations(in: [elsewhere, file]), "a file can't be a location")
+        XCTAssertNil(workspace.newLocations(in: [drive.appendingPathComponent("Papers")]), "already in iCloud Drive")
+        XCTAssertNil(workspace.newLocations(in: [desktop]), "already in iCloud Drive, linked")
+        XCTAssertNil(workspace.newLocations(in: []))
+
+        XCTAssertTrue(workspace.addLocations([elsewhere]))
+        XCTAssertEqual(workspace.locations.map(\.name), ["Library", "iCloud Drive", "Elsewhere"])
+        XCTAssertFalse(workspace.addLocations([elsewhere]), "there already")
+        XCTAssertEqual(workspace.locations.count, 3)
+        try await settle(workspace)
+    }
+
+    func testSidebarAddsAFolderDroppedBetweenItsSections() async throws {
+        let workspace = try await makeWorkspace()
+        let sidebar = SidebarController(workspace: workspace)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 260, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
+        sidebar.scrollView.frame = window.contentView!.bounds
+        window.contentView!.addSubview(sidebar.scrollView)
+        window.layoutIfNeeded()
+        let outline = sidebar.outline
+        XCTAssertEqual(outline.numberOfRows, 6, "two sections, iCloud Drive's open")
+
+        let elsewhere = base.appendingPathComponent("Elsewhere")
+        try make(elsewhere)
+        let below = NSPoint(x: 100, y: 20)
+        let papers = (0..<outline.numberOfRows).compactMap { outline.item(atRow: $0) as? FileNode }.first { $0.name == "Papers" }!
+        let onPapers = outline.convert(NSPoint(x: 100, y: outline.rect(ofRow: outline.row(forItem: papers)).midY), to: nil)
+        func validate(_ urls: [URL], at point: NSPoint, proposing item: Any?, _ index: Int) -> NSDragOperation {
+            sidebar.outlineView(outline, validateDrop: FakeDrag(urls, at: point), proposedItem: item, proposedChildIndex: index)
+        }
+
+        XCTAssertEqual(validate([elsewhere], at: onPapers, proposing: papers, NSOutlineViewDropOnItemIndex), .copy, "into Papers, as before")
+        XCTAssertEqual(validate([elsewhere], at: below, proposing: nil, 1), .link)
+        XCTAssertEqual(validate([elsewhere], at: below, proposing: papers, 0), .link, "below the last row")
+        let file = base.appendingPathComponent("Loose.md")
+        try "# Loose\n".write(to: file, atomically: true, encoding: .utf8)
+        XCTAssertEqual(validate([file], at: below, proposing: nil, 1), [], "a file isn't a location")
+        XCTAssertEqual(validate([desktop.appendingPathComponent("Trip")], at: below, proposing: nil, 1), [], "already there")
+
+        XCTAssertTrue(sidebar.outlineView(outline, acceptDrop: FakeDrag([elsewhere], at: below), item: nil, childIndex: NSOutlineViewDropOnItemIndex))
+        XCTAssertEqual(workspace.locations.map(\.name), ["Library", "iCloud Drive", "Elsewhere"])
+        XCTAssertTrue((0..<outline.numberOfRows).contains { (outline.item(atRow: $0) as? SidebarEntry)?.sectionKey == workspace.locations.last?.id.uuidString })
+        try await settle(workspace)
+    }
+
     // MARK: - Never waiting for the disk
 
     /// Adding a location shows it at once, by name, however slow its folders are to read; its files follow.
@@ -282,4 +335,33 @@ final class LocationTests: XCTestCase {
         XCTAssertEqual(targets?.map(\.name), ["iCloud Drive", "Desktop", "Trip", "Obsidian", "Vault", "Papers"])
         XCTAssertEqual(targets?.map(\.depth), [-1, 0, 1, 0, 1, 0])
     }
+}
+
+/// A drag of files from the Finder, held over the sidebar at a point in the window.
+@MainActor
+private final class FakeDrag: NSObject, @preconcurrency NSDraggingInfo {
+    let draggingPasteboard = NSPasteboard(name: NSPasteboard.Name("notebook-test-\(UUID().uuidString)"))
+    let draggingLocation: NSPoint
+
+    init(_ urls: [URL], at point: NSPoint) {
+        draggingLocation = point
+        draggingPasteboard.clearContents()
+        draggingPasteboard.writeObjects(urls as [NSURL])
+    }
+
+    var draggingDestinationWindow: NSWindow? { nil }
+    var draggingSourceOperationMask: NSDragOperation { .every }
+    var draggedImageLocation: NSPoint { .zero }
+    var draggedImage: NSImage? { nil }
+    var draggingSource: Any? { nil }
+    var draggingSequenceNumber: Int { 1 }
+    var draggingFormation: NSDraggingFormation = .default
+    var animatesToDestination = false
+    var numberOfValidItemsForDrop = 1
+    var springLoadingHighlight: NSSpringLoadingHighlight { .none }
+    func slideDraggedImage(to screenPoint: NSPoint) {}
+    func enumerateDraggingItems(options: NSDraggingItemEnumerationOptions, for view: NSView?, classes: [AnyClass],
+                                searchOptions: [NSPasteboard.ReadingOptionKey: Any],
+                                using block: (NSDraggingItem, Int, UnsafeMutablePointer<ObjCBool>) -> Void) {}
+    func resetSpringLoading() {}
 }

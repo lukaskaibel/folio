@@ -158,11 +158,12 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
 
 - **Notes are files.** The title is the file name: rename a note by editing its title, and links to it in other notes
   follow. New notes go into the folder you're in.
-- **Folders as they are.** Add iCloud Drive or any folder as a location in the sidebar, with ⌘O or File › Add
-  Location. iCloud Drive shows what the Finder shows in it: Desktop and Documents when they are kept in iCloud, and the
-  folders of apps such as Pages or Obsidian. Folders are read in the background, so even a large iCloud Drive shows at
-  once and nothing waits for it. Create, rename, duplicate and move notes and folders, by drag and drop or with Move
-  To; Option-drag copies. Deleting moves to the Trash, never further. Favourites sit at the top of the sidebar.
+- **Folders as they are.** Add iCloud Drive or any folder as a location with Add Location at the bottom of the
+  sidebar, or drop the folder from the Finder below the sidebar's sections. iCloud Drive shows what the Finder shows
+  in it: Desktop and Documents when they are kept in iCloud, and the folders of apps such as Pages or Obsidian.
+  Folders are read in the background, so even a large iCloud Drive shows at once and nothing waits for it. Create,
+  rename, duplicate and move notes and folders, by drag and drop or with Move To; Option-drag copies. Deleting moves
+  to the Trash, never further. Favourites sit at the top of the sidebar.
 - **iPhone and iPad.** The same editor, search and file handling, with screens made for each: one folder per screen
   on the iPhone, the sidebar on the iPad. Pick iCloud Drive or any folder in the Files app's picker, or keep notes on
   the device, in On My iPhone › Notebook. A bar above the keyboard, whose tools you choose, formats, links and adds
@@ -244,9 +245,10 @@ with a team, has the iCloud entitlement that takes them to your other devices.
 ### Adding your notes
 
 On first launch, Notebook asks for a folder: **Open iCloud Drive**, or **Choose another folder…**. Add more later with
-File › Open… (⌘O), File › Add Location…, Settings › General, or by dropping a folder on Notebook in the Dock. Notebook works
-on the files in place; nothing is copied or imported. A new location shows in the sidebar straight away, and its files a
-moment later, however many there are.
+**Add Location** at the bottom of the sidebar, by dropping a folder on the sidebar or on Notebook in the Dock, or with
+File › Open… (⌘O), File › Add Location… and Settings › General. Notebook works on the files in place; nothing is
+copied or imported. A new location shows in the sidebar straight away, and its files a moment later, however many
+there are.
 
 On iPhone and iPad, **Choose a Folder** opens the Files app's picker: pick iCloud Drive itself to have everything you
 write on the Mac, or any folder in it or on the device. **Keep Notes on This iPhone** (or iPad) uses Notebook's own

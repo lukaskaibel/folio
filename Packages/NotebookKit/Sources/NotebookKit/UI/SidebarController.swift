@@ -558,8 +558,14 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     }
 
     func outlineView(_ outlineView: NSOutlineView, validateDrop info: NSDraggingInfo, proposedItem item: Any?, proposedChildIndex index: Int) -> NSDragOperation {
-        guard let folder = dropFolder(for: item) else { return [] }
         let urls = info.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
+        // Between the sections or below them, a folder from elsewhere becomes a location, shown where it is. The
+        // whole sidebar lights up, not a place in a section.
+        if isBetweenSections(info, proposedItem: item), workspace.newLocations(in: urls) != nil {
+            outlineView.setDropItem(nil, dropChildIndex: NSOutlineViewDropOnItemIndex)
+            return info.draggingSourceOperationMask.contains(.link) ? .link : .generic
+        }
+        guard let folder = dropFolder(for: item) else { return [] }
         guard !urls.isEmpty, !urls.contains(where: { folder.path == $0.path || folder.path.hasPrefix($0.path + "/") }) else { return [] }
         if let node = folderNode(for: item) { outlineView.setDropItem(node, dropChildIndex: NSOutlineViewDropOnItemIndex) }
         let local = urls.allSatisfy { workspace.location(containing: $0) != nil }
@@ -567,10 +573,18 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     }
 
     func outlineView(_ outlineView: NSOutlineView, acceptDrop info: NSDraggingInfo, item: Any?, childIndex index: Int) -> Bool {
-        guard let folder = dropFolder(for: item) else { return false }
         let urls = info.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
+        // Only a drop that adds locations is on the sidebar as a whole.
+        if item == nil { return workspace.addLocations(urls) }
+        guard let folder = dropFolder(for: item) else { return false }
         workspace.drop(urls, into: folder, copying: NSEvent.modifierFlags.contains(.option))
         return true
+    }
+
+    /// Between two sections, above the first or in the empty space below the last. Below the last the outline
+    /// proposes the end of whatever is open there, so that is told by where the pointer is.
+    private func isBetweenSections(_ info: NSDraggingInfo, proposedItem item: Any?) -> Bool {
+        item == nil || outline.row(at: outline.convert(info.draggingLocation, from: nil)) < 0
     }
 
     private func folderNode(for item: Any?) -> FileNode? {
@@ -801,5 +815,31 @@ struct SidebarOutline: NSViewRepresentable {
     func makeNSView(context: Context) -> NSScrollView { context.coordinator.scrollView }
 
     func updateNSView(_ view: NSScrollView, context: Context) {}
+}
+
+/// At the bottom of the sidebar, where Notes has New Folder and Reminders Add List: another folder for the sidebar,
+/// picked or dropped on it.
+struct AddLocationButton: View {
+    let workspace: Workspace
+    @State private var isTargeted = false
+
+    var body: some View {
+        Button { workspace.chooseLocation(iCloud: false) } label: {
+            Label("Add Location", systemImage: "plus.circle")
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.tint.opacity(isTargeted ? 0.18 : 0), in: .rect(cornerRadius: 6))
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+        .help("Show another folder in the sidebar. You can also drop a folder here.")
+        .dropDestination(for: URL.self) { urls, _ in
+            workspace.addLocations(urls)
+        } isTargeted: { isTargeted = $0 }
+        .padding(.horizontal, 10)
+        .padding(.bottom, 10)
+    }
 }
 #endif

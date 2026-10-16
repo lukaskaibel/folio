@@ -23,6 +23,8 @@ versions follow [semantic versioning](https://semver.org).
   Hide Folder. Hidden folders leave the sidebar, search and Move To, and stay hidden on your other Macs through iCloud.
   To see them again, dimmed, click the eye next to the location's name or press ⇧⌘.; links to notes in them keep
   working.
+- Add Location at the bottom of the sidebar, to show another folder there. A folder dropped from the Finder on the
+  sidebar, between or below its sections, is added the same way.
 
 ### Changed
 
