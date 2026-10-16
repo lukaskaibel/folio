@@ -34,6 +34,7 @@ struct MainView: View {
             VStack(spacing: 0) {
                 SidebarOutline(workspace: workspace)
                 AppIconTipView()
+                AddLocationButton(workspace: workspace)
             }
             .navigationSplitViewColumnWidth(min: 200, ideal: 250, max: 400)
                 .toolbar {
@@ -446,7 +447,7 @@ struct WelcomeView: View {
                 .foregroundStyle(Color.theme(Theme.textSecondary))
                 .padding(.top, 14)
             Spacer()
-            Text("You can add more folders later with File › Add Location. Notebook only sees the folders you choose.")
+            Text("You can add more folders later with Add Location at the bottom of the sidebar. Notebook only sees the folders you choose.")
                 .font(.system(size: 12))
                 .foregroundStyle(Color.theme(Theme.textTertiary))
                 .padding(.bottom, 22)

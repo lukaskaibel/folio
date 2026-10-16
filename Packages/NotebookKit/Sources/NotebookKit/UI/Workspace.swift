@@ -120,6 +120,28 @@ public final class Workspace: NSObject {
         locations.append(LocationStore.make(for: url))
         if !temporaryLocations { LocationStore.save(locations) }
         locationsChanged()
+        // At the end of a long sidebar it would be out of sight.
+        sidebar?.reveal(url, select: false)
+    }
+
+    /// Of folders dragged onto the sidebar, the ones it could add: folders it doesn't show yet. Nil when the drag
+    /// has anything else in it, such as a file or a folder already in a location.
+    func newLocations(in urls: [URL]) -> [URL]? {
+        let urls = urls.map(\.standardizedFileURL)
+        let fresh = urls.filter { url in
+            var isDirectory: ObjCBool = false
+            return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
+                && !isPackage(url) && location(containing: url) == nil
+        }
+        return !fresh.isEmpty && fresh.count == urls.count ? fresh : nil
+    }
+
+    /// Folders dropped on the sidebar, each a location of its own, as folders dropped in the Finder's sidebar are.
+    @discardableResult
+    func addLocations(_ urls: [URL]) -> Bool {
+        guard let fresh = newLocations(in: urls) else { return false }
+        fresh.forEach(addLocation)
+        return true
     }
 
     public func removeLocation(_ id: UUID) {

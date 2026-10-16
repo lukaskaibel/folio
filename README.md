@@ -134,11 +134,11 @@ open. Links, the caret and folders are in ink blue to go with it, or in the acce
 
 - **Notes are files.** The title is the file name: rename a note by editing its title, and links to it in other notes
   follow. New notes go into the folder you're in.
-- **Folders as they are.** Add iCloud Drive or any folder as a location in the sidebar, with ⌘O or File › Add
-  Location. iCloud Drive shows what the Finder shows in it: Desktop and Documents when they are kept in iCloud, and the
-  folders of apps such as Pages or Obsidian. Create, rename, duplicate and move notes and folders, by drag and drop or
-  with Move To; Option-drag copies. Deleting moves to the Trash, never further. Favourites sit at the top of the
-  sidebar.
+- **Folders as they are.** Add iCloud Drive or any folder as a location with Add Location at the bottom of the
+  sidebar, or drop the folder from the Finder below the sidebar's sections. iCloud Drive shows what the Finder shows
+  in it: Desktop and Documents when they are kept in iCloud, and the folders of apps such as Pages or Obsidian.
+  Create, rename, duplicate and move notes and folders, by drag and drop or with Move To; Option-drag copies. Deleting
+  moves to the Trash, never further. Favourites sit at the top of the sidebar.
 - **Live preview editor.** Headings, bold, italic, strikethrough, `==highlight==`, inline code, links, checklists,
   bulleted and numbered lists, quotes, callouts, tables, code blocks, maths, Mermaid, footnotes and front matter, which
   folds into a small "properties" pill.
@@ -209,8 +209,9 @@ team ID>`; it isn't checked in.
 ### Adding your notes
 
 On first launch, Notebook asks for a folder: **Open iCloud Drive**, or **Choose another folder…**. Add more later with
-File › Open… (⌘O), File › Add Location…, Settings › General, or by dropping a folder on Notebook in the Dock. Notebook works
-on the files in place; nothing is copied or imported.
+**Add Location** at the bottom of the sidebar, by dropping a folder on the sidebar or on Notebook in the Dock, or with
+File › Open… (⌘O), File › Add Location… and Settings › General. Notebook works on the files in place; nothing is
+copied or imported.
 
 To look around without your own notes, run a Debug build with the arguments `-NotebookLibrary /tmp/NotebookSample
 -NotebookDemo YES` (Product › Scheme › Edit Scheme › Arguments). It writes a few sample notes, pictures and PDFs to that
