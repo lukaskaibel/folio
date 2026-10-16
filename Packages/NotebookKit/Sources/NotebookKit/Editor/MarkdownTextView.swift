@@ -77,8 +77,14 @@ final class MarkdownTextView: NSTextView {
     // MARK: - Layout
 
     override func setFrameSize(_ newSize: NSSize) {
+        let changed = newSize != frame.size
         super.setFrameSize(newSize)
         updateInsets()
+        // Drawings are as wide as the text, and the last one reaches down to the end of the page: their canvases
+        // follow.
+        if changed, controller?.isDrawing == true {
+            DispatchQueue.main.async { [weak self] in self?.controller?.updateDrawingCanvases() }
+        }
     }
 
     /// Centres a column of text at most `EditorStyle.contentWidth` wide, with room above for the title.
@@ -123,6 +129,15 @@ final class MarkdownTextView: NSTextView {
     // MARK: - Mouse
 
     override func mouseDown(with event: NSEvent) {
+        // A click in the text (canvases take their own) stops drawing and puts the caret where it was clicked, which
+        // stays under the pointer while the drawings settle to their size.
+        if let controller, controller.isDrawing {
+            let index = characterIndexForInsertion(at: convert(event.locationInWindow, from: nil))
+            controller.endDrawing(keeping: index)
+            window?.makeFirstResponder(self)
+            controller.setSelection(NSRange(location: min(index, controller.storage.length), length: 0))
+            return
+        }
         if controller?.handleMouseDown(event) == true { return }
         isTrackingMouse = true
         super.mouseDown(with: event)

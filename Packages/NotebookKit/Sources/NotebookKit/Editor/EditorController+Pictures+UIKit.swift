@@ -37,7 +37,7 @@ final class PictureInteractions: NSObject, UIDragInteractionDelegate, @preconcur
 
     /// The picture or file card at a point in the text view.
     func picture(at point: CGPoint) -> Picture? {
-        guard let editor, case .picture(let range, let url) = editor.hitTest(point),
+        guard let editor, !editor.isDrawing, case .picture(let range, let url) = editor.hitTest(point),
               let rect = editor.layoutManager.rect(forObjectAt: range.location, origin: editor.textOrigin) else { return nil }
         return Picture(range: range, url: url, rect: rect)
     }
@@ -63,6 +63,11 @@ final class PictureInteractions: NSObject, UIDragInteractionDelegate, @preconcur
     private func menu(for picture: Picture) -> UIMenu {
         guard let editor else { return UIMenu() }
         var open: [UIMenuElement] = []
+        if let drawing = editor.drawing(at: picture.range) {
+            open.append(UIAction(title: "Edit Drawing", image: UIImage(systemName: "pencil.tip.crop.circle")) { [weak editor] _ in
+                editor?.beginDrawing(in: drawing)
+            })
+        }
         if let url = picture.url {
             open.append(UIAction(title: "Quick Look", image: UIImage(systemName: "eye")) { [weak editor] _ in
                 guard let editor else { return }

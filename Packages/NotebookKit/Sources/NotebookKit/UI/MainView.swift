@@ -100,7 +100,10 @@ struct DocumentToolbar: ToolbarContent {
         ToolbarSpacer(.flexible)
         if let url = workspace.currentURL {
             if let note = workspace.note {
-                ToolbarItem { FormatMenu().disabled(!note.isLoaded) }
+                ToolbarItemGroup {
+                    FormatMenu().disabled(!note.isLoaded)
+                    DrawingToggle(workspace: workspace).disabled(!note.isLoaded)
+                }
                 ToolbarSpacer(.fixed)
             } else {
                 ToolbarItem {
@@ -244,6 +247,15 @@ struct DetailColumn: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.theme(Theme.panel).ignoresSafeArea())
+        .overlay(alignment: .bottom) {
+            if workspace.isDrawing {
+                DrawingPalette(workspace: workspace)
+                    .padding(.bottom, 18)
+                    .padding(.horizontal, 12)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(Theme.spring, value: workspace.isDrawing)
         .overlay {
             SwipeAnchor(swiper: workspace.pages)
                 .ignoresSafeArea(.container, edges: .top)

@@ -23,7 +23,7 @@ public struct NotebookScene: Scene {
                     #endif
                 }
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.willResignActiveNotification)) { _ in workspace.saveAll() }
-                .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in workspace.saveAll() }
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in workspace.saveAll(quitting: true) }
         }
         .windowToolbarStyle(.unified)
         .defaultSize(width: 1280, height: 820)
@@ -121,6 +121,9 @@ public struct NotebookScene: Scene {
                 formatButton("Bulleted List", #selector(MarkdownTextView.makeBulletedList(_:)), "7", [.command, .shift])
                 formatButton("Numbered List", #selector(MarkdownTextView.makeNumberedList(_:)), "9", [.command, .shift])
                 formatButton("Block Quote", #selector(MarkdownTextView.makeQuote(_:)), "'", .command)
+                Divider()
+                Button(workspace.isDrawing ? "Stop Drawing" : "Drawing") { workspace.editor.toggleDrawing() }
+                    .disabled(workspace.note == nil)
                 Divider()
                 formatButton("Increase Indent", #selector(MarkdownTextView.indentLines(_:)), "]", [.command, .option])
                 formatButton("Decrease Indent", #selector(MarkdownTextView.outdentLines(_:)), "[", [.command, .option])

@@ -119,7 +119,7 @@ public enum NoteExporter {
         fit(copy, margin: margin)
         for _ in 0..<80 {
             render(view)
-            if !ImageStore.shared.isBusy, !ThumbnailStore.shared.isBusy, !DiagramStore.isBusy { break }
+            if !ImageStore.shared.isBusy, !ThumbnailStore.shared.isBusy, !DiagramStore.isBusy, !DrawingStore.shared.isBusy { break }
             try? await Task.sleep(for: .milliseconds(50))
         }
         fit(copy, margin: margin)

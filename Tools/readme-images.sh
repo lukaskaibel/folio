@@ -103,6 +103,8 @@ for theme in dark light; do
   say "open Travel/Flight tickets.pdf"; sleep 2; shot "quicklook-$theme"
   # Further down the trip: the plan with its link, the callout, the table and the embedded PDF.
   say "open Travel/Kyoto trip.md"; sleep 1.2; say "scroll 640"; sleep 1; shot "objects-$theme"
+  # Drawing in a note: the way to the ryokan, open for drawing, with the palette at the bottom.
+  say "open Travel/Getting to the ryokan.md" "wait 1" "drawing 0"; sleep 2; shot "drawing-$theme"; say "drawing end"
   # The questions for the doctor, with Remind Me… open under the title, where the sample reminder's bell is.
   say "open Personal/Questions for Dr. Weber.md"; sleep 1.2
   say "remindme Personal/Questions for Dr. Weber.md"; sleep 1.2; shot "reminder-$theme"

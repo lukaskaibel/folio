@@ -111,6 +111,8 @@ struct DocumentScreen: View {
                     .disabled(!isLoaded)
                 AttachmentMenu(editor: workspace.editor)
                     .disabled(!isLoaded)
+                DrawingButton(workspace: workspace)
+                    .disabled(!isLoaded)
             }
             ToolbarSpacer(.fixed, placement: .primaryAction)
         }
@@ -118,11 +120,15 @@ struct DocumentScreen: View {
             ShareLink(item: url) { Label("Share", systemImage: "square.and.arrow.up") }
             moreMenu
         }
-        if isNote, workspace.isEditing, !isInSplitView {
+        if isNote, workspace.isEditing || workspace.isDrawing, !isInSplitView {
             ToolbarSpacer(.fixed, placement: .primaryAction)
             ToolbarItem(placement: .primaryAction) {
-                Button { workspace.editor.endEditing() } label: { Label("Done", systemImage: "checkmark") }
-                    .buttonStyle(.glassProminent)
+                Button {
+                    if workspace.isDrawing { workspace.editor.endDrawing() } else { workspace.editor.endEditing() }
+                } label: {
+                    Label("Done", systemImage: "checkmark")
+                }
+                .buttonStyle(.glassProminent)
             }
         }
         if isInSplitView {
@@ -136,13 +142,18 @@ struct DocumentScreen: View {
                 .keyboardShortcut("i", modifiers: [.command, .control])
             }
         }
-        if isNote, !isInSplitView, sizeClass == .compact, !workspace.isEditing {
+        // While drawing, the tool picker takes the bottom of the screen.
+        if isNote, !isInSplitView, sizeClass == .compact, !workspace.isEditing, !workspace.isDrawing {
             ToolbarItem(placement: .bottomBar) {
                 Button { workspace.editor.beginEditing(then: .checklist) } label: { Label("Checklist", systemImage: "checklist") }
                     .disabled(!isLoaded)
             }
             ToolbarItem(placement: .bottomBar) {
                 AttachmentMenu(editor: workspace.editor)
+                    .disabled(!isLoaded)
+            }
+            ToolbarItem(placement: .bottomBar) {
+                DrawingButton(workspace: workspace)
                     .disabled(!isLoaded)
             }
             ToolbarSpacer(.flexible, placement: .bottomBar)
@@ -235,6 +246,17 @@ struct FormatMenu: View {
             FormatPanelView(editor: editor) { isShown = false }
                 .frame(width: 390)
                 .presentationCompactAdaptation(.popover)
+        }
+    }
+}
+
+/// The pencil, as in Notes: draws in the note, in the drawing at the caret or a new one; filled while drawing.
+struct DrawingButton: View {
+    let workspace: Workspace
+
+    var body: some View {
+        Button { workspace.editor.toggleDrawing() } label: {
+            Label(workspace.isDrawing ? "Stop Drawing" : "Drawing", systemImage: workspace.isDrawing ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
         }
     }
 }

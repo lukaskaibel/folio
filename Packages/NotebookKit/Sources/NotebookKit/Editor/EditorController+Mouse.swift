@@ -41,6 +41,8 @@ extension EditorController {
                 return .checkbox(line: document.lineIndex(containing: index))
             case .image(let url, _, _):
                 return .picture(range: range, url: url)
+            case .drawing(let url):
+                return .picture(range: range, url: url)
             case .fileCard(let url, _):
                 return .picture(range: range, url: url)
             case .noteEmbed(let target, _):
@@ -107,7 +109,12 @@ extension EditorController {
         case .picture(let range, let url):
             textView.window?.makeFirstResponder(textView)
             setSelection(range)
-            if event.clickCount >= 2, let url { delegate?.editor(self, quickLook: url) }
+            // A double-click opens a drawing for drawing, and any other picture in Quick Look.
+            if event.clickCount >= 2, let drawing = drawing(at: range) {
+                beginDrawing(in: drawing)
+            } else if event.clickCount >= 2, let url {
+                delegate?.editor(self, quickLook: url)
+            }
             return true
         case .editLink(let range):
             editLink(at: range)
@@ -123,6 +130,7 @@ extension EditorController {
 
     func updateCursor(for event: NSEvent) {
         let point = textView.convert(event.locationInWindow, from: nil)
+        if isDrawing, canvas(at: point) != nil { return NSCursor.crosshair.set() }
         if !textView.copyButton.isHidden, textView.copyButton.frame.contains(point) { return NSCursor.arrow.set() }
         switch hitTest(point) {
         case .checkbox, .link, .editLink, .headingLevel: NSCursor.pointingHand.set()
@@ -140,6 +148,9 @@ extension EditorController {
                 case .image(let url, _, _), .fileCard(let url, _):
                     if let url { delegate?.editor(self, quickLook: url) }
                     return true
+                case .drawing(let url):
+                    delegate?.editor(self, quickLook: url)
+                    return true
                 default:
                     break
                 }
@@ -153,6 +164,11 @@ extension EditorController {
         if case .picture(let range, let url) = hitTest(point) {
             setSelection(range)
             let menu = NSMenu()
+            if let drawing = drawing(at: range) {
+                let edit = NSMenuItem(title: "Edit Drawing", action: #selector(MarkdownTextView.editDrawing(_:)), keyEquivalent: "")
+                edit.representedObject = drawing
+                menu.addItem(edit)
+            }
             if let url {
                 let look = NSMenuItem(title: "Quick Look", action: #selector(MarkdownTextView.quickLookSelection(_:)), keyEquivalent: "")
                 look.representedObject = url
@@ -178,6 +194,11 @@ extension MarkdownTextView {
     @objc func quickLookSelection(_ sender: NSMenuItem) {
         guard let url = sender.representedObject as? URL, let controller else { return }
         controller.delegate?.editor(controller, quickLook: url)
+    }
+
+    @objc func editDrawing(_ sender: NSMenuItem) {
+        guard let picture = sender.representedObject as? URL else { return }
+        controller?.beginDrawing(in: picture)
     }
 
     @objc func revealSelection(_ sender: NSMenuItem) {

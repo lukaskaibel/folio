@@ -139,7 +139,7 @@ public enum NoteExporter {
                 let glyphs = copy.layoutManager.glyphRange(forBoundingRect: CGRect(x: 0, y: 0, width: width, height: used.height + 1), in: copy.container)
                 copy.layoutManager.drawGlyphs(forGlyphRange: glyphs, at: .zero)
             }
-            if !ImageStore.shared.isBusy, !ThumbnailStore.shared.isBusy, !DiagramStore.isBusy { break }
+            if !ImageStore.shared.isBusy, !ThumbnailStore.shared.isBusy, !DiagramStore.isBusy, !DrawingStore.shared.isBusy { break }
             try? await Task.sleep(for: .milliseconds(50))
         }
         return Copy(editor: copy, delegate: delegate)

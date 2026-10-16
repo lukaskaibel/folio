@@ -1,7 +1,13 @@
 #if DEBUG
+#if os(macOS)
+import AppKit
+#else
+import UIKit
+#endif
 import CoreText
 import Foundation
 import ImageIO
+import PencilKit
 import UniformTypeIdentifiers
 
 /// Sample notes and files for trying Notebook and for its screenshots and tests, written to a folder of your choice so
@@ -71,6 +77,15 @@ enum DemoLibrary {
         | 4 | Gion | Evening walk |
 
         ![[Flight tickets.pdf]]
+
+        """)
+        write("Travel/Getting to the ryokan.md", """
+        From Kyoto Station it's twenty minutes on foot: along the river, over the second bridge, then up the lane to the ryokan.
+
+        ![Drawing](.assets/Getting%20to%20the%20ryokan%20drawing.png)
+
+        - [ ] Send the map to Mia
+        - [x] Ask about a late check-in
 
         """)
         write("Travel/Budget.md", """
@@ -163,6 +178,7 @@ enum DemoLibrary {
         """)
 
         drawTorii(to: root.appendingPathComponent("Travel/.assets/torii.png"))
+        drawRoute(to: root.appendingPathComponent("Travel/.assets/Getting to the ryokan drawing.png"))
         drawTorii(to: root.appendingPathComponent("Travel/ryokan.jpg"), jpeg: true)
         makePDF(at: root.appendingPathComponent("Travel/Flight tickets.pdf"), title: "Itinerary receipt", lines: [
             "Booking reference K7Q2LM", "Outbound Mon 12 Oct: FRA 13:40 to KIX 08:45, flight XY 2041",
@@ -193,6 +209,78 @@ enum DemoLibrary {
               let destination = CGImageDestinationCreateWithURL(url as CFURL, (jpeg ? UTType.jpeg : UTType.png).identifier as CFString, 1, nil) else { return }
         CGImageDestinationAddImage(destination, image, jpeg ? [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary : nil)
         CGImageDestinationFinalize(destination)
+    }
+
+    /// A sketch of the way from the station to the ryokan, as strokes a pen would make: a drawing to go on drawing in.
+    private static func drawRoute(to picture: URL) {
+        var strokes: [PKStroke] = []
+        func stroke(_ points: [CGPoint], _ type: PKInk.InkType = .pen, _ color: UInt32 = 0x1C1C1E, width: CGFloat = 3) {
+            let path = points.enumerated().map { index, point in
+                PKStrokePoint(location: point, timeOffset: Double(index) / 120, size: CGSize(width: width, height: width), opacity: 1, force: 1, azimuth: 0, altitude: .pi / 2)
+            }
+            strokes.append(PKStroke(ink: PKInk(type, color: NSColor(hex: color)), path: PKStrokePath(controlPoints: path, creationDate: Date())))
+        }
+        /// Through the points as a hand draws: rounded between them, and a little uneven.
+        func hand(_ points: [(CGFloat, CGFloat)], smooth: Bool = true, seed: Double = 0) -> [CGPoint] {
+            let p = points.map { CGPoint(x: $0.0, y: $0.1) }
+            var result: [CGPoint] = []
+            for i in 0..<max(1, p.count - 1) {
+                let p0 = p[max(0, i - 1)], p1 = p[i], p2 = p[min(p.count - 1, i + 1)], p3 = p[min(p.count - 1, i + 2)]
+                let steps = max(2, Int(hypot(p2.x - p1.x, p2.y - p1.y) / 4))
+                for step in 0..<steps {
+                    let t = CGFloat(step) / CGFloat(steps)
+                    var point: CGPoint
+                    if smooth {
+                        let t2 = t * t, t3 = t2 * t
+                        func value(_ a: CGFloat, _ b: CGFloat, _ c: CGFloat, _ d: CGFloat) -> CGFloat {
+                            0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3)
+                        }
+                        point = CGPoint(x: value(p0.x, p1.x, p2.x, p3.x), y: value(p0.y, p1.y, p2.y, p3.y))
+                    } else {
+                        point = CGPoint(x: p1.x + (p2.x - p1.x) * t, y: p1.y + (p2.y - p1.y) * t)
+                    }
+                    let n = Double(result.count)
+                    point.x += CGFloat(sin(n * 0.31 + seed) * 0.7)
+                    point.y += CGFloat(cos(n * 0.23 + seed * 1.7) * 0.7)
+                    result.append(point)
+                }
+            }
+            result.append(p[p.count - 1])
+            return result
+        }
+        // The way, marked in yellow under the dashes.
+        let way: [(CGFloat, CGFloat)] = [(158, 56), (236, 64), (292, 86), (346, 131), (400, 182), (466, 222), (516, 250)]
+        stroke(hand(way, seed: 1), .marker, 0xF2C230, width: 16)
+        // The river, between its banks.
+        stroke(hand([(8, 120), (110, 104), (220, 132), (340, 112), (460, 140), (632, 112)], seed: 2), .pen, 0x2F6FDE, width: 3.5)
+        stroke(hand([(8, 158), (110, 142), (220, 170), (340, 150), (460, 178), (632, 150)], seed: 3), .pen, 0x2F6FDE, width: 3.5)
+        // The station, with its tracks.
+        stroke(hand([(40, 30), (150, 28), (152, 74), (42, 76), (41, 32)], smooth: false, seed: 4), width: 3)
+        stroke(hand([(22, 86), (176, 84)], smooth: false, seed: 5), width: 2.4)
+        stroke(hand([(22, 95), (176, 93)], smooth: false, seed: 6), width: 2.4)
+        for x in stride(from: CGFloat(30), to: 172, by: 14) { stroke([CGPoint(x: x, y: 81), CGPoint(x: x - 1, y: 100)], width: 2) }
+        // The way itself, dashed.
+        let line = hand(way, seed: 7)
+        var dash: [CGPoint] = []
+        var travelled: CGFloat = 0
+        for (a, b) in zip(line, line.dropFirst()) {
+            travelled += hypot(b.x - a.x, b.y - a.y)
+            if travelled.truncatingRemainder(dividingBy: 18) < 11 { dash.append(b) } else if dash.count > 1 { stroke(dash, width: 2.6); dash = [] } else { dash = [] }
+        }
+        if dash.count > 1 { stroke(dash, width: 2.6) }
+        // The second bridge.
+        stroke(hand([(326, 98), (329, 166)], smooth: false, seed: 8), width: 3)
+        stroke(hand([(364, 96), (367, 164)], smooth: false, seed: 9), width: 3)
+        // The ryokan, ringed in red.
+        stroke(hand([(506, 232), (556, 194), (604, 232)], smooth: false, seed: 10), width: 3)
+        stroke(hand([(516, 230), (516, 274), (596, 274), (596, 230)], smooth: false, seed: 11), width: 3)
+        stroke(hand([(549, 274), (549, 252), (563, 252), (563, 274)], smooth: false, seed: 12), width: 2.4)
+        let ring = (0...44).map { index -> (CGFloat, CGFloat) in
+            let angle = Double(index) / 40 * 2 * .pi - 2.2
+            return (556 + CGFloat(cos(angle)) * 72, 236 + CGFloat(sin(angle)) * 54)
+        }
+        stroke(hand(ring, seed: 13), .pen, 0xE5483E, width: 3)
+        DrawingFile(drawing: PKDrawing(strokes: strokes), size: CGSize(width: 640, height: 300)).write(picture: picture)
     }
 
     private static func makePDF(at url: URL, title: String, lines: [String]) {

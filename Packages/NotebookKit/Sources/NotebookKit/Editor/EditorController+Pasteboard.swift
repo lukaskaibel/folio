@@ -29,6 +29,8 @@ extension EditorController {
             switch object.kind {
             case .image(let url, _, _), .fileCard(let url, _):
                 file = url
+            case .drawing(let url):
+                file = url
             default:
                 break
             }
@@ -156,7 +158,7 @@ extension EditorController {
         let ext = (name as NSString).pathExtension
         var candidate = assets.appendingPathComponent(name)
         var counter = 2
-        while FileManager.default.fileExists(atPath: candidate.path) {
+        while FileManager.default.fileExists(atPath: candidate.path) || FileManager.default.fileExists(atPath: DrawingFile.strokesURL(for: candidate).path) {
             candidate = assets.appendingPathComponent(ext.isEmpty ? "\(base) \(counter)" : "\(base) \(counter).\(ext)")
             counter += 1
         }
@@ -174,6 +176,15 @@ extension EditorController {
         var copied = false
         NSFileCoordinator().coordinate(readingItemAt: url, options: [], writingItemAt: destination, options: .forReplacing, error: nil) { from, to in
             copied = (try? FileManager.default.copyItem(at: from, to: to)) != nil
+        }
+        // A drawing's strokes come along, so it can be drawn in where it goes.
+        let strokes = DrawingFile.strokesURL(for: url)
+        if copied, MarkdownStyler.isImageFile(url), FileManager.default.fileExists(atPath: strokes.path) {
+            let copy = DrawingFile.strokesURL(for: destination)
+            NSFileCoordinator().coordinate(readingItemAt: strokes, options: [], writingItemAt: copy, options: .forReplacing, error: nil) { from, to in
+                try? FileManager.default.removeItem(at: to)
+                try? FileManager.default.copyItem(at: from, to: to)
+            }
         }
         return copied ? Self.markdownPath(destination.lastPathComponent) : nil
     }

@@ -111,8 +111,13 @@ final class MarkdownTextView: UITextView {
             laidOutWidth = bounds.width
             applyTypography()
             controller?.marginNeedsDisplay()
+            // Drawings are as wide as the text: their canvases follow.
+            if controller?.isDrawing == true {
+                DispatchQueue.main.async { [weak self] in self?.controller?.updateDrawingCanvases() }
+            }
         }
     }
+
 
     private var knownTopInset: CGFloat = 0
 
@@ -174,6 +179,14 @@ final class MarkdownTextView: UITextView {
     /// Holding a picture lifts it (`PictureInteractions`): the text's loupe, which would put the caret there and bring
     /// up the keyboard, leaves pictures alone.
     override func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+        // While drawing, a touch on a drawing draws: it doesn't select text or bring up the keyboard. The note still
+        // scrolls over it, with a finger where only Apple Pencil draws and with two fingers where a finger draws too.
+        if let controller, controller.isDrawing, recognizer.view === self, let canvas = controller.canvas(at: recognizer.location(in: self)) {
+            guard recognizer === panGestureRecognizer, controller.scrollsOverDrawing(recognizer) else { return false }
+            // The first of two fingers began a stroke before the second made it a scroll.
+            if recognizer.numberOfTouches > 1 { canvas.cancelStroke() }
+            return true
+        }
         if String(describing: type(of: recognizer)).contains("Loupe"),
            controller?.pictureInteractions?.picture(at: recognizer.location(in: self)) != nil {
             return false

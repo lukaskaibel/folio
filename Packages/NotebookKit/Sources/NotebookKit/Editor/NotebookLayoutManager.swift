@@ -15,6 +15,8 @@ protocol EditorLayoutSource: AnyObject {
     /// Something changed size (a diagram finished drawing): lay it out again.
     func objectNeedsLayout(_ range: NSRange)
     func noteText(for url: URL) -> String?
+    /// A drawing is open in a canvas over the text, which draws it.
+    func showsCanvas(for picture: URL) -> Bool
 }
 
 /// TextKit 1 layout with Notebook's live preview: hidden Markdown punctuation gets no glyph at all, objects (checkboxes,
@@ -181,6 +183,10 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
             if display.width > width { display = CGSize(width: width, height: size.height * width / size.width) }
             if display.height > 560 { display = CGSize(width: display.width * 560 / display.height, height: 560) }
             return NSRect(x: 0, y: 0, width: floor(display.width), height: floor(display.height))
+        case .drawing(let url):
+            // As wide as the text, wherever it was drawn; as tall as that makes it.
+            let size = DrawingStore.shared.size(of: url) ?? ImageStore.shared.size(of: url) ?? CGSize(width: width, height: width / 2)
+            return NSRect(x: 0, y: 0, width: floor(width), height: max(24, (size.height * floor(width) / max(1, size.width)).rounded()))
         case .fileCard:
             return NSRect(x: 0, y: 0, width: min(width, 440), height: 68)
         case .noteEmbed:
@@ -239,6 +245,19 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
         let glyph = glyphIndexForCharacter(at: index)
         guard glyph < numberOfGlyphs, propertyForGlyph(at: glyph) == .controlCharacter, let object = object(at: index), showsAsObject(object, index) else { return nil }
         return boundingRect(forGlyphRange: NSRange(location: glyph, length: 1), in: container).offsetBy(dx: origin.x, dy: origin.y)
+    }
+
+    /// Where a picture, table or drawing on a line of its own is drawn, in the text view's coordinates: the whole
+    /// box, which the glyph's own rectangle isn't.
+    func blockObjectRect(at index: Int, origin: NSPoint) -> NSRect? {
+        guard let object = object(at: index), object.isBlock, index < (textStorage?.length ?? 0) else { return nil }
+        let glyph = glyphIndexForCharacter(at: index)
+        guard glyph < numberOfGlyphs, propertyForGlyph(at: glyph) == .controlCharacter else { return nil }
+        let line = lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+        let style = textStorage?.attribute(.paragraphStyle, at: index, effectiveRange: nil) as? NSParagraphStyle
+        let size = blockSize(object, at: index, width: line.width - (style?.firstLineHeadIndent ?? 0))
+        return NSRect(x: line.minX + (style?.firstLineHeadIndent ?? 0) + origin.x, y: line.minY + origin.y + (style?.paragraphSpacingBefore ?? 0),
+                      width: size.width, height: size.height)
     }
 
     /// The baseline of the line a glyph is on, as drawn (raised by the line's baseline offset).
@@ -393,6 +412,12 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
 
         case .image(let url, let source, let inline):
             drawImage(url: url, source: source, range: objectRange, in: rect, radius: inline ? 3 : 8)
+
+        case .drawing(let url):
+            guard source?.showsCanvas(for: url) != true,
+                  let image = DrawingStore.shared.image(for: url, width: rect.width, dark: source?.isDarkAppearance ?? false, ready: { [weak self] in self?.source?.objectNeedsDisplay(objectRange) })
+            else { break }
+            image.drawUpright(in: rect)
 
         case .fileCard(let url, let name):
             drawFileCard(url: url, name: name, range: objectRange, in: rect)
