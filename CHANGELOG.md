@@ -5,14 +5,22 @@ versions follow [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- Hide folders you don't want to see, such as the ones other apps keep in iCloud Drive: right-click one and choose
+  Hide Folder. Hidden folders leave the sidebar, search and Move To, and stay hidden on your other Macs through iCloud.
+  To see them again, dimmed, click the eye next to the location's name or press ⇧⌘.; links to notes in them keep
+  working.
+- Add Location at the bottom of the sidebar, to show another folder there. A folder dropped from the Finder on the
+  sidebar, between or below its sections, is added the same way.
+
 ## [0.1.0] – not released yet
 
 The first version: a Mac app for Markdown notes in your own folders. While it was being built, it was called Folio.
 
 ### Added
 
-- Locations: iCloud Drive or any folder in the sidebar, with favourites, read in place and watched for changes. Add
-  one with Add Location at the bottom of the sidebar, or by dropping a folder from the Finder on the sidebar.
+- Locations: iCloud Drive or any folder in the sidebar, with favourites, read in place and watched for changes.
 - iCloud Drive as the Finder shows it, with Desktop, Documents and the folders of apps such as Pages or Obsidian.
 - A live-preview editor: Markdown marks show only next to the caret, and heading levels in the margin.
 - Headings, bold, italic, strikethrough, highlights, inline code, links, checklists, lists, quotes, callouts, tables,
