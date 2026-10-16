@@ -68,6 +68,9 @@ public final class Workspace: NSObject {
     private(set) var isTitleScrolledAway = false
     /// The note is in drawing mode: the pencil in the toolbar is on and the drawing tools are out.
     private(set) var isDrawing = false
+    /// While drawing: whether Undo and Redo have strokes to take back or bring again.
+    private(set) var canUndoDrawing = false
+    private(set) var canRedoDrawing = false
     /// The folder selected in the sidebar, where ⌘N puts a note when no note is open.
     var selectedFolder: URL?
     /// Locations given on the command line for this run only (tests, the demo library).
@@ -1130,6 +1133,8 @@ extension Workspace: EditorControllerDelegate {
 
     public func editorDrawingDidChange(_ editor: EditorController) {
         if isDrawing != editor.isDrawing { isDrawing = editor.isDrawing }
+        if canUndoDrawing != editor.canUndoDrawing { canUndoDrawing = editor.canUndoDrawing }
+        if canRedoDrawing != editor.canRedoDrawing { canRedoDrawing = editor.canRedoDrawing }
     }
 
     public func editorEditingDidChange(_ editor: EditorController) {

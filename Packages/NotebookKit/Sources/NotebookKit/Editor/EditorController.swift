@@ -38,7 +38,7 @@ public protocol EditorControllerDelegate: AnyObject {
     func editorPositionDidChange(_ editor: EditorController)
     /// Typing started or stopped, in the note or its title (on iPhone and iPad: the keyboard came up or went).
     func editorEditingDidChange(_ editor: EditorController)
-    /// Drawing mode started or ended.
+    /// Drawing mode started or ended, or Undo and Redo in it have something else to do.
     func editorDrawingDidChange(_ editor: EditorController)
     /// The reminder under the title, or the writing bar's bell, was tapped: to set, change or remove the note's reminder.
     func editorShowReminder(_ editor: EditorController)

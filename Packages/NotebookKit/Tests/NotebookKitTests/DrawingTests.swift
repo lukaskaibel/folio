@@ -277,6 +277,28 @@ final class DrawingTests: XCTestCase {
         XCTAssertEqual(h.text, "Hello\n![Drawing](\(EditorController.markdownPath(picture.lastPathComponent)))\n", "the text's undo is untouched")
     }
 
+    func testTheUndoButtonTakesBackStrokesOfTheDrawingDrawnInLast() throws {
+        let h = EditorHarness("Hello")
+        h.caret(5)
+        h.editor.beginDrawing()
+        XCTAssertFalse(h.editor.canUndoDrawing, "nothing drawn yet")
+        let picture = try XCTUnwrap(drawings(in: h).first)
+        let canvas = try XCTUnwrap(h.editor.drawingSession?.canvases[picture])
+        canvas.addStroke(through: [CGPoint(x: 20, y: 20), CGPoint(x: 60, y: 60)], ink: PKInk(.pen), width: 3)
+        canvas.addStroke(through: [CGPoint(x: 80, y: 20), CGPoint(x: 120, y: 60)], ink: PKInk(.pen), width: 3)
+        XCTAssertTrue(h.editor.canUndoDrawing)
+        XCTAssertFalse(h.editor.canRedoDrawing)
+
+        h.editor.undoDrawing()
+        XCTAssertEqual(canvas.file.drawing.strokes.count, 1)
+        XCTAssertTrue(h.editor.canRedoDrawing)
+        h.editor.redoDrawing()
+        XCTAssertEqual(canvas.file.drawing.strokes.count, 2)
+
+        h.editor.endDrawing()
+        XCTAssertFalse(h.editor.canUndoDrawing, "not while not drawing")
+    }
+
     func testDrawingWithTheMouse() throws {
         let h = EditorHarness("Hello")
         h.caret(5)

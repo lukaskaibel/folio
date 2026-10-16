@@ -117,6 +117,11 @@ struct DocumentScreen: View {
             ToolbarSpacer(.fixed, placement: .primaryAction)
         }
         ToolbarItemGroup(placement: .primaryAction) {
+            // Undo while drawing, as in Notes on the iPhone. The iPad's tool picker has Undo and Redo of its own, but
+            // not where it is narrow.
+            if isNote, workspace.isDrawing, sizeClass == .compact {
+                DrawingUndoButton(workspace: workspace)
+            }
             ShareLink(item: url) { Label("Share", systemImage: "square.and.arrow.up") }
             moreMenu
         }
@@ -251,6 +256,23 @@ struct FormatMenu: View {
 }
 
 /// The pencil, as in Notes: draws in the note, in the drawing at the caret or a new one; filled while drawing.
+/// Takes back the last stroke; touch and hold it for Redo, which keeps the bar as it is.
+struct DrawingUndoButton: View {
+    let workspace: Workspace
+
+    var body: some View {
+        Menu {
+            Button { workspace.editor.redoDrawing() } label: { Label("Redo", systemImage: "arrow.uturn.forward") }
+                .disabled(!workspace.canRedoDrawing)
+        } label: {
+            Label("Undo", systemImage: "arrow.uturn.backward")
+        } primaryAction: {
+            workspace.editor.undoDrawing()
+        }
+        .disabled(!workspace.canUndoDrawing && !workspace.canRedoDrawing)
+    }
+}
+
 struct DrawingButton: View {
     let workspace: Workspace
 
