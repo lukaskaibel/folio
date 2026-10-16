@@ -113,6 +113,20 @@ enum DebugRemote {
             if let format = FormatCommand.allCases.first(where: { $0.name.lowercased().replacingOccurrences(of: " ", with: "") == argument.lowercased() }) {
                 editor.perform(format)
             }
+        case "pictures", "selectpicture", "movepicture", "deletepicture":
+            // The pictures of the note, by their order: `selectpicture 0`, `movepicture 0 <offset>`.
+            let pattern = try! NSRegularExpression(pattern: "!\\[[^\\]]*\\]\\([^)]*\\)")
+            let ranges = pattern.matches(in: editor.text, range: NSRange(location: 0, length: editor.nsText.length)).map(\.range).filter(editor.isWholeObject)
+            let index = Int(numbers.first ?? 0)
+            guard command == "pictures" || ranges.indices.contains(index) else { return log("no picture \(index)") }
+            switch command {
+            case "selectpicture": editor.selectObject(ranges[index])
+            case "movepicture": editor.moveObject(ranges[index], to: Int(numbers.count > 1 ? numbers[1] : 0))
+            case "deletepicture": editor.deleteObject(ranges[index])
+            default: log("pictures \(ranges)")
+            }
+        case "formatpanel":
+            argument == "hide" ? editor.hideFormatPanel() : editor.showFormatPanel()
         case "scroll":
             editor.setScrollTop((numbers.first ?? 0) - editor.topInset)
         case "scrollto":

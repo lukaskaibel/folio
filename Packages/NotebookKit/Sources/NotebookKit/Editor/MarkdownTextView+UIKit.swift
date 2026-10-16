@@ -124,6 +124,31 @@ final class MarkdownTextView: UITextView {
         return controller.caretRect(proposed: rect)
     }
 
+    /// A picture selected whole shows the ring the layout manager draws around it, not the text's selection.
+    override func selectionRects(for range: UITextRange) -> [UITextSelectionRect] {
+        if let controller {
+            let start = offset(from: beginningOfDocument, to: range.start)
+            let length = offset(from: range.start, to: range.end)
+            if controller.isWholeObject(NSRange(location: start, length: length)) { return [] }
+        }
+        return super.selectionRects(for: range)
+    }
+
+    // MARK: - Pictures
+
+    /// The gestures of the pictures' menu and dragging (`PictureInteractions`).
+    var pictureRecognizers: Set<UIGestureRecognizer> = []
+
+    /// Touching and holding a picture is the picture's: the text's own long press (the loupe, selecting a word)
+    /// leaves it alone. Scrolling and taps go on as ever.
+    override func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+        if !pictureRecognizers.contains(recognizer), !(recognizer is UIPanGestureRecognizer), !(recognizer is UITapGestureRecognizer),
+           let pictures = controller?.pictureInteractions, pictures.picture(at: recognizer.location(in: self)) != nil {
+            return false
+        }
+        return super.gestureRecognizerShouldBegin(recognizer)
+    }
+
     // MARK: - Focus
 
     /// While the title lets go of the focus (see `TitleField`).

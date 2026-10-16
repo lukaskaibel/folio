@@ -202,33 +202,23 @@ struct ShareSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 
-/// The text styles, formatting and lists, as the toolbar's Aa button.
+/// The toolbar's Aa button: the Format panel the bar above the keyboard has, in a popover.
 struct FormatMenu: View {
     let editor: EditorController
+    @State private var isShown = false
 
     var body: some View {
-        Menu {
-            Section {
-                ForEach(FormatCommand.styles) { item($0) }
-            }
-            ControlGroup {
-                ForEach(FormatCommand.inline) { item($0) }
-            }
-            .controlGroupStyle(.compactMenu)
-            Section {
-                ForEach(FormatCommand.lists + [.link]) { item($0) }
-            }
-            Section {
-                item(.indent)
-                item(.outdent)
-            }
+        Button {
+            editor.beginEditing()
+            isShown = true
         } label: {
             Label("Format", systemImage: "textformat")
         }
-    }
-
-    private func item(_ command: FormatCommand) -> some View {
-        Button { editor.beginEditing(then: command) } label: { Label(command.name, systemImage: command.symbol) }
+        .popover(isPresented: $isShown) {
+            FormatPanelView(editor: editor) { isShown = false }
+                .frame(width: 390)
+                .presentationCompactAdaptation(.popover)
+        }
     }
 }
 

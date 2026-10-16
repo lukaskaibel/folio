@@ -1,54 +1,221 @@
 #if os(iOS)
+import SwiftUI
 import UIKit
 
-/// The bar above the keyboard while you write, as in Notes: text styles and formatting, a checklist, a link, pictures
-/// from the camera, the scanner or the library, and a button that puts the keyboard away.
+/// What the bar above the keyboard can hold. Which ones and in what order is yours to choose, in Settings › Writing
+/// Bar.
+enum WritingTool: String, CaseIterable, Identifiable {
+    case format, checklist, attach, link, undo, redo
+    case bold, italic, strikethrough, highlight, code, quote
+    case bulletedList, numberedList, outdent, indent
+    case camera, scanner, photos, files
+    case hideKeyboard
+
+    var id: Self { self }
+
+    /// The bar as it comes: what Notes has first, then the formatting, then lists and pictures.
+    static let standard: [WritingTool] = [
+        .format, .checklist, .attach, .link, .undo, .redo,
+        .bold, .italic, .strikethrough, .highlight, .code, .quote,
+        .bulletedList, .numberedList, .outdent, .indent, .camera, .scanner,
+    ]
+
+    var command: FormatCommand? {
+        switch self {
+        case .checklist: .checklist
+        case .link: .link
+        case .bold: .bold
+        case .italic: .italic
+        case .strikethrough: .strikethrough
+        case .highlight: .highlight
+        case .code: .code
+        case .quote: .quote
+        case .bulletedList: .bulletedList
+        case .numberedList: .numberedList
+        case .outdent: .outdent
+        case .indent: .indent
+        default: nil
+        }
+    }
+
+    var source: AttachmentSource? {
+        switch self {
+        case .camera: .camera
+        case .scanner: .scanner
+        case .photos: .photos
+        case .files: .files
+        default: nil
+        }
+    }
+
+    var name: String {
+        if let command { return command.name }
+        if let source { return source.name }
+        switch self {
+        case .format: return "Format"
+        case .attach: return "Attach"
+        case .undo: return "Undo"
+        case .redo: return "Redo"
+        default: return "Hide Keyboard"
+        }
+    }
+
+    var symbol: String {
+        if let command { return command.symbol }
+        if let source { return source == .files ? "folder" : source.symbol }
+        switch self {
+        case .format: return "textformat"
+        case .attach: return "paperclip"
+        case .undo: return "arrow.uturn.backward"
+        case .redo: return "arrow.uturn.forward"
+        default: return "keyboard.chevron.compact.down"
+        }
+    }
+
+    /// The camera and the scanner only where there is a camera.
+    var isAvailable: Bool { source?.isAvailable ?? true }
+}
+
+/// The bar above the keyboard while you write, as in Notes: the tools float over the note in a capsule of glass, a
+/// little above the keyboard, and the ones that don't fit wait on the next page.
 @MainActor
-final class WritingBar: UIToolbar {
-    private weak var editor: EditorController?
+final class WritingBar: UIView {
+    /// Room above the capsule, the capsule, and the gap between it and the keyboard.
+    static let topGap: CGFloat = 6
+    static let barHeight: CGFloat = 44
+    static let keyboardGap: CGFloat = 10
+    static let height = topGap + barHeight + keyboardGap
+    /// About a fingertip per tool; a page holds as many as fit.
+    static let toolWidth: CGFloat = 56
+
+    /// The capsule spans the screen on an iPhone, less its margins; on a wider screen it stops at about ten tools.
+    static func barWidth(for available: CGFloat) -> CGFloat {
+        max(toolWidth, min(available - 24, 620))
+    }
+
+    private let host: UIHostingController<WritingBarView>
 
     init(editor: EditorController) {
-        self.editor = editor
-        super.init(frame: CGRect(x: 0, y: 0, width: 400, height: 44))
+        host = UIHostingController(rootView: WritingBarView(editor: editor))
+        super.init(frame: CGRect(x: 0, y: 0, width: 400, height: Self.height))
         autoresizingMask = [.flexibleWidth]
-        let format = UIBarButtonItem(title: "Format", image: UIImage(systemName: "textformat"), menu: UIMenu(children: [
-            UIDeferredMenuElement.uncached { [weak self] completion in completion(self?.formatMenu() ?? []) },
-        ]))
-        let checklist = UIBarButtonItem(title: "Checklist", image: UIImage(systemName: "checklist"), primaryAction: UIAction { [weak self] _ in
-            self?.editor?.perform(.checklist)
-        })
-        let link = UIBarButtonItem(title: "Link", image: UIImage(systemName: "link"), primaryAction: UIAction { [weak self] _ in
-            self?.editor?.perform(.link)
-        })
-        let attach = UIBarButtonItem(title: "Attach", image: UIImage(systemName: "paperclip"), menu: UIMenu(children: AttachmentSource.available.map { source in
-            UIAction(title: source.name, image: UIImage(systemName: source.symbol)) { [weak self] _ in
-                guard let editor = self?.editor else { return }
-                AttachmentPicker.shared.present(source, for: editor)
-            }
-        }))
-        let done = UIBarButtonItem(title: "Hide Keyboard", image: UIImage(systemName: "keyboard.chevron.compact.down"), primaryAction: UIAction { [weak self] _ in
-            _ = self?.editor?.textView.resignFirstResponder()
-        })
-        items = [format, checklist, link, attach, .flexibleSpace(), done]
+        backgroundColor = .clear
+        host.view.backgroundColor = .clear
+        host.safeAreaRegions = []
+        host.view.frame = bounds
+        host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        addSubview(host.view)
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
-    /// The text styles with the one the caret is in ticked, the formatting as a row of symbols, then lists and
-    /// indenting, as Notes' Aa menu has them.
-    private func formatMenu() -> [UIMenuElement] {
-        guard let editor else { return [] }
-        let current = editor.currentLineFormat
-        func action(_ command: FormatCommand, checked: Bool = false) -> UIAction {
-            UIAction(title: command.name, image: UIImage(systemName: command.symbol), state: checked ? .on : .off) { [weak editor] _ in
-                editor?.perform(command)
+    override var intrinsicContentSize: CGSize { CGSize(width: UIView.noIntrinsicMetric, height: Self.height) }
+
+    /// Only the capsule takes touches: the strip around it belongs to the note.
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        let width = Self.barWidth(for: bounds.width)
+        let capsule = CGRect(x: (bounds.width - width) / 2, y: Self.topGap, width: width, height: Self.barHeight)
+        return capsule.insetBy(dx: -4, dy: -4).contains(point)
+    }
+}
+
+struct WritingBarView: View {
+    let editor: EditorController
+    @State private var page: Int? = 0
+
+    var body: some View {
+        GeometryReader { proxy in
+            let width = WritingBar.barWidth(for: proxy.size.width)
+            let pages = Self.pages(of: NotebookSettings.shared.writingBarTools.filter(\.isAvailable), width: width)
+            let perPage = pages.first?.count ?? 1
+            ScrollView(.horizontal) {
+                HStack(spacing: 0) {
+                    ForEach(pages.indices, id: \.self) { index in
+                        HStack(spacing: 0) {
+                            ForEach(pages[index]) { tool in
+                                button(tool)
+                            }
+                            // The last page keeps the others' spacing.
+                            ForEach(0..<max(0, perPage - pages[index].count), id: \.self) { _ in
+                                Color.clear.frame(maxWidth: .infinity)
+                            }
+                        }
+                        .containerRelativeFrame(.horizontal)
+                        .id(index)
+                    }
+                }
+                .scrollTargetLayout()
+            }
+            .scrollTargetBehavior(.paging)
+            .scrollIndicators(.hidden)
+            .scrollPosition(id: $page)
+            .scrollDisabled(pages.count < 2)
+            .frame(width: width, height: WritingBar.barHeight)
+            .overlay(alignment: .bottom) {
+                if pages.count > 1 { dots(count: pages.count) }
+            }
+            .clipShape(.capsule)
+            .glassEffect(.regular.interactive(), in: .capsule)
+            .frame(maxWidth: .infinity)
+            .padding(.top, WritingBar.topGap)
+        }
+    }
+
+    static func pages(of tools: [WritingTool], width: CGFloat) -> [[WritingTool]] {
+        let perPage = max(1, Int(width / WritingBar.toolWidth))
+        return stride(from: 0, to: tools.count, by: perPage).map { Array(tools[$0..<min($0 + perPage, tools.count)]) }
+    }
+
+    /// Which page of tools this is, small at the capsule's lower edge.
+    private func dots(count: Int) -> some View {
+        HStack(spacing: 4) {
+            ForEach(0..<count, id: \.self) { index in
+                Circle()
+                    .fill(Color.primary.opacity(index == (page ?? 0) ? 0.5 : 0.15))
+                    .frame(width: 4, height: 4)
             }
         }
-        let styles = UIMenu(options: .displayInline, children: FormatCommand.styles.map { action($0, checked: $0 == current) })
-        let inline = UIMenu(options: .displayInline, preferredElementSize: .small, children: FormatCommand.inline.map { action($0, checked: editor.isActive($0)) })
-        let lists = UIMenu(options: .displayInline, children: FormatCommand.lists.map { action($0, checked: $0 == current) })
-        let indent = UIMenu(options: .displayInline, preferredElementSize: .medium, children: [action(.outdent), action(.indent)])
-        return [inline, styles, lists, indent]
+        .padding(.bottom, 3)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private func button(_ tool: WritingTool) -> some View {
+        if tool == .attach {
+            Menu {
+                ForEach(AttachmentSource.available) { source in
+                    Button { AttachmentPicker.shared.present(source, for: editor) } label: { Label(source.name, systemImage: source.symbol) }
+                }
+            } label: {
+                icon(tool)
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+        } else {
+            Button { perform(tool) } label: { icon(tool) }
+                .buttonStyle(.plain)
+        }
+    }
+
+    private func icon(_ tool: WritingTool) -> some View {
+        Image(systemName: tool.symbol)
+            .font(.system(size: 18))
+            .foregroundStyle(.primary)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(.rect)
+            .accessibilityLabel(tool.name)
+    }
+
+    private func perform(_ tool: WritingTool) {
+        if let command = tool.command { return editor.perform(command) }
+        if let source = tool.source { return AttachmentPicker.shared.present(source, for: editor) }
+        switch tool {
+        case .format: editor.toggleFormatPanel()
+        case .undo: editor.textView.undoManager?.undo()
+        case .redo: editor.textView.undoManager?.redo()
+        default: editor.endEditing()
+        }
     }
 }
 #endif

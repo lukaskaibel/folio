@@ -109,6 +109,14 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     var isReplayingUndo = false
     /// The text as it was before the last change, which tells what a change removed.
     var shadowText = NSMutableString()
+    /// What the Format panel shows: the style of the caret's line and the formatting it is in.
+    let formatState = FormatState()
+    /// The Format panel in place of the keyboard, made the first time Aa is tapped.
+    var formatInput: UIView?
+    /// The bar above the keyboard.
+    var writingBar: UIView?
+    /// Touching and holding pictures, and dragging them.
+    var pictureInteractions: PictureInteractions?
     #endif
     /// Where the `[[` the popup completes starts (just after the brackets). While it is set, that link is drawn as
     /// the text being typed rather than as a finished link.

@@ -233,6 +233,7 @@ struct TouchSettings: View {
                 Section("Notes") {
                     NavigationLink { TextSettings().navigationTitle("Text") } label: { Label("Text", systemImage: "textformat") }
                     NavigationLink { SidebarSettings().navigationTitle("Files") } label: { Label("Files", systemImage: "folder") }
+                    NavigationLink { WritingBarSettings() } label: { Label("Writing Bar", systemImage: "keyboard") }
                     LabeledContent("New Notes Without a Folder") {
                         Text(workspace.locations.first.map { "\($0.name) › Inbox" } ?? "–")
                     }
@@ -257,6 +258,57 @@ struct TouchSettings: View {
             }
             .folderImporter(isPresented: $addsLocation, workspace: workspace)
         }
+    }
+}
+/// Which tools the bar above the keyboard has, and in what order.
+struct WritingBarSettings: View {
+    @Bindable private var settings = NotebookSettings.shared
+
+    private var others: [WritingTool] {
+        WritingTool.allCases.filter { $0.isAvailable && !settings.writingBarTools.contains($0) }
+    }
+
+    var body: some View {
+        List {
+            Section {
+                ForEach(settings.writingBarTools) { tool in
+                    Label(tool.name, systemImage: tool.symbol)
+                }
+                .onMove { settings.writingBarTools.move(fromOffsets: $0, toOffset: $1) }
+                .onDelete { settings.writingBarTools.remove(atOffsets: $0) }
+            } header: {
+                Text("In the Bar")
+            } footer: {
+                Text("The bar shows as many as fit; swipe it for the next page.")
+            }
+            if !others.isEmpty {
+                Section("More Tools") {
+                    ForEach(others) { tool in
+                        Button {
+                            withAnimation { settings.writingBarTools.append(tool) }
+                        } label: {
+                            HStack(spacing: 14) {
+                                Image(systemName: "plus.circle.fill")
+                                    .symbolRenderingMode(.multicolor)
+                                    .foregroundStyle(.green)
+                                    .font(.title3)
+                                Label(tool.name, systemImage: tool.symbol)
+                                    .foregroundStyle(.primary)
+                            }
+                        }
+                        .accessibilityLabel("Add \(tool.name)")
+                    }
+                }
+            }
+            Section {
+                Button("Reset to Default") {
+                    withAnimation { settings.writingBarTools = WritingTool.standard }
+                }
+                .disabled(settings.writingBarTools == WritingTool.standard)
+            }
+        }
+        .environment(\.editMode, .constant(.active))
+        .navigationTitle("Writing Bar")
     }
 }
 #endif

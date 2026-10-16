@@ -27,12 +27,17 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         view.delegate = self
         view.titleField.delegate = self
         view.titleField.addTarget(self, action: #selector(titleReturn), for: .editingDidEndOnExit)
-        view.inputAccessoryView = WritingBar(editor: self)
+        let bar = WritingBar(editor: self)
+        writingBar = bar
+        view.inputAccessoryView = bar
         // The title is plain text: none of the writing bar's formatting goes there. Without a bar of its own, it
         // would show the text view's, which it is inside of.
         view.titleField.inputAccessoryView = UIView(frame: .zero)
 
         view.textDropDelegate = self
+        let pictures = PictureInteractions(editor: self)
+        pictures.install(on: view)
+        pictureInteractions = pictures
 
         let tap = UITapGestureRecognizer(target: self, action: #selector(tapped(_:)))
         tap.delegate = self
@@ -223,6 +228,7 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
             }
         }
         selectionChanged()
+        formatState.update(from: self)
         if isTracking { waitForTrackingToEnd() }
     }
 
@@ -248,6 +254,7 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
 
     public func textViewDidChange(_ textView: UITextView) {
         textChanged()
+        formatState.update(from: self)
     }
 
     public func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
@@ -276,6 +283,11 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
 
     public func textViewDidEndEditing(_ textView: UITextView) {
         guard !isMoving else { return }
+        // Next time, the keyboard comes up again rather than the Format panel.
+        if isShowingFormatPanel {
+            textView.inputView = nil
+            textView.inputAccessoryView = writingBar
+        }
         delegate?.editorEditingDidChange(self)
     }
 
@@ -483,6 +495,12 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
     /// Pictures and files dragged in from Photos or Files go next to the note, as pasted ones do; text dragged
     /// within the note is the text view's.
     public func textDroppableView(_ textDroppableView: UIView & UITextDroppable, proposalForDrop drop: UITextDropRequest) -> UITextDropProposal {
+        if pictureDrag(in: drop) != nil {
+            let proposal = UITextDropProposal(operation: .move)
+            proposal.dropPerformer = .delegate
+            proposal.dropAction = .insert
+            return proposal
+        }
         guard isFileDrop(drop) else { return drop.suggestedProposal }
         let proposal = UITextDropProposal(operation: .copy)
         proposal.dropPerformer = .delegate
@@ -491,6 +509,7 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
     }
 
     private func isFileDrop(_ drop: UITextDropRequest) -> Bool {
+        guard pictureDrag(in: drop) == nil else { return false }
         let providers = drop.dropSession.items.map(\.itemProvider)
         return !drop.isSameView && !providers.isEmpty && providers.allSatisfy { provider in
             provider.canLoadObject(ofClass: UIImage.self) || provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier)
@@ -499,6 +518,9 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
     }
 
     public func textDroppableView(_ textDroppableView: UIView & UITextDroppable, willPerformDrop drop: UITextDropRequest) {
+        if let drag = pictureDrag(in: drop) {
+            return moveObject(drag.range, to: textView.offset(from: textView.beginningOfDocument, to: drop.dropPosition))
+        }
         guard isFileDrop(drop) else { return }
         let location = textView.offset(from: textView.beginningOfDocument, to: drop.dropPosition)
         let providers = drop.dropSession.items.map(\.itemProvider)
