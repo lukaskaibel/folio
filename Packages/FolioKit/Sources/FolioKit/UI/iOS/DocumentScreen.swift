@@ -90,12 +90,11 @@ struct DocumentScreen: View {
     private var toolbar: some ToolbarContent {
         if isInSplitView {
             ToolbarItemGroup(placement: .topBarLeading) {
+                // ⌘[ and ⌘] are the Go menu's.
                 Button { workspace.goBack() } label: { Label("Back", systemImage: "chevron.backward") }
                     .disabled(!workspace.canGoBack)
-                    .keyboardShortcut("[", modifiers: .command)
                 Button { workspace.goForward() } label: { Label("Forward", systemImage: "chevron.forward") }
                     .disabled(!workspace.canGoForward)
-                    .keyboardShortcut("]", modifiers: .command)
             }
         }
         if isNote, isInSplitView || sizeClass == .regular {

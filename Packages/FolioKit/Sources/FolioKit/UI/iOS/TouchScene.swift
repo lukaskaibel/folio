@@ -7,13 +7,15 @@ import UIKit
 public struct FolioScene: Scene {
     @State private var workspace = Workspace.shared
 
-    public init() {}
+    public init() {
+        // Before the first frame, which would otherwise show the welcome screen until the locations are read.
+        Workspace.shared.start()
+    }
 
     public var body: some Scene {
         WindowGroup {
             TouchRootView(workspace: workspace)
                 .onAppear {
-                    workspace.start()
                     #if DEBUG
                     DebugRemote.startIfRequested(workspace: workspace)
                     #endif
@@ -84,7 +86,8 @@ struct TouchCommands: Commands {
                 .keyboardShortcut("]", modifiers: .command)
                 .disabled(!workspace.canGoForward)
         }
-        CommandMenu("Format") {
+        // In the system's Format menu, after its Bold and Italic, which the text view turns into Markdown.
+        CommandGroup(after: .textFormatting) {
             format(.strikethrough, "x", [.command, .shift])
             format(.highlight, "h", [.command, .control])
             format(.code, "e", .command)

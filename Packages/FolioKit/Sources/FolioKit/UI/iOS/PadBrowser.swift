@@ -153,6 +153,13 @@ struct PadSidebar: View {
                 }
             }
             .listStyle(.sidebar)
+            .onAppear {
+                // The note open at launch, in its folder.
+                if let url = workspace.currentURL {
+                    reveal(url)
+                    DispatchQueue.main.async { proxy.scrollTo(url) }
+                }
+            }
             .onChange(of: expanded) { _, expanded in UserDefaults.standard.set(Array(expanded), forKey: "expandedFolders") }
             .onChange(of: workspace.revealRequest?.id) { _, _ in
                 guard let request = workspace.revealRequest else { return }

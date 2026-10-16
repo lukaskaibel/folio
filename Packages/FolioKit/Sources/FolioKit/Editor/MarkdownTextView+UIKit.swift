@@ -155,6 +155,9 @@ final class MarkdownTextView: UITextView {
     override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
         // Pictures and files can be pasted too, which a plain text view doesn't take.
         if action == #selector(paste(_:)), UIPasteboard.general.hasImages || UIPasteboard.general.hasURLs { return true }
+        // Bold and italic are Markdown: a text view without rich text would leave them out (and ⌘B, ⌘I with them).
+        if action == #selector(toggleBoldface(_:)) || action == #selector(toggleItalics(_:)) { return isEditable }
+        if action == #selector(toggleUnderline(_:)) { return false }
         return super.canPerformAction(action, withSender: sender)
     }
 
