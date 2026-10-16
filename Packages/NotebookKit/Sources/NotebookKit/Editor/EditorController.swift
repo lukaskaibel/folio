@@ -644,25 +644,52 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         let selection = self.selection
         guard selection.length == 0, storage.length > 0 else { return shortCaret(rect, font: EditorStyle.body) }
         let index = selection.location
-        let fontIndex = index > 0 && (index >= storage.length || nsText.character(at: index) == 10) ? index - 1 : min(index, storage.length - 1)
-        var font = (storage.attribute(.font, at: max(0, fontIndex), effectiveRange: nil) as? NSFont) ?? EditorStyle.body
-        if font.pointSize < 4 { font = EditorStyle.body }
-        guard index < storage.length else { return shortCaret(rect, font: font) }
-        let glyph = layoutManager.glyphIndexForCharacter(at: index)
-        guard glyph < layoutManager.numberOfGlyphs else { return shortCaret(rect, font: font) }
+        guard let character = caretNeighbour(of: index, onLineAt: rect.midY) else {
+            // An empty line: the caret where its text will go.
+            return shortCaret(rect, font: index < storage.length ? font(at: index) : EditorStyle.body)
+        }
+        let font = font(at: character)
+        let glyph = layoutManager.glyphIndexForCharacter(at: character)
         let line = layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
         let location = layoutManager.location(forGlyphAt: glyph)
-        let offset = (storage.attribute(.baselineOffset, at: index, effectiveRange: nil) as? CGFloat) ?? 0
+        let offset = (storage.attribute(.baselineOffset, at: character, effectiveRange: nil) as? CGFloat) ?? 0
         let baseline = textOrigin.y + line.minY + location.y - offset
-        let top = baseline - font.ascender - 1
-        let height = font.ascender - font.descender + 2
-        guard abs(rect.midY - (top + height / 2)) < line.height else { return shortCaret(rect, font: font) }
-        return NSRect(x: rect.minX, y: top, width: rect.width, height: height)
+        let caret = NSRect(x: rect.minX, y: baseline - font.ascender - 1, width: rect.width, height: font.ascender - font.descender + 2)
+        return fitted(caret, in: rect)
     }
 
+    /// The character the caret takes its height from: the nearest one shown on its line, the one after the caret
+    /// first. Line breaks and hidden Markdown aren't laid out on the baseline, and an empty line has none.
+    private func caretNeighbour(of index: Int, onLineAt y: CGFloat) -> Int? {
+        guard layoutManager.numberOfGlyphs > 0 else { return nil }
+        let glyph = layoutManager.glyphIndex(for: NSPoint(x: 0, y: y - textOrigin.y), in: container)
+        var glyphs = NSRange()
+        let line = layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: &glyphs)
+        // Below the last line, on the empty one after a final line break.
+        guard y >= textOrigin.y + line.minY, y < textOrigin.y + line.maxY else { return nil }
+        let characters = layoutManager.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
+        let caret = min(max(index, characters.location), NSMaxRange(characters))
+        let after = caret..<NSMaxRange(characters)
+        let nearest = Array(after.prefix(1)) + (characters.location..<caret).reversed() + after.dropFirst()
+        return nearest.first { nsText.character(at: $0) != 10 && !layoutManager.isHidden($0) }
+    }
+
+    private func font(at index: Int) -> NSFont {
+        let font = storage.attribute(.font, at: index, effectiveRange: nil) as? NSFont
+        return font.map { $0.pointSize < 4 ? EditorStyle.body : $0 } ?? EditorStyle.body
+    }
+
+    /// A caret as tall as the font in the middle of the line, raised by a point as text is (`EditorStyle.baselineOffset`).
     private func shortCaret(_ rect: NSRect, font: NSFont) -> NSRect {
-        let height = min(rect.height, font.ascender - font.descender + 2)
-        return NSRect(x: rect.minX, y: rect.midY - height / 2, width: rect.width, height: height)
+        let height = font.ascender - font.descender + 2
+        return fitted(NSRect(x: rect.minX, y: rect.midY - height / 2 - 1, width: rect.width, height: height), in: rect)
+    }
+
+    /// Kept inside the caret the text view proposed. On the Mac only that is redrawn when the caret blinks, so a caret
+    /// reaching past it leaves a piece of itself on screen.
+    private func fitted(_ caret: NSRect, in rect: NSRect) -> NSRect {
+        let height = min(caret.height, rect.height)
+        return NSRect(x: caret.minX, y: min(max(caret.minY, rect.minY), rect.maxY - height), width: caret.width, height: height)
     }
 }
 

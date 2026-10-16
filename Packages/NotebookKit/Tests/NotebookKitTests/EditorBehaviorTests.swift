@@ -60,6 +60,34 @@ final class EditorBehaviorTests: XCTestCase {
         XCTAssertEqual(before, after, accuracy: 0.5)
     }
 
+    // MARK: - The caret
+
+    /// The caret AppKit proposes at a place, as tall as the line without its spacing, and the one the editor draws.
+    private func caret(_ h: EditorHarness, at index: Int) -> (proposed: NSRect, drawn: NSRect) {
+        h.caret(index)
+        let glyph = h.editor.layoutManager.glyphIndexForCharacter(at: index)
+        let line = h.editor.layoutManager.lineFragmentUsedRect(forGlyphAt: glyph, effectiveRange: nil)
+        let proposed = NSRect(x: 100, y: h.textView.textContainerOrigin.y + line.minY, width: 1, height: line.height)
+        return (proposed, h.editor.caretRect(proposed: proposed))
+    }
+
+    func testCaretStaysInItsLineAndSitsWhereTextDoes() {
+        let h = EditorHarness("# Kick-off\n\nFive days in October.\n\nPlain paragraph.")
+        let text = caret(h, at: h.range(of: "days").location)
+        let places = [
+            "end of a line": caret(h, at: h.range(of: "October.").upperBound),
+            "empty line": caret(h, at: h.range(of: "October.").upperBound + 1),
+            "empty line under a heading": caret(h, at: h.range(of: "Kick-off").upperBound + 1),
+        ]
+        for (place, caret) in places {
+            // Blinking redraws only the proposed rectangle: any of the caret outside it would stay on screen.
+            XCTAssertGreaterThanOrEqual(caret.drawn.minY, caret.proposed.minY, place)
+            XCTAssertLessThanOrEqual(caret.drawn.maxY, caret.proposed.maxY, place)
+            XCTAssertEqual(caret.drawn.minY - caret.proposed.minY, text.drawn.minY - text.proposed.minY, accuracy: 0.1, place)
+            XCTAssertEqual(caret.drawn.height, text.drawn.height, accuracy: 0.1, place)
+        }
+    }
+
     // MARK: - Selections take things whole
 
     func testSelectingBoldTextTakesItsMarkers() {
