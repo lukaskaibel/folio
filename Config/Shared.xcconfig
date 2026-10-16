@@ -6,6 +6,10 @@ CURRENT_PROJECT_VERSION = 1
 
 PRODUCT_BUNDLE_IDENTIFIER = com.lukaskbl.Notebook
 
+// Notebook uses no encryption of its own (iCloud and HTTPS are Apple's), so App Store Connect doesn't ask about export
+// compliance for every build.
+INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO
+
 // Without a team the Mac app is signed to run on this Mac only, and the iPhone and iPad app runs in the Simulator,
 // which is all a local build needs. To run it on your own iPhone or iPad, set your team in Local.xcconfig.
 DEVELOPMENT_TEAM =
