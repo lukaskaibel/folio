@@ -38,12 +38,15 @@ public protocol EditorControllerDelegate: AnyObject {
     func editorPositionDidChange(_ editor: EditorController)
     /// Typing started or stopped, in the note or its title (on iPhone and iPad: the keyboard came up or went).
     func editorEditingDidChange(_ editor: EditorController)
+    /// Drawing mode started or ended.
+    func editorDrawingDidChange(_ editor: EditorController)
 }
 
 public extension EditorControllerDelegate {
     func editorOutlineDidChange(_ editor: EditorController) {}
     func editorPositionDidChange(_ editor: EditorController) {}
     func editorEditingDidChange(_ editor: EditorController) {}
+    func editorDrawingDidChange(_ editor: EditorController) {}
 }
 
 /// Notebook's editor: a TextKit 1 text view whose storage holds the note's Markdown exactly, styled so that it reads as
@@ -74,6 +77,10 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     var isPerformingEdit = false
     /// The folder of the note, which pictures and relative links start from.
     public private(set) var folder: URL?
+    /// Drawing mode, while it is on (`EditorController+Drawing`).
+    var drawingSession: DrawingSession?
+    /// The caret was put somewhere since the note was opened, rather than left at its start.
+    var caretWasPlaced = false
 
     let suggestions = LinkSuggestionPanel()
 
@@ -164,6 +171,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
 
     /// Shows a note. `title` is its name; `focusTitle` puts the caret in the title (for a new note).
     public func load(text: String, folder: URL?, title: String, meta: String, focusTitle: Bool = false) {
+        endDrawing()
         isLoading = true
         self.folder = folder
         closeSuggestions()
@@ -192,6 +200,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         textView.undoManager?.removeAllActions()
         #endif
         isLoading = false
+        caretWasPlaced = false
         scrollToTop()
         updateOutline()
         if focusTitle {
@@ -403,6 +412,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
             restyle(lines: Array(document.lines.indices))
             layoutManager.invalidateLayout(forCharacterRange: NSRange(location: 0, length: storage.length), actualCharacterRange: nil)
         }
+        updateDrawingCanvases()
     }
 
     func lines(of block: Int) -> [Int] {
@@ -577,6 +587,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
 
     /// The selection moved: show the Markdown next to the caret, follow a link being typed.
     func selectionChanged() {
+        if !isLoading { caretWasPlaced = true }
         layoutManager.selectedRanges = selectedRanges
         if !isTracking { updateReveal() }
         updateSuggestions()
@@ -587,6 +598,8 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         guard !isLoading else { return }
         delegate?.editorTextDidChange(self)
         updateSuggestions()
+        // A change from another device, or an undo, may have moved the drawings or taken one away.
+        if isDrawing { DispatchQueue.main.async { [weak self] in self?.updateDrawingCanvases() } }
     }
 
     func mouseTrackingEnded() {

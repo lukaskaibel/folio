@@ -117,6 +117,9 @@ public struct NotebookScene: Scene {
                 formatButton("Numbered List", #selector(MarkdownTextView.makeNumberedList(_:)), "9", [.command, .shift])
                 formatButton("Block Quote", #selector(MarkdownTextView.makeQuote(_:)), "'", .command)
                 Divider()
+                Button(workspace.isDrawing ? "Stop Drawing" : "Drawing") { workspace.editor.toggleDrawing() }
+                    .disabled(workspace.note == nil)
+                Divider()
                 formatButton("Increase Indent", #selector(MarkdownTextView.indentLines(_:)), "]", [.command, .option])
                 formatButton("Decrease Indent", #selector(MarkdownTextView.outdentLines(_:)), "[", [.command, .option])
             }

@@ -147,10 +147,17 @@ enum FileOperations {
             guard let text = NoteDocument.read(note) else { continue }
             used.formUnion(assetNames(in: text))
         }
-        for name in candidates.subtracting(used) {
+        for name in withDrawingStrokes(candidates).subtracting(withDrawingStrokes(used)) {
             let url = folder.appendingPathComponent(".assets").appendingPathComponent(name)
             if FileManager.default.fileExists(atPath: url.path) { _ = trash(url) }
         }
+    }
+
+    /// Asset names with the strokes files of the drawings among them, which go wherever their pictures go.
+    static func withDrawingStrokes(_ names: Set<String>) -> Set<String> {
+        names.union(names.filter { ($0 as NSString).pathExtension.lowercased() == "png" }.map {
+            ($0 as NSString).deletingPathExtension + "." + DrawingFile.fileExtension
+        })
     }
 
     /// The `.assets` files a note's Markdown points at, by file name.

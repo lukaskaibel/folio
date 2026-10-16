@@ -17,6 +17,8 @@ final class EditorObject: NSObject {
         /// The end of a link to a note: a little room after the name.
         case chipTrail
         case image(url: URL?, source: String, inline: Bool)
+        /// A picture with its strokes next to it (`DrawingFile`): drawn from them, and drawn in.
+        case drawing(url: URL)
         case fileCard(url: URL?, name: String)
         case noteEmbed(target: String, url: URL?)
         case horizontalRule
@@ -59,7 +61,7 @@ final class EditorObject: NSObject {
     var isBlock: Bool {
         switch kind {
         case .image(_, _, let inline): !inline
-        case .fileCard, .noteEmbed, .horizontalRule, .table, .mermaid, .mathBlock, .frontmatter: true
+        case .drawing, .fileCard, .noteEmbed, .horizontalRule, .table, .mermaid, .mathBlock, .frontmatter: true
         default: false
         }
     }
@@ -81,6 +83,7 @@ final class EditorObject: NSObject {
         case .chipLead(let icon): "lead\(icon)"
         case .chipTrail: "trail"
         case .image(let url, let source, let inline): "image\(url?.path ?? source)\(inline)"
+        case .drawing(let url): "drawing\(url.path)"
         case .fileCard(let url, let name): "file\(url?.path ?? name)"
         case .noteEmbed(let target, _): "embed\(target)"
         case .horizontalRule: "hr"

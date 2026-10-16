@@ -5,7 +5,7 @@ import UIKit
 /// What the bar above the keyboard can hold. Which ones and in what order is yours to choose, in Settings › Writing
 /// Bar.
 enum WritingTool: String, CaseIterable, Identifiable {
-    case format, checklist, attach, link, undo, redo
+    case format, checklist, attach, drawing, link, undo, redo
     case bold, italic, strikethrough, highlight, code, quote
     case bulletedList, numberedList, outdent, indent
     case camera, scanner, photos, files
@@ -15,7 +15,7 @@ enum WritingTool: String, CaseIterable, Identifiable {
 
     /// The bar as it comes: what Notes has first, then the formatting, then lists and pictures.
     static let standard: [WritingTool] = [
-        .format, .checklist, .attach, .link, .undo, .redo,
+        .format, .checklist, .attach, .drawing, .link, .undo, .redo,
         .bold, .italic, .strikethrough, .highlight, .code, .quote,
         .bulletedList, .numberedList, .outdent, .indent, .camera, .scanner,
     ]
@@ -54,6 +54,7 @@ enum WritingTool: String, CaseIterable, Identifiable {
         switch self {
         case .format: return "Format"
         case .attach: return "Attach"
+        case .drawing: return "Drawing"
         case .undo: return "Undo"
         case .redo: return "Redo"
         default: return "Hide Keyboard"
@@ -66,6 +67,7 @@ enum WritingTool: String, CaseIterable, Identifiable {
         switch self {
         case .format: return "textformat"
         case .attach: return "paperclip"
+        case .drawing: return "pencil.tip.crop.circle"
         case .undo: return "arrow.uturn.backward"
         case .redo: return "arrow.uturn.forward"
         default: return "keyboard.chevron.compact.down"
@@ -212,6 +214,7 @@ struct WritingBarView: View {
         if let source = tool.source { return AttachmentPicker.shared.present(source, for: editor) }
         switch tool {
         case .format: editor.toggleFormatPanel()
+        case .drawing: editor.beginDrawing()
         case .undo: editor.textView.undoManager?.undo()
         case .redo: editor.textView.undoManager?.redo()
         default: editor.endEditing()

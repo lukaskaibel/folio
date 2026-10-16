@@ -89,8 +89,13 @@ final class MarkdownTextView: UITextView {
             laidOutWidth = bounds.width
             applyTypography()
             controller?.marginNeedsDisplay()
+            // Drawings are as wide as the text: their canvases follow.
+            if controller?.isDrawing == true {
+                DispatchQueue.main.async { [weak self] in self?.controller?.updateDrawingCanvases() }
+            }
         }
     }
+
 
     private var knownTopInset: CGFloat = 0
 
@@ -142,6 +147,11 @@ final class MarkdownTextView: UITextView {
     /// Touching and holding a picture is the picture's: the text's own long press (the loupe, selecting a word)
     /// leaves it alone. Scrolling and taps go on as ever.
     override func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+        // While drawing, a touch on a drawing draws: it doesn't select text or bring up the keyboard. The note still
+        // scrolls over it, with a finger where only Apple Pencil draws and with two fingers where a finger draws too.
+        if let controller, controller.isDrawing, recognizer.view === self, controller.canvas(at: recognizer.location(in: self)) != nil {
+            return recognizer === panGestureRecognizer && controller.scrollsOverDrawing(recognizer)
+        }
         if !pictureRecognizers.contains(recognizer), !(recognizer is UIPanGestureRecognizer), !(recognizer is UITapGestureRecognizer),
            let pictures = controller?.pictureInteractions, pictures.picture(at: recognizer.location(in: self)) != nil {
             return false

@@ -55,6 +55,8 @@ public final class Workspace: NSObject {
     private(set) var currentHeading: Int?
     /// True once the note's title has scrolled up under the toolbar, which then shows it.
     private(set) var isTitleScrolledAway = false
+    /// The note is in drawing mode: the pencil in the toolbar is on and the drawing tools are out.
+    private(set) var isDrawing = false
     /// The folder selected in the sidebar, where ⌘N puts a note when no note is open.
     var selectedFolder: URL?
     /// Locations given on the command line for this run only (tests, the demo library).
@@ -427,6 +429,7 @@ public final class Workspace: NSObject {
     /// Saves the note being left; a new note left empty goes away, and pictures it no longer uses go to the Trash.
     private func leaveCurrentNote() {
         guard let note else { return }
+        editor.endDrawing()
         #if os(iOS)
         // Back while typing a new name: the name counts, as it would once the title is left.
         if editor.isEditingTitle { editor.commitTitle() }
@@ -632,7 +635,7 @@ public final class Workspace: NSObject {
         if note?.url.standardizedFileURL == url.standardizedFileURL { note?.moved(to: moved) }
         if let text, url.deletingLastPathComponent() != folder {
             let assets = FileOperations.assetNames(in: text)
-            for name in assets {
+            for name in FileOperations.withDrawingStrokes(assets) {
                 let source = url.deletingLastPathComponent().appendingPathComponent(".assets").appendingPathComponent(name)
                 let target = folder.appendingPathComponent(".assets").appendingPathComponent(name)
                 guard FileManager.default.fileExists(atPath: source.path), !FileManager.default.fileExists(atPath: target.path) else { continue }
@@ -767,6 +770,7 @@ public final class Workspace: NSObject {
 
     /// Saves everything; called when the app goes to the background or quits.
     public func saveAll() {
+        editor.saveDrawingsNow()
         guard let note else { return }
         note.update(text: editor.text)
         note.saveNow()
@@ -850,6 +854,10 @@ extension Workspace: EditorControllerDelegate {
     public func editorPositionDidChange(_ editor: EditorController) {
         if currentHeading != editor.currentHeading { currentHeading = editor.currentHeading }
         if isTitleScrolledAway != editor.isTitleScrolledAway { isTitleScrolledAway = editor.isTitleScrolledAway }
+    }
+
+    public func editorDrawingDidChange(_ editor: EditorController) {
+        if isDrawing != editor.isDrawing { isDrawing = editor.isDrawing }
     }
 
     public func editorEditingDidChange(_ editor: EditorController) {

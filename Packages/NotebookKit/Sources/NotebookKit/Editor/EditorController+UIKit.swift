@@ -278,6 +278,8 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
     }
 
     public func textViewDidBeginEditing(_ textView: UITextView) {
+        // A tap in the text while drawing stops drawing and puts the caret there.
+        if isDrawing { endDrawing() }
         delegate?.editorEditingDidChange(self)
     }
 
@@ -332,6 +334,8 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
 
     /// Taps on checkboxes, links and pictures are the editor's; everywhere else the text view places the caret.
     public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        // A touch on a drawing while drawing is the canvas's.
+        if isDrawing, gestureRecognizer.view === textView, canvas(at: gestureRecognizer.location(in: textView)) != nil { return false }
         guard gestureRecognizer.view === textView, !(gestureRecognizer is UIPanGestureRecognizer) else { return true }
         guard let (hit, _) = touchHit(at: gestureRecognizer.location(in: textView)) else { return false }
         if case .headingLevel = hit { return false }
@@ -368,7 +372,10 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
             closeSuggestions()
             delegate?.editor(self, open: kind)
         case .picture(let range, let url):
-            if let url {
+            // A tap opens a drawing for drawing, as in Notes, and any other picture in Quick Look.
+            if let drawing = drawing(at: range) {
+                beginDrawing(in: drawing)
+            } else if let url {
                 delegate?.editor(self, quickLook: url)
             } else {
                 makeTextFirstResponder()
@@ -387,6 +394,8 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
 
     /// The note scrolls on under the keyboard: what it covers is room to scroll the caret above it.
     @objc private func keyboardWillChange(_ notification: Notification) {
+        // While drawing, the room at the bottom is the tool picker's.
+        guard !isDrawing else { return updateDrawingInset() }
         guard let window = textView.window,
               let end = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
         let keyboard = window.convert(end, from: window.screen.coordinateSpace)

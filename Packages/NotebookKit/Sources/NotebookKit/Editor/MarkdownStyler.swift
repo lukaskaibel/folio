@@ -341,12 +341,16 @@ enum MarkdownStyler {
             let url = fileURL(source, env: env)
             if let url, !isImageFile(url) {
                 kind = .fileCard(url: url, name: url.lastPathComponent)
+            } else if let url, DrawingFile.isDrawing(url) {
+                kind = .drawing(url: url)
             } else {
                 kind = .image(url: url, source: source, inline: false)
             }
         case .embed(let target):
             let url = env.resolve(target)
-            if let url, isImageFile(url) {
+            if let url, DrawingFile.isDrawing(url) {
+                kind = .drawing(url: url)
+            } else if let url, isImageFile(url) {
                 kind = .image(url: url, source: target, inline: false)
             } else if let url, url.pathExtension.lowercased() != "md" {
                 kind = .fileCard(url: url, name: url.lastPathComponent)

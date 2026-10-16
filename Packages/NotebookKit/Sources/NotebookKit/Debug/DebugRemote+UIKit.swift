@@ -1,4 +1,5 @@
 #if DEBUG && os(iOS)
+import PencilKit
 import SwiftUI
 import UIKit
 
@@ -218,6 +219,29 @@ enum DebugRemote {
             log("suggestions \(editor.suggestions.isVisible) \(editor.suggestions.model.items.map(\.title))")
         case "views":
             if let window = editor.textView.window { log(describe(window, depth: 0, limit: Int(numbers.first ?? 6))) }
+        case "drawing", "drawstroke", "drawinfo", "drawundo", "drawredo":
+            log(editor.debugDrawing(command, argument))
+        case "drawpolicy":
+            // drawpolicy any|pencil|default: who draws in the open canvases.
+            let policy: PKCanvasViewDrawingPolicy = argument == "any" ? .anyInput : argument == "pencil" ? .pencilOnly : .default
+            editor.drawingSession?.canvases.values.forEach { $0.drawingPolicy = policy }
+            log("policy \(policy.rawValue)")
+        case "drawrefresh":
+            for canvas in editor.drawingSession?.canvases.values ?? [:].values {
+                switch argument {
+                case "layout": canvas.setNeedsLayout(); canvas.layoutIfNeeded()
+                case "offset": canvas.contentOffset = CGPoint(x: 0, y: 1); canvas.contentOffset = .zero
+                case "zoom": let zoom = canvas.zoomScale; canvas.zoomScale = zoom * 0.999; canvas.zoomScale = zoom
+                default: let drawing = canvas.drawing; canvas.drawing = PKDrawing(); canvas.drawing = drawing
+                }
+            }
+            log("refreshed \(argument)")
+        case "tapdrawing":
+            // A tap on the note's nth drawing, as a finger's.
+            let drawings = editor.drawingObjects()
+            guard let found = drawings[safe: Int(numbers.first ?? 0)],
+                  let rect = editor.layoutManager.blockObjectRect(at: found.index, origin: editor.textOrigin) else { return log("no drawing") }
+            editor.debugTap(at: CGPoint(x: rect.midX, y: rect.midY))
         default:
             // Everything else is the screens': going back, searching, showing settings.
             NotificationCenter.default.post(name: .notebookDebug, object: nil, userInfo: ["command": command, "argument": argument])
