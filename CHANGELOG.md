@@ -15,10 +15,20 @@ versions follow [semantic versioning](https://semver.org).
 - Swipe actions and menus on touch and hold for files, drag and drop of files and pictures, and the Mac's keyboard
   shortcuts and menus on an iPad with a keyboard.
 - Notes as a PDF to share, or printed, on iPhone and iPad.
+- On iPhone and iPad, the bar above the keyboard floats over the note as in Notes and scrolls a page of tools at a
+  time; Settings › Writing Bar chooses its tools and their order. Aa opens the Format panel in the keyboard's place.
+- Touch and hold a picture or file in a note to copy, cut, share or delete it, or drag it to another place in the note.
+
+### Changed
+
+- Checkboxes are circles, as in Notes and Reminders, filled with the accent colour when done. On iPhone and iPad they
+  are bigger, for a fingertip.
 
 ### Fixed
 
 - Links in a note opened while Notebook was still reading your folders showed as links to notes that don't exist yet.
+- Giving a new note its name could stop Notebook for a long time in a large folder in iCloud Drive. Renaming a note
+  still updates the links to it in other notes, now in the background.
 
 ## [0.1.0] – not released yet
 
