@@ -136,14 +136,11 @@ final class MarkdownTextView: UITextView {
 
     // MARK: - Pictures
 
-    /// The gestures of the pictures' menu and dragging (`PictureInteractions`).
-    var pictureRecognizers: Set<UIGestureRecognizer> = []
-
-    /// Touching and holding a picture is the picture's: the text's own long press (the loupe, selecting a word)
-    /// leaves it alone. Scrolling and taps go on as ever.
+    /// Holding a picture lifts it (`PictureInteractions`): the text's loupe, which would put the caret there and bring
+    /// up the keyboard, leaves pictures alone.
     override func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
-        if !pictureRecognizers.contains(recognizer), !(recognizer is UIPanGestureRecognizer), !(recognizer is UITapGestureRecognizer),
-           let pictures = controller?.pictureInteractions, pictures.picture(at: recognizer.location(in: self)) != nil {
+        if String(describing: type(of: recognizer)).contains("Loupe"),
+           controller?.pictureInteractions?.picture(at: recognizer.location(in: self)) != nil {
             return false
         }
         return super.gestureRecognizerShouldBegin(recognizer)

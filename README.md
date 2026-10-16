@@ -133,16 +133,16 @@ open. Links, the caret and folders are in ink blue to go with it, or in the acce
 
 ### On iPhone and iPad
 
-The same notes in the same editor, laid out the way each device works. On the iPhone you go into one folder per
-screen, as in the Files app, and a note opens on a screen of its own; swipe from the edge to go back. The first screen
-has your favourites, what you opened last and the folders of each location. Search and a new note sit at the bottom,
-as in Notes, and search finds names, notes and PDFs as on the Mac. While you write, a bar floats above the keyboard
-with Aa, a checklist, attachments, a link, undo and the formatting, a page of tools at a time; Settings › Writing Bar
-chooses which and in what order. Aa brings up the Format panel in the keyboard's place, as in Notes: the text styles,
-bold, italic and the rest, lists, indenting and quotes. Pictures come from the camera, the document scanner, your
-photos or the Files app. Tap a checkbox to tick it, a link to follow it, a picture to look at it; touch and hold a
-picture to copy, share or delete it, and drag it to move it in the note. Swipe a file to move or delete it, or to make
-it a favourite; touch and hold it for everything else.
+The same notes in the same editor, laid out the way each device works. On the iPhone you go into one folder per screen,
+as in the Files app, and a note opens on a screen of its own; swipe from the edge to go back. The first screen has your
+favourites, what you opened last and the folders of each location. Search and a new note sit at the bottom, as in Notes,
+and search finds names, notes and PDFs as on the Mac. While you write, a bar floats above the keyboard with Aa, a
+checklist, attachments, a link, undo and the formatting, a page of tools at a time; Settings › Writing Bar chooses which
+and in what order. Aa brings up the Format panel in the keyboard's place, as in Notes: the text styles, bold, italic and
+the rest, lists, indenting and quotes. Pictures come from the camera, the document scanner, your photos or the Files
+app. Tap a checkbox to tick it, a link to follow it, a picture to look at it; touch and hold a picture and drag it to
+move it in the note, or let go to copy, share or delete it. Swipe a file to move or delete it, or to make it a
+favourite; touch and hold it for everything else.
 
 The iPad has the Mac's layout: the sidebar with its folders opening in place, the note next to it, and the outline in
 an inspector. In portrait the sidebar steps aside once you have picked a note. With a keyboard, the Mac's shortcuts
@@ -302,8 +302,8 @@ and iPad:
 | Touch and hold a file or folder | Rename, move, duplicate, copy a link, share and more |
 | Pull a list down | Read the folder again |
 | Tap a checkbox, a link or a picture | Tick it, follow it, or look at it in Quick Look |
-| Touch and hold a picture or file in a note | Select it: Quick Look, copy, cut, share or delete |
-| Drag a picture or file in a note | Move it to another place in the note, or into another app |
+| Touch and hold a picture or file in a note, then drag | Move it to another place in the note, or into another app |
+| Touch and hold a picture or file, then let go | Select it: Quick Look, copy, cut, share or delete |
 | Tap the heading level in the margin | Title, heading, subheading or body (iPad) |
 | Drag down over a note | Put the keyboard away |
 

@@ -17,7 +17,8 @@ versions follow [semantic versioning](https://semver.org).
 - Notes as a PDF to share, or printed, on iPhone and iPad.
 - On iPhone and iPad, the bar above the keyboard floats over the note as in Notes and scrolls a page of tools at a
   time; Settings › Writing Bar chooses its tools and their order. Aa opens the Format panel in the keyboard's place.
-- Touch and hold a picture or file in a note to copy, cut, share or delete it, or drag it to another place in the note.
+- Touch and hold a picture or file in a note and drag it to another place in the note, or let go to copy, cut, share or
+  delete it.
 
 ### Changed
 

@@ -2,24 +2,19 @@
 import UIKit
 import UniformTypeIdentifiers
 
-/// Pictures and file cards in a note, by touch, as Notes has them: a tap opens one; touching and holding selects it,
-/// with the ring the Mac draws, and shows what you can do with it; moving the finger then lifts it, to drop it
-/// elsewhere in the note or in another app.
+/// Pictures and file cards in a note, by touch, as in Notes: a tap opens one; touching and holding lifts it, to drop
+/// elsewhere in the note or in another app; let go without moving and it is selected, with the ring the Mac draws,
+/// and the edit menu shows what you can do with it. Selected text is the text view's own to drag (see
+/// `EditorController.textDraggableView`).
 @MainActor
-final class PictureInteractions: NSObject, UIContextMenuInteractionDelegate, UIDragInteractionDelegate {
+final class PictureInteractions: NSObject, UIDragInteractionDelegate, @preconcurrency UIEditMenuInteractionDelegate {
     private weak var editor: EditorController?
-
-    /// What is dragged: the picture's Markdown and where it was, in the note it came from.
-    final class Drag {
-        let range: NSRange
-        let markdown: String
-        let note: Int
-        init(range: NSRange, markdown: String, note: Int) {
-            self.range = range
-            self.markdown = markdown
-            self.note = note
-        }
-    }
+    private lazy var editMenu = UIEditMenuInteraction(delegate: self)
+    /// The picture held, and where the finger was when it lifted.
+    private var held: (picture: Picture, start: CGPoint)?
+    private var heldMoved = false
+    /// The picture the edit menu is for.
+    private var menuPicture: Picture?
 
     struct Picture {
         let range: NSRange
@@ -34,12 +29,10 @@ final class PictureInteractions: NSObject, UIContextMenuInteractionDelegate, UID
     }
 
     func install(on textView: MarkdownTextView) {
-        let before = Set(textView.gestureRecognizers ?? [])
-        textView.addInteraction(UIContextMenuInteraction(delegate: self))
         let drag = UIDragInteraction(delegate: self)
         drag.isEnabled = true
         textView.addInteraction(drag)
-        textView.pictureRecognizers = Set(textView.gestureRecognizers ?? []).subtracting(before)
+        textView.addInteraction(editMenu)
     }
 
     /// The picture or file card at a point in the text view.
@@ -49,26 +42,22 @@ final class PictureInteractions: NSObject, UIContextMenuInteractionDelegate, UID
         return Picture(range: range, url: url, rect: rect)
     }
 
-    // MARK: - Touch and hold
+    // MARK: - The edit menu
 
-    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configurationForMenuAtLocation location: CGPoint) -> UIContextMenuConfiguration? {
-        guard let editor, let picture = picture(at: location) else { return nil }
-        editor.selectObject(picture.range)
-        return UIContextMenuConfiguration(identifier: NSValue(range: picture.range), previewProvider: nil) { [weak self] _ in
-            self?.menu(for: picture)
-        }
+    /// Selects the picture and shows its menu above it, as a text view shows one for selected text.
+    func showMenu(for picture: Picture) {
+        editor?.selectObject(picture.range)
+        menuPicture = picture
+        editMenu.presentEditMenu(with: UIEditMenuConfiguration(identifier: nil, sourcePoint: CGPoint(x: picture.rect.midX, y: picture.rect.minY)))
     }
 
-    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configuration: UIContextMenuConfiguration,
-                                highlightPreviewForItemWithIdentifier identifier: any NSCopying) -> UITargetedPreview? {
-        guard let range = (identifier as? NSValue)?.rangeValue, let picture = picture(at: range) else { return nil }
-        return preview(of: picture)
+    func editMenuInteraction(_ interaction: UIEditMenuInteraction, menuFor configuration: UIEditMenuConfiguration,
+                             suggestedActions: [UIMenuElement]) -> UIMenu? {
+        menuPicture.map(menu(for:))
     }
 
-    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configuration: UIContextMenuConfiguration,
-                                dismissalPreviewForItemWithIdentifier identifier: any NSCopying) -> UITargetedPreview? {
-        guard let range = (identifier as? NSValue)?.rangeValue, let picture = picture(at: range) else { return nil }
-        return preview(of: picture)
+    func editMenuInteraction(_ interaction: UIEditMenuInteraction, targetRectFor configuration: UIEditMenuConfiguration) -> CGRect {
+        menuPicture?.rect ?? .null
     }
 
     private func menu(for picture: Picture) -> UIMenu {
@@ -116,36 +105,62 @@ final class PictureInteractions: NSObject, UIContextMenuInteractionDelegate, UID
     // MARK: - Dragging
 
     func dragInteraction(_ interaction: UIDragInteraction, itemsForBeginning session: UIDragSession) -> [UIDragItem] {
-        guard let editor, let view = interaction.view, let picture = picture(at: session.location(in: view)) else { return [] }
-        let markdown = editor.nsText.substring(with: picture.range)
-        // Another app gets the file itself; this note moves the Markdown.
-        let provider = picture.url.flatMap { NSItemProvider(contentsOf: $0) } ?? NSItemProvider(object: markdown as NSString)
-        provider.suggestedName = picture.url?.deletingPathExtension().lastPathComponent
-        let item = UIDragItem(itemProvider: provider)
-        item.localObject = Drag(range: picture.range, markdown: markdown, note: editor.loadCount)
-        editor.selectObject(picture.range)
-        return [item]
+        guard let editor, let view = interaction.view else { return [] }
+        let point = session.location(in: view)
+        if let picture = picture(at: point) {
+            editMenu.dismissMenu()
+            held = (picture, point)
+            heldMoved = false
+            editor.selectObject(picture.range)
+            return editor.dragItem(for: picture.range).map { [$0] } ?? []
+        }
+        held = nil
+        return []
     }
 
     func dragInteraction(_ interaction: UIDragInteraction, previewForLifting item: UIDragItem, session: UIDragSession) -> UITargetedDragPreview? {
-        guard let drag = item.localObject as? Drag, let picture = picture(at: drag.range), let preview = preview(of: picture) else { return nil }
-        return UITargetedDragPreview(view: preview.view, parameters: preview.parameters as! UIDragPreviewParameters, target: preview.target)
+        guard let drag = item.localObject as? EditorController.Drag else { return nil }
+        if drag.isObject, let picture = picture(at: drag.range), let preview = preview(of: picture),
+           let parameters = preview.parameters as? UIDragPreviewParameters {
+            return UITargetedDragPreview(view: preview.view, parameters: parameters, target: preview.target)
+        }
+        return nil
     }
 
     func dragInteraction(_ interaction: UIDragInteraction, sessionIsRestrictedToDraggingApplication session: UIDragSession) -> Bool {
         false
     }
 
+    /// Held and let go without moving: the lift goes back, the picture stays selected and its menu shows.
+    func dragInteraction(_ interaction: UIDragInteraction, willAnimateLiftWith animator: any UIDragAnimating, session: UIDragSession) {
+        animator.addCompletion { [weak self] position in
+            guard let self, position == .start, let held = self.held, !self.heldMoved,
+                  let current = self.picture(at: held.picture.range) else { return }
+            self.held = nil
+            self.showMenu(for: current)
+        }
+    }
+
+    func dragInteraction(_ interaction: UIDragInteraction, sessionDidMove session: UIDragSession) {
+        guard let held, let view = interaction.view else { return }
+        let point = session.location(in: view)
+        if hypot(point.x - held.start.x, point.y - held.start.y) > 8 { heldMoved = true }
+    }
+
+    func dragInteraction(_ interaction: UIDragInteraction, session: UIDragSession, didEndWith operation: UIDropOperation) {
+        held = nil
+    }
+
     // MARK: - Previews
 
-    private func picture(at range: NSRange) -> Picture? {
+    func picture(at range: NSRange) -> Picture? {
         guard let editor, range.upperBound <= editor.storage.length,
               let rect = editor.layoutManager.rect(forObjectAt: range.location, origin: editor.textOrigin) else { return nil }
         return picture(at: CGPoint(x: rect.midX, y: rect.midY))
     }
 
     /// The picture as it is drawn, lifted off the page with its rounded corners.
-    private func preview(of picture: Picture) -> UITargetedPreview? {
+    func preview(of picture: Picture) -> UITargetedPreview? {
         guard let textView = editor?.textView,
               let snapshot = textView.resizableSnapshotView(from: picture.rect, afterScreenUpdates: false, withCapInsets: .zero) else { return nil }
         let parameters = UIDragPreviewParameters()
@@ -188,41 +203,68 @@ extension EditorController {
         replace(removal, with: "", select: NSRange(location: removal.location, length: 0), actionName: "Delete")
     }
 
-    /// A picture dropped elsewhere in its note: it goes on a line of its own before the line it was dropped on, in
-    /// one change that one undo takes back.
+    /// A picture dropped elsewhere in its note goes before the line it was dropped on, as a paragraph of its own: a
+    /// blank line between it and text, and no blank line left doubled where it was. One change, which one undo takes
+    /// back.
     func moveObject(_ range: NSRange, to location: Int) {
         let text = nsText
         guard range.upperBound <= text.length else { return }
         let markdown = text.substring(with: range)
-        let removal = blockRange(of: range)
-        var target = text.lineRange(for: NSRange(location: min(location, text.length), length: 0)).location
-        var inserted = markdown + "\n"
-        if location >= text.length, text.length > 0, !text.hasSuffix("\n") {
-            target = text.length
-            inserted = "\n" + markdown
+        func isBlank(_ line: NSRange) -> Bool { text.substring(with: line).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        func line(at index: Int) -> NSRange { text.lineRange(for: NSRange(location: index, length: 0)) }
+
+        var removal = blockRange(of: range)
+        if removal != range, removal.upperBound < text.length, isBlank(line(at: removal.upperBound)),
+           removal.location == 0 || isBlank(line(at: removal.location - 1)) {
+            removal.length += line(at: removal.upperBound).length
         }
+        var target = line(at: min(location, text.length)).location
+        if location >= text.length, text.length > 0 { target = text.length }
         guard target < removal.location || target > removal.upperBound else { return }
-        let lead = inserted.hasPrefix("\n") ? 1 : 0
-        let length = (markdown as NSString).length
+
+        let atEnd = target == text.length
+        let before = target > 0 && !isBlank(line(at: target - 1)) && !(atEnd && text.hasSuffix("\n\n"))
+        var lead = before ? "\n" : ""
+        if atEnd, text.length > 0, !text.hasSuffix("\n") { lead = "\n\n" }
+        let after = !atEnd && !isBlank(line(at: target))
+        let inserted = lead + markdown + "\n" + (after ? "\n" : "")
+
+        // Both changes as one: the stretch from the first to the last, rewritten.
+        let low = min(target, removal.location)
+        let high = max(target, removal.upperBound)
+        let stretch = NSMutableString(string: text.substring(with: NSRange(location: low, length: high - low)))
+        let removed = NSRange(location: removal.location - low, length: removal.length)
+        var start: Int
         if target < removal.location {
-            let between = text.substring(with: NSRange(location: target, length: removal.location - target))
-            replace(NSRange(location: target, length: removal.upperBound - target), with: inserted + between,
-                    select: NSRange(location: target + lead, length: length), actionName: "Move")
+            stretch.replaceCharacters(in: removed, with: "")
+            stretch.insert(inserted, at: target - low)
+            start = target
         } else {
-            let between = text.substring(with: NSRange(location: removal.upperBound, length: target - removal.upperBound))
-            let start = removal.location + (between as NSString).length + lead
-            replace(NSRange(location: removal.location, length: target - removal.location), with: between + inserted,
-                    select: NSRange(location: start, length: length), actionName: "Move")
+            stretch.insert(inserted, at: target - low)
+            stretch.replaceCharacters(in: removed, with: "")
+            start = target - removal.length
         }
+        start += (lead as NSString).length
+        replace(NSRange(location: low, length: high - low), with: stretch as String,
+                select: NSRange(location: start, length: (markdown as NSString).length), actionName: "Move")
         selectionChanged()
     }
 
-    /// A picture of this note dragged within it.
-    func pictureDrag(in drop: UITextDropRequest) -> PictureInteractions.Drag? {
-        guard let drag = drop.dropSession.localDragSession?.items.first?.localObject as? PictureInteractions.Drag,
-              drag.note == loadCount, drag.range.upperBound <= storage.length,
-              nsText.substring(with: drag.range) == drag.markdown else { return nil }
-        return drag
+    /// Text moved by dragging within the note: taken out and put in where it was dropped, in one change that one undo
+    /// takes back.
+    func moveText(_ range: NSRange, to location: Int) {
+        let text = nsText
+        guard range.upperBound <= text.length, location <= text.length, location < range.location || location > range.upperBound else { return }
+        let markdown = text.substring(with: range)
+        if location < range.location {
+            let between = text.substring(with: NSRange(location: location, length: range.location - location))
+            replace(NSRange(location: location, length: range.upperBound - location), with: markdown + between,
+                    select: NSRange(location: location, length: range.length), actionName: "Move")
+        } else {
+            let between = text.substring(with: NSRange(location: range.upperBound, length: location - range.upperBound))
+            replace(NSRange(location: range.location, length: location - range.location), with: between + markdown,
+                    select: NSRange(location: range.location + (between as NSString).length, length: range.length), actionName: "Move")
+        }
     }
 }
 #endif
