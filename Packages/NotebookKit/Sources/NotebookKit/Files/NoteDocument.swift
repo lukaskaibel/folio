@@ -31,6 +31,8 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     @ObservationIgnored var onDelete: (() -> Void)?
     /// Called when the text came in, read in the background.
     @ObservationIgnored var onLoad: ((String) -> Void)?
+    /// Called after the text was written to the file.
+    @ObservationIgnored var onSave: (() -> Void)?
 
     @ObservationIgnored private var saveTimer: Timer?
     static let saveDelay: TimeInterval = 0.6
@@ -201,6 +203,7 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         if written {
             savedText = text
             modified = Self.modificationDate(url)
+            onSave?()
         }
     }
 

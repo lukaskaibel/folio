@@ -13,6 +13,8 @@ final class MarkdownTextView: NSTextView {
 
     let titleField = TitleField()
     let metaLabel = NSTextField(labelWithString: "")
+    /// The note's reminder, a bell and its time, before the date under the title. A click changes or removes it.
+    let reminderButton = NSButton(title: "", target: nil, action: nil)
     let copyButton = CodeCopyButton()
 
     static let titleTop: CGFloat = 44
@@ -23,6 +25,7 @@ final class MarkdownTextView: NSTextView {
     var exportMargin: CGFloat? {
         didSet {
             metaLabel.isHidden = exportMargin != nil
+            if exportMargin != nil { reminderButton.isHidden = true }
             updateInsets()
         }
     }
@@ -43,6 +46,16 @@ final class MarkdownTextView: NSTextView {
         metaLabel.font = .systemFont(ofSize: 12.5)
         metaLabel.textColor = Theme.textTertiary
         addSubview(metaLabel)
+        reminderButton.isBordered = false
+        reminderButton.image = NSImage(systemSymbolName: "bell.fill", accessibilityDescription: nil)
+        reminderButton.imagePosition = .imageLeading
+        reminderButton.imageHugsTitle = true
+        reminderButton.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 10.5, weight: .regular)
+        reminderButton.isHidden = true
+        reminderButton.target = self
+        reminderButton.action = #selector(showReminder(_:))
+        reminderButton.toolTip = "Change or remove the reminder"
+        addSubview(reminderButton)
         copyButton.target = self
         copyButton.action = #selector(copyCodeBlock(_:))
         addSubview(copyButton)
@@ -75,7 +88,31 @@ final class MarkdownTextView: NSTextView {
         if textContainerInset != inset { textContainerInset = inset }
         let width = bounds.width - side * 2
         titleField.frame = NSRect(x: side - 2, y: titleTop, width: width + 4, height: Self.titleHeight)
-        metaLabel.frame = NSRect(x: side, y: titleTop + Self.titleHeight + 2, width: width, height: 18)
+        var metaStart = side
+        if !reminderButton.isHidden {
+            let size = reminderButton.intrinsicContentSize
+            reminderButton.frame = NSRect(x: side, y: titleTop + Self.titleHeight + 2 + floor((18 - size.height) / 2), width: size.width, height: size.height)
+            metaStart = reminderButton.frame.maxX + 10
+        }
+        metaLabel.frame = NSRect(x: metaStart, y: titleTop + Self.titleHeight + 2, width: max(0, side + width - metaStart), height: 18)
+    }
+
+    /// The bell and time of the note's reminder, red once the time has passed; nil for none.
+    func setReminder(_ text: String?, isOverdue: Bool) {
+        reminderButton.isHidden = text == nil || exportMargin != nil
+        let color: NSColor = isOverdue ? .systemRed : Theme.accent
+        reminderButton.contentTintColor = color
+        reminderButton.attributedTitle = NSAttributedString(string: text ?? "", attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: color])
+        reminderButton.setAccessibilityLabel(text.map { "Reminder, \($0)" })
+        updateInsets()
+    }
+
+    /// Where Remind Me… shows its popover for the open note: from the reminder, or the date where it will be.
+    var reminderAnchor: NSView { reminderButton.isHidden ? metaLabel : reminderButton }
+
+    @objc private func showReminder(_ sender: Any?) {
+        guard let controller else { return }
+        controller.delegate?.editorShowReminder(controller)
     }
 
     // Leave more room under the last line than above the title.

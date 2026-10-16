@@ -38,10 +38,25 @@ struct FileRow: View {
                 .foregroundStyle(tint)
                 .opacity(dimmed ? 0.5 : 1)
         }
-        .badge(isInCloud ? Text(Image(systemName: "icloud.and.arrow.down")) : nil)
-        .accessibilityLabel(isHidden ? "\(name), hidden" : isInCloud ? "\(name), in iCloud" : name)
+        .badge(badge)
+        .accessibilityLabel(accessibilityName)
         // Folders on screen are read ahead, so opening one shows its files straight away.
         .onAppear { if kind == .folder { workspace.prefetch(url) } }
+    }
+
+    private var reminder: Reminder? {
+        kind == .note ? workspace.reminder(for: url) : nil
+    }
+
+    /// A reminder's bell, red once its time has passed, before the cloud of a file still in iCloud.
+    private var badge: Text? {
+        if let reminder { return Text(Image(systemName: "bell.fill")).foregroundStyle(reminder.date <= .now ? Color.red : Color.secondary) }
+        return isInCloud ? Text(Image(systemName: "icloud.and.arrow.down")) : nil
+    }
+
+    private var accessibilityName: String {
+        if let reminder { return "\(name), reminder \(Workspace.reminderText(reminder.date))" }
+        return isHidden ? "\(name), hidden" : isInCloud ? "\(name), in iCloud" : name
     }
 
     private var tint: Color {
@@ -206,6 +221,9 @@ struct FileActions: View {
             Button { workspace.quickLook(url) } label: { Label("Quick Look", systemImage: "eye") }
         }
         Section {
+            if kind == .note {
+                Button { workspace.askForReminder(url) } label: { Label("Remind Me…", systemImage: "bell") }
+            }
             if !isLinked, !isLocation {
                 Button { workspace.renaming = url } label: { Label("Rename", systemImage: "pencil") }
                 MoveToMenu(workspace: workspace, url: url)
@@ -394,6 +412,10 @@ struct FileAlerts: ViewModifier {
                 Text("Enter a name for this folder.")
             }
             .onChange(of: newFolderIn) { _, folder in if folder != nil { name = "" } }
+            .sheet(item: $workspace.reminderRequest) { request in
+                ReminderPicker(workspace: workspace, url: request.url) { workspace.reminderRequest = nil }
+                    .presentationDetents([.medium, .large])
+            }
             .alert(deleteTitle, isPresented: Binding(get: { workspace.deleting != nil }, set: { if !$0 { workspace.deleting = nil } })) {
                 Button("Cancel", role: .cancel) { workspace.deleting = nil }
                 Button("Delete", role: .destructive) {

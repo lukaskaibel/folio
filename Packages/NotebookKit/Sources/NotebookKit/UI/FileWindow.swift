@@ -219,6 +219,13 @@ final class PassThroughHostingView<Content: View>: NSHostingView<Content> {
 
 /// Files opened from the Finder or dropped on the Dock icon open in windows of their own, folders in the sidebar.
 public final class NotebookAppDelegate: NSObject, NSApplicationDelegate {
+    /// Before a click on a reminder's notification, which can be what started the app, reaches it.
+    public func applicationWillFinishLaunching(_ notification: Notification) {
+        MainActor.assumeIsolated {
+            ReminderNotifications.activate()
+        }
+    }
+
     public func application(_ application: NSApplication, open urls: [URL]) {
         MainActor.assumeIsolated {
             FileWindows.shared.open(urls)
