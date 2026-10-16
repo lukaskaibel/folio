@@ -24,7 +24,7 @@ public enum Theme {
     /// Markdown punctuation shown next to the caret.
     static let faint = NSColor(light: 0xA3A7AF, dark: 0x5A5E66)
 
-    /// The accent colour chosen in System Settings, or Notebook's violet when it is set to Multicolour.
+    /// The accent colour chosen in System Settings, or Notebook's ink blue (`AccentColor`) when it is set to Multicolour.
     static let accent = NSColor.controlAccentColor
     static let positive = NSColor(light: 0x2F9B67, dark: 0x4CB782)
     static let warning = NSColor(light: 0xB8791C, dark: 0xE5A84B)

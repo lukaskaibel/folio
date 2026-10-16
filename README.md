@@ -10,11 +10,11 @@
 </p>
 
 <p align="center">
-  <img alt="Platform: macOS 27 or later" src="https://img.shields.io/badge/macOS-27%2B-111214">
-  <img alt="Apple silicon" src="https://img.shields.io/badge/Apple%20silicon-native-111214">
+  <img alt="Platform: macOS 27 or later" src="https://img.shields.io/badge/macOS-27%2B-34508F">
+  <img alt="Apple silicon" src="https://img.shields.io/badge/Apple%20silicon-native-34508F">
   <img alt="Built with Swift, SwiftUI and AppKit" src="https://img.shields.io/badge/Swift-SwiftUI%20%2B%20AppKit-F05138">
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-111214"></a>
-  <a href="CHANGELOG.md"><img alt="Version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-111214"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-34508F"></a>
+  <a href="CHANGELOG.md"><img alt="Version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-34508F"></a>
 </p>
 
 <p align="center">
@@ -128,7 +128,7 @@ appearance. The inspector shows a note's outline, with the section you're readin
 a heading scrolls there. In Settings › Text you pick the typeface (San Francisco, New York, Rounded or Monospaced),
 the size, the line spacing and the line width. The icon is a leather notebook, and Settings › App Icon makes it yours:
 pick the leather, the elastic band, the ribbon and the background, and the Dock shows your notebook while the app is
-open.
+open. Links, the caret and folders are in ink blue to go with it, or in the accent colour you chose in System Settings.
 
 ## What it does
 
