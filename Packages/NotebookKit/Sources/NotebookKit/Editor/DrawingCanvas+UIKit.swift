@@ -95,6 +95,9 @@ final class DrawingCanvas: PKCanvasView {
         if !isPlaced {
             isPlaced = true
             layoutIfNeeded()
+            // An empty drawing first: a canvas whose first drawing already has strokes draws nothing at all once a
+            // stroke is added to it (iOS 27).
+            setDrawing(PKDrawing())
             setDrawing(file.drawing)
         }
     }

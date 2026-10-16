@@ -58,6 +58,9 @@ extension EditorController {
         }
         session.focused = target
         drawingSession = session
+        // A drawing selected by the click that opened it would show its selection through the canvas.
+        let selection = self.selection
+        if selection.length > 0 { setSelection(NSRange(location: selection.upperBound, length: 0)) }
         startDrawingInput()
         updateDrawingCanvases()
         if let target {

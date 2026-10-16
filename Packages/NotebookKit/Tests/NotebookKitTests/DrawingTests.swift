@@ -308,6 +308,7 @@ final class DrawingTests: XCTestCase {
         // A tap with the editor (a double-click on the Mac) opens it for drawing.
         h.click(at: NSPoint(x: rect.midX, y: rect.midY), count: 2)
         XCTAssertTrue(h.editor.isDrawing)
+        XCTAssertEqual(h.selection.length, 0, "the drawing isn't left selected under the canvas")
         XCTAssertNotNil(h.editor.drawingSession?.canvases[url])
         XCTAssertTrue(h.editor.drawingSession?.created.isEmpty ?? false, "no new drawing")
         h.editor.endDrawing()

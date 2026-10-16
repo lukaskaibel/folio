@@ -160,13 +160,19 @@ enum DebugRemote {
         case "drawing", "drawstroke", "drawinfo", "drawundo", "drawredo":
             if let editor { log(editor.debugDrawing(command, argument)) }
         case "drawtool":
-            // drawtool pen|pencil|marker|eraser [width 0-2] [object|pixel]
+            // drawtool pen|pencil|marker|eraser [width 0-2] [object|pixel|RRGGBB]
             let bits = argument.split(separator: " ").map(String.init)
             let tools = DrawingTools.shared
             if let tool = bits.first.flatMap(DrawingTools.Tool.init) { tools.tool = tool }
             if bits.count > 1, let level = Int(bits[1]) { tools.widthLevel = level }
             if bits.count > 2, let eraser = DrawingTools.Eraser(rawValue: bits[2]) { tools.eraser = eraser }
+            if bits.count > 2, let hex = UInt32(bits[2], radix: 16) { tools.color = NSColor(hex: hex) }
             log("tool \(tools.tool) width \(tools.width) eraser \(tools.eraser)")
+        case "drawslow":
+            // drawslow <seconds> x y x y …: as drawpath, through a smooth curve, at the speed of a hand (for recordings).
+            guard numbers.count >= 5 else { return }
+            let points = stride(from: 1, to: numbers.count - 1, by: 2).map { CGPoint(x: numbers[$0], y: numbers[$0 + 1]) }
+            drag(along: smooth(points), seconds: numbers[0])
         case "drawpath":
             // drawpath x y x y …: the mouse button down at the first point (window points from the top left),
             // dragged through the others and up at the last, as real events.
@@ -595,6 +601,53 @@ enum DebugRemote {
             while NSApp.nextEvent(matching: [.leftMouseUp, .leftMouseDragged], until: .distantPast, inMode: .default, dequeue: true) != nil {}
         }
         log("click \(Int(point.x)),\(Int(point.y))\(end.map { " to \(Int($0.x)),\(Int($0.y))" } ?? "") on \(type(of: target))")
+    }
+
+    /// Points every few pixels along a curve through `points`.
+    private static func smooth(_ points: [CGPoint]) -> [CGPoint] {
+        guard points.count > 1 else { return points }
+        var result: [CGPoint] = []
+        for i in 0..<(points.count - 1) {
+            let p0 = points[max(0, i - 1)], p1 = points[i], p2 = points[i + 1], p3 = points[min(points.count - 1, i + 2)]
+            let steps = max(2, Int(hypot(p2.x - p1.x, p2.y - p1.y) / 3))
+            for step in 0..<steps {
+                let t = CGFloat(step) / CGFloat(steps), t2 = t * t, t3 = t2 * t
+                func value(_ a: CGFloat, _ b: CGFloat, _ c: CGFloat, _ d: CGFloat) -> CGFloat {
+                    0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3)
+                }
+                result.append(CGPoint(x: value(p0.x, p1.x, p2.x, p3.x), y: value(p0.y, p1.y, p2.y, p3.y)))
+            }
+        }
+        result.append(points[points.count - 1])
+        return result
+    }
+
+    /// A mouse drag along points over `seconds`: the button goes down on the view under the first, and a timer
+    /// moves it on while that view follows the mouse.
+    private static func drag(along points: [CGPoint], seconds: Double) {
+        guard let window, let content = window.contentView, let first = points.first, let last = points.last else { return }
+        let root = content.superview ?? content
+        let flip = { (point: CGPoint) in CGPoint(x: point.x, y: content.bounds.height - point.y) }
+        guard let target = root.hitTest(flip(first)) else { return log("drawslow: nothing at \(first)") }
+        func event(_ type: NSEvent.EventType, _ point: CGPoint) -> NSEvent? {
+            NSEvent.mouseEvent(with: type, location: flip(point), modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                               windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1)
+        }
+        var next = 1
+        let interval = max(0.004, seconds / Double(max(1, points.count)))
+        let timer = Timer(timeInterval: interval, repeats: true) { timer in
+            if next < points.count {
+                if let drag = event(.leftMouseDragged, points[next]) { NSApp.postEvent(drag, atStart: false) }
+                next += 1
+            } else {
+                if let up = event(.leftMouseUp, last) { NSApp.postEvent(up, atStart: false) }
+                timer.invalidate()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        if let down = event(.leftMouseDown, first) { target.mouseDown(with: down) }
+        timer.invalidate()
+        log("drawslow \(points.count) points on \(type(of: target))")
     }
 
     /// A mouse drag through points, delivered to the view under the first one: down, dragged, up.
