@@ -60,7 +60,7 @@ final class MarkdownTextView: UITextView {
         var configuration = UIButton.Configuration.plain()
         configuration.contentInsets = .zero
         headingButton.configuration = configuration
-        headingButton.showsMenuAsPrimaryAction = true
+        headingButton.addAction(UIAction { [weak self] _ in self?.controller?.showTextStyles() }, for: .primaryActionTriggered)
         headingButton.isHidden = true
         headingButton.accessibilityLabel = "Text Style"
         addSubview(headingButton)

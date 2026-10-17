@@ -62,13 +62,20 @@ enum EditorStyle {
 
     /// The chosen typeface at a size and weight: San Francisco, New York, SF Rounded or SF Mono.
     static func face(_ size: CGFloat, weight: NSFont.Weight = .regular) -> NSFont {
-        let font = NSFont.systemFont(ofSize: size, weight: weight)
-        guard let design = typography.face.design, let descriptor = font.fontDescriptor.withDesign(design) else { return font }
-        #if os(macOS)
-        return NSFont(descriptor: descriptor, size: size) ?? font
-        #else
-        return UIFont(descriptor: descriptor, size: size)
-        #endif
+        typography.face.font(size, weight: weight)
+    }
+
+    /// A text style's name where you pick it, in a menu or the Format panel, set as the style is in the note: Title,
+    /// Heading and Subheading larger and heavier than the text around them (`size`), though by less than in the note.
+    static func styleSample(_ style: FormatCommand, size: CGFloat, face: Typography.Face) -> NSFont {
+        let level = switch style {
+        case .title: 1
+        case .heading: 2
+        case .subheading: 3
+        default: 0
+        }
+        guard level > 0 else { return face.font(size) }
+        return face.font((size * (1 + (headingScale(level) - 1) * 0.75)).rounded(), weight: level == 1 ? .bold : .semibold)
     }
 
     /// Heading sizes keep their proportion to the text.

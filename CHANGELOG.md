@@ -47,6 +47,8 @@ versions follow [semantic versioning](https://semver.org).
   sidebar's right-click menu and the inspector on the Mac, and in the ⋯ menu, on touch and hold and, if you add it in
   Settings › Writing Bar, as a bell above the keyboard on iPhone and iPad. Reminders aren't written into the note;
   they follow it when you rename or move it in Notebook, and reach your other devices through iCloud.
+- On iPhone and iPad, touch and hold the bar above the keyboard, or tap the sliders after its last tool, to choose its
+  tools and their order right there, without going to Settings.
 
 ### Changed
 
@@ -61,6 +63,13 @@ versions follow [semantic versioning](https://semver.org).
   wait you could see, such as a download from iCloud.
 - On the Mac, the sidebar's icons are the size Notes has: large for a location's own folders and files, smaller inside
   a folder, with the names and the indent where Notes has them.
+- Where you pick a text style, each looks as it does in the note: Title, Heading, Subheading and Body in the Mac's Aa
+  menu, in the Format panel on iPhone and iPad and behind the heading level in the margin, in the note's typeface. On
+  the iPad the heading level opens them next to it. In Settings › Text each typeface is shown in itself, on iPhone and
+  iPad in a list of its own.
+- New Note is a button of glass in the accent colour, so it stands out from the buttons around it.
+- More menus have symbols next to their items, as the ⋯ menu has: Move To's folders, Export As, the menu of a picture
+  in a note, Copy Code, and the commands of the menu bar on the Mac and the iPad.
 
 ### Fixed
 
@@ -85,6 +94,8 @@ versions follow [semantic versioning](https://semver.org).
   in the sidebar is no longer ended by changes in other folders either; they show once the name is in.
 - After renaming the folder selected in the sidebar, ⌘N made the folder again under its old name for the new note. A
   renamed folder now also stays selected, as in the Finder.
+- Checkboxes and bullets sat two points above the middle of their text, and so did the heading level in the margin, the
+  icons of links and callouts, and maths within a line. They now line up with the text.
 
 ## [0.1.0] – not released yet
 

@@ -40,7 +40,7 @@ struct MainView: View {
             .navigationSplitViewColumnWidth(min: 200, ideal: 250, max: 400)
                 .toolbar {
                     ToolbarItem {
-                        Button { workspace.newNote() } label: { Label("New Note", systemImage: "square.and.pencil") }
+                        NewNoteButton { workspace.newNote() }
                             .help("New note (⌘N)")
                     }
                 }
@@ -141,14 +141,15 @@ struct DocumentToolbar: ToolbarContent {
     }
 }
 
-/// The formatting commands, as in Notes' Aa button. They go to the note, which keeps the caret.
+/// The formatting commands, as in Notes' Aa button: the text styles each set as it is in the note, the rest with
+/// their symbols. They go to the note, which keeps the caret.
 struct FormatMenu: View {
     var body: some View {
         Menu {
-            item("Title", #selector(MarkdownTextView.makeTitle(_:)))
-            item("Heading", #selector(MarkdownTextView.makeHeading(_:)))
-            item("Subheading", #selector(MarkdownTextView.makeSubheading(_:)))
-            item("Body", #selector(MarkdownTextView.makeBody(_:)))
+            style(.title, #selector(MarkdownTextView.makeTitle(_:)))
+            style(.heading, #selector(MarkdownTextView.makeHeading(_:)))
+            style(.subheading, #selector(MarkdownTextView.makeSubheading(_:)))
+            style(.body, #selector(MarkdownTextView.makeBody(_:)))
             Divider()
             item("Bold", #selector(MarkdownTextView.toggleBoldface(_:)), "bold")
             item("Italic", #selector(MarkdownTextView.toggleItalics(_:)), "italic")
@@ -167,10 +168,13 @@ struct FormatMenu: View {
         .help("Format")
     }
 
-    private func item(_ title: String, _ action: Selector, _ symbol: String? = nil) -> some View {
-        Button { NSApp.sendAction(action, to: nil, from: nil) } label: {
-            if let symbol { Label(title, systemImage: symbol) } else { Text(title) }
-        }
+    private func item(_ title: String, _ action: Selector, _ symbol: String) -> some View {
+        Button { NSApp.sendAction(action, to: nil, from: nil) } label: { Label(title, systemImage: symbol) }
+    }
+
+    private func style(_ style: FormatCommand, _ action: Selector) -> some View {
+        let font = EditorStyle.styleSample(style, size: NSFont.menuFont(ofSize: 0).pointSize, face: NotebookSettings.shared.typography.face)
+        return Button { NSApp.sendAction(action, to: nil, from: nil) } label: { Text(style.name).font(Font(font)) }
     }
 }
 
@@ -198,8 +202,8 @@ struct MoreMenu: View {
             if let note = workspace.note {
                 Divider()
                 Menu {
-                    Button("PDF…") { workspace.export(as: .pdf) }
-                    Button("PNG Image…") { workspace.export(as: .png) }
+                    Button { workspace.export(as: .pdf) } label: { Label("PDF…", systemImage: "doc.richtext") }
+                    Button { workspace.export(as: .png) } label: { Label("PNG Image…", systemImage: "photo") }
                 } label: {
                     Label("Export As", systemImage: "square.and.arrow.up.on.square")
                 }

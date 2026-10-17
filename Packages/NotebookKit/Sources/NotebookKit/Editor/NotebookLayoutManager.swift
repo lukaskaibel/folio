@@ -260,13 +260,11 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
                       width: size.width, height: size.height)
     }
 
-    /// The baseline of the line a glyph is on, as drawn (raised by the line's baseline offset).
+    /// The baseline of the line a glyph is on, as drawn. The glyph's location is already raised by the line's baseline
+    /// offset: taking it off again put checkboxes and bullets two points above the middle of their text.
     private func baseline(forGlyphAt glyph: Int, origin: NSPoint) -> CGFloat {
         let line = lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
-        let location = location(forGlyphAt: glyph)
-        let index = characterIndexForGlyph(at: glyph)
-        let offset = (textStorage?.attribute(.baselineOffset, at: index, effectiveRange: nil) as? CGFloat) ?? 0
-        return origin.y + line.minY + location.y - offset
+        return origin.y + line.minY + location(forGlyphAt: glyph).y
     }
 
     private func isSelected(_ range: NSRange) -> Bool {

@@ -164,23 +164,23 @@ extension EditorController {
         if case .picture(let range, let url) = hitTest(point) {
             setSelection(range)
             let menu = NSMenu()
+            func add(_ title: String, _ action: Selector, _ symbol: String, _ object: Any? = nil) {
+                let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+                item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+                item.representedObject = object
+                menu.addItem(item)
+            }
             if let drawing = drawing(at: range) {
-                let edit = NSMenuItem(title: "Edit Drawing", action: #selector(MarkdownTextView.editDrawing(_:)), keyEquivalent: "")
-                edit.representedObject = drawing
-                menu.addItem(edit)
+                add("Edit Drawing", #selector(MarkdownTextView.editDrawing(_:)), "pencil.tip.crop.circle", drawing)
             }
             if let url {
-                let look = NSMenuItem(title: "Quick Look", action: #selector(MarkdownTextView.quickLookSelection(_:)), keyEquivalent: "")
-                look.representedObject = url
-                menu.addItem(look)
-                let finder = NSMenuItem(title: "Show in Finder", action: #selector(MarkdownTextView.revealSelection(_:)), keyEquivalent: "")
-                finder.representedObject = url
-                menu.addItem(finder)
+                add("Quick Look", #selector(MarkdownTextView.quickLookSelection(_:)), "eye", url)
+                add("Show in Finder", #selector(MarkdownTextView.revealSelection(_:)), "folder", url)
                 menu.addItem(.separator())
             }
-            menu.addItem(NSMenuItem(title: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: ""))
-            menu.addItem(NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: ""))
-            menu.addItem(NSMenuItem(title: "Delete", action: #selector(NSText.delete(_:)), keyEquivalent: ""))
+            add("Cut", #selector(NSText.cut(_:)), "scissors")
+            add("Copy", #selector(NSText.copy(_:)), "doc.on.doc")
+            add("Delete", #selector(NSText.delete(_:)), "trash")
             return menu
         }
         if let base { addCopyCode(to: base, at: point) }

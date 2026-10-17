@@ -191,7 +191,7 @@ struct HomeScreen: View {
             DefaultToolbarItem(kind: .search, placement: .bottomBar)
             ToolbarSpacer(.fixed, placement: .bottomBar)
             ToolbarItem(placement: .bottomBar) {
-                Button { workspace.newNote(in: workspace.inboxFolder) } label: { Label("New Note", systemImage: "square.and.pencil") }
+                NewNoteButton { workspace.newNote(in: workspace.inboxFolder) }
             }
         }
         .sheet(isPresented: $showsSettings) { TouchSettings(workspace: workspace) }
@@ -222,7 +222,9 @@ struct HomeScreen: View {
             Menu {
                 Section("New Folder In") {
                     ForEach(workspace.locations) { location in
-                        Button(location.name) { newFolderIn = location.url }
+                        Button { newFolderIn = location.url } label: {
+                            Label(location.name, systemImage: location.isICloudDrive ? "icloud" : "folder")
+                        }
                     }
                 }
             } label: { label }
@@ -352,7 +354,7 @@ struct FolderScreen: View {
             DefaultToolbarItem(kind: .search, placement: .bottomBar)
             ToolbarSpacer(.fixed, placement: .bottomBar)
             ToolbarItem(placement: .bottomBar) {
-                Button { workspace.newNote(in: page.url) } label: { Label("New Note", systemImage: "square.and.pencil") }
+                NewNoteButton { workspace.newNote(in: page.url) }
             }
         }
     }
