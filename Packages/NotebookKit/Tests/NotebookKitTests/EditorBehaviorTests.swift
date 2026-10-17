@@ -88,6 +88,41 @@ final class EditorBehaviorTests: XCTestCase {
         }
     }
 
+    /// The rows of part of the text view with ink on them, from the top of the first to the bottom of the last.
+    private func ink(_ h: EditorHarness, in rect: NSRect) -> ClosedRange<CGFloat>? {
+        h.settle(0)
+        guard let bitmap = h.textView.bitmapImageRepForCachingDisplay(in: rect) else { return nil }
+        h.textView.cacheDisplay(in: rect, to: bitmap)
+        let rows = (0..<bitmap.pixelsHigh).filter { y in
+            (0..<bitmap.pixelsWide).contains { x in
+                guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { return false }
+                return color.alphaComponent > 0.5 && color.brightnessComponent < 0.5
+            }
+        }
+        guard let first = rows.first, let last = rows.last else { return nil }
+        let scale = CGFloat(bitmap.pixelsHigh) / rect.height
+        return rect.minY + CGFloat(first) / scale...rect.minY + CGFloat(last + 1) / scale
+    }
+
+    func testCaretReachesFromAboveTheTextToBelowIt() throws {
+        let h = EditorHarness("Hy there\n\n## Hy there")
+        for start in [0, h.range(of: "## Hy").location + 3] {
+            let caret = caret(h, at: start + 1)
+            let font = try XCTUnwrap(h.editor.storage.attribute(.font, at: start, effectiveRange: nil) as? NSFont)
+            func glyph(_ offset: Int) throws -> ClosedRange<CGFloat> {
+                let glyphs = h.editor.layoutManager.glyphRange(forCharacterRange: NSRange(location: start + offset, length: 1), actualCharacterRange: nil)
+                let rect = h.editor.layoutManager.boundingRect(forGlyphRange: glyphs, in: h.editor.container)
+                return try XCTUnwrap(ink(h, in: NSRect(x: rect.minX + h.textView.textContainerOrigin.x, y: caret.proposed.minY, width: rect.width, height: caret.proposed.height)))
+            }
+            // The H stands on the baseline; the caret reaches a point past the font's ascender above it and its
+            // descender below, so past the tail of the y.
+            let capital = try glyph(0), descender = try glyph(1)
+            XCTAssertEqual(caret.drawn.maxY, capital.upperBound - font.descender + 1, accuracy: 0.75, font.description)
+            XCTAssertEqual(caret.drawn.minY, capital.upperBound - font.ascender - 1, accuracy: 0.75, font.description)
+            XCTAssertGreaterThan(caret.drawn.maxY, descender.upperBound, font.description)
+        }
+    }
+
     // MARK: - Selections take things whole
 
     func testSelectingBoldTextTakesItsMarkers() {
