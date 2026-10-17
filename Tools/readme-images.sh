@@ -54,9 +54,10 @@ launch() {
   defaults delete $bundle_id 2>/dev/null || true
   : > "$work/cmd"
   rm -f "$work/cmd.log"
+  # Scroll bars only while scrolling, as with a trackpad, even when a mouse is connected.
   open -n -g "$app" --args -NotebookLibrary "$PWD/$library" -NotebookLibraryName "iCloud Drive" -NotebookDemo YES \
-    -AppleLanguages '(en)' -AppleLocale en_US -NSAllowContinuousSpellChecking NO -NotebookTips hide -debugCommandFile "$PWD/$work/cmd" \
-    "-NSWindow Frame main" "160 80 1280 820 0 0 1512 949"
+    -AppleLanguages '(en)' -AppleLocale en_US -NSAllowContinuousSpellChecking NO -AppleShowScrollBars WhenScrolling \
+    -NotebookTips hide -debugCommandFile "$PWD/$work/cmd" "-NSWindow Frame main" "160 80 1280 820 0 0 1512 949"
   for _ in $(seq 40); do
     pid=$(pgrep -nf "$PWD/$app/Contents/MacOS" || true)
     [ -n "$pid" ] && break
