@@ -55,6 +55,8 @@ versions follow [semantic versioning](https://semver.org).
 - On iPhone, a folder that takes a while to read shows a spinner instead of "No Notes".
 - A PDF or picture that is read at once shows at once, as in Preview, instead of fading in; it fades in only after a
   wait you could see, such as a download from iCloud.
+- On the Mac, the sidebar's icons are the size Notes has: large for a location's own folders and files, smaller inside
+  a folder, with the names and the indent where Notes has them.
 - Where you pick a text style, each looks as it does in the note: Title, Heading, Subheading and Body in the Mac's Aa
   menu, in the Format panel on iPhone and iPad and behind the heading level in the margin, in the note's typeface. On
   the iPad the heading level opens them next to it. In Settings › Text each typeface is shown in itself, on iPhone and

@@ -64,7 +64,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         outline.style = .sourceList
         outline.backgroundColor = .clear
         outline.rowSizeStyle = .default
-        outline.indentationPerLevel = 14
+        outline.indentationPerLevel = 10
         outline.focusRingType = .none
         outline.allowsEmptySelection = true
         outline.floatsGroupRows = false
@@ -337,18 +337,19 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         }
         let cell = outlineView.makeView(withIdentifier: SidebarFileCell.identifier, owner: nil) as? SidebarFileCell ?? SidebarFileCell()
         cell.label.delegate = self
+        let nested = outlineView.level(forItem: item) > 1
         if let node = item as? FileNode {
             // Folders on screen are read ahead, so opening one shows its files straight away.
             workspace.prefetch(node)
             // Hidden folders show dimmed while their location shows them, as hidden files in the Finder.
             let dimmed = NotebookSettings.shared.dimsOtherFiles && !node.isFolder && node.kind != .note || node.isFolder && workspace.isHidden(node.url)
-            cell.configure(name: node.name, kind: node.kind, inCloud: node.isInCloud, url: node.url, dimmed: dimmed,
+            cell.configure(name: node.name, kind: node.kind, inCloud: node.isInCloud, url: node.url, nested: nested, dimmed: dimmed,
                            reminder: node.kind == .note ? workspace.reminder(for: node.url) : nil)
         } else if let entry = item as? SidebarEntry, let url = entry.url {
             let kind = FileKind(url: url, isDirectory: (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false)
             let name = kind == .note ? url.deletingPathExtension().lastPathComponent : kind == .folder ? workspace.folderName(url) : url.lastPathComponent
             cell.configure(name: name, kind: kind, inCloud: false, url: url, symbol: { if case .favorite = entry.kind, kind == .folder { return "star" } else { return nil } }(),
-                           reminder: kind == .note ? workspace.reminder(for: url) : nil)
+                           nested: nested, reminder: kind == .note ? workspace.reminder(for: url) : nil)
         }
         return cell
     }
@@ -733,10 +734,9 @@ final class SidebarFileCell: NSTableCellView {
     init() {
         super.init(frame: .zero)
         identifier = Self.identifier
-        // Not the cell's imageView: the source list would resize some icons to its own row style.
+        // Not the cell's imageView: the source list would size and place it itself, further right than Notes does.
         textField = label
         icon.translatesAutoresizingMaskIntoConstraints = false
-        icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
         label.translatesAutoresizingMaskIntoConstraints = false
         label.font = .systemFont(ofSize: 13)
         label.lineBreakMode = .byTruncatingMiddle
@@ -750,12 +750,11 @@ final class SidebarFileCell: NSTableCellView {
         addSubview(icon)
         addSubview(label)
         addSubview(accessory)
+        // Icon and name where Notes has them. The icon keeps its own size, centred on its column.
         NSLayoutConstraint.activate([
-            icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
+            icon.centerXAnchor.constraint(equalTo: leadingAnchor, constant: 9),
             icon.centerYAnchor.constraint(equalTo: centerYAnchor),
-            icon.widthAnchor.constraint(equalToConstant: 18),
-            icon.heightAnchor.constraint(equalToConstant: 18),
-            label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6),
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 24),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
             label.trailingAnchor.constraint(lessThanOrEqualTo: accessory.leadingAnchor, constant: -4),
             accessory.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
@@ -767,9 +766,11 @@ final class SidebarFileCell: NSTableCellView {
 
     private var tint: NSColor = .secondaryLabelColor
 
-    func configure(name: String, kind: FileKind, inCloud: Bool, url: URL, symbol: String? = nil, dimmed: Bool = false, reminder: Reminder? = nil) {
+    func configure(name: String, kind: FileKind, inCloud: Bool, url: URL, symbol: String? = nil, nested: Bool, dimmed: Bool = false, reminder: Reminder? = nil) {
         label.stringValue = name
         label.textColor = dimmed ? .tertiaryLabelColor : inCloud ? .secondaryLabelColor : .labelColor
+        // As in Notes: large icons on a section's own rows, smaller ones inside a folder.
+        icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular, scale: nested ? .medium : .large)
         icon.alphaValue = dimmed ? 0.5 : 1
         icon.image = NSImage(systemSymbolName: symbol ?? kind.symbol, accessibilityDescription: nil)
         tint = kind == .folder ? .controlAccentColor : kind == .note || kind == .other ? .secondaryLabelColor : kind.tint
