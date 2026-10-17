@@ -9,7 +9,7 @@ name: TestFlight
 
 on:
   push:
-    branches: [main]
+    branches: [main, claude/testflight-apps-three-projects-f48e3a]  # TEMPORARY: try it from the pull request
     paths:
       - Notebook/**
       - Notebook.xcodeproj/**
