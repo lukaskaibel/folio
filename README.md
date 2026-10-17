@@ -473,11 +473,17 @@ shows notifications only from an app in a lasting place, not from one in `/tmp`.
 Builds for TestFlight are made and uploaded with [fastlane](https://fastlane.tools), signed in with an App Store
 Connect API key, so Xcode needs no account. Copy `fastlane/.env.secret.example` to `fastlane/.env.secret` (it stays out
 of git) and fill in the key and your team, run `bundle install` once, and then upload the iPhone and iPad app, the Mac
-app or both. Each upload gets the date and time as its build number:
+app or both:
 
 ```bash
 bundle exec fastlane ios beta
 ```
+
+Every change to the app on `main` also goes to TestFlight by itself, for the iPhone and iPad:
+[`.github/workflows/testflight.yml`](.github/workflows/testflight.yml) runs the same lane on GitHub, signed with
+certificates made for it (the workflow lists the secrets it needs). A TestFlight build carries the version it's on its
+way to and the date and time in Germany: `0.1.0 (2026.1017.1047)` is the build of 17 October 2026 at 10:47, and once
+`v0.1.0` is tagged, the builds after it are `0.2.0`. Its "What to Test" names the commit.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes.
 

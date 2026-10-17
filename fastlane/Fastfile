@@ -10,6 +10,9 @@
 #   bundle exec fastlane beta         # both
 #   bundle exec fastlane build        # build both for the App Store, signed, without uploading (or ios build, mac build)
 #
+# .github/workflows/testflight.yml runs `ios beta` on GitHub for every change to the app on main. TestFlight builds are
+# numbered as beta_version and build_number below say: 0.2.0 (2026.1017.1047).
+#
 # The App Store listing (texts, screenshots, submitting for review) isn't here yet: that comes with the first release.
 
 require "plist"
@@ -63,7 +66,7 @@ end
 
 # Lets Xcode make the development profiles for the archive, signed in with the same API key. The team and the signing
 # identity are given here rather than in Config/Local.xcconfig, which would sign the Debug builds for the team too.
-def build_arguments
+def build_arguments(marketing_version)
   [
     "-allowProvisioningUpdates",
     "-authenticationKeyPath", File.expand_path(secret("APP_STORE_CONNECT_API_KEY_P8_PATH")),
@@ -71,6 +74,7 @@ def build_arguments
     "-authenticationKeyIssuerID", secret("APP_STORE_CONNECT_API_KEY_ISSUER_ID"),
     "DEVELOPMENT_TEAM=#{secret('DEVELOPMENT_TEAM')}",
     "CODE_SIGN_IDENTITY=Apple Development",
+    "MARKETING_VERSION=#{marketing_version}",
     "CURRENT_PROJECT_VERSION=#{build_number}"
   ].shelljoin
 end
@@ -138,20 +142,47 @@ def version
   File.read(File.join(ROOT, "Config", "Shared.xcconfig"))[/^MARKETING_VERSION = (.+)$/, 1].strip
 end
 
-# Every upload needs a higher build number. It comes from the date and time (2026.1016.1453), as in Issues, and is the
-# same for both platforms of one run.
+def git(*arguments)
+  sh(["git", "-C", ROOT, *arguments].shelljoin, log: false).strip
+end
+
+# The version a TestFlight build is on its way to. Config/Shared.xcconfig holds the version of the latest release,
+# which gets a v tag when it ships, so once v0.1.0 is tagged, the builds after it are the next minor version, 0.2.0.
+# Before that they are 0.1.0 itself. (A version that is out is closed in App Store Connect: it takes no more builds.)
+def beta_version
+  @beta_version ||= if git("tag", "--list", "v#{version}").empty?
+                      version
+                    else
+                      major, minor = version.split(".").map(&:to_i)
+                      "#{major}.#{minor + 1}.0"
+                    end
+end
+
+# Every upload needs a higher build number. It is the date and time in Germany, year first so that it sorts:
+# 2026.1017.1047 is 17 October 2026 at 10:47. The same on this Mac and on GitHub, and for both platforms of one run.
 def build_number
   @build_number ||= begin
-    now = Time.now
+    zone = ENV["TZ"]
+    ENV["TZ"] = "Europe/Berlin"
+    now = Time.now.localtime
+    ENV["TZ"] = zone
     "#{now.year}.#{now.month * 100 + now.day}.#{now.hour * 100 + now.min}"
   end
 end
 
-# Archives one platform for the App Store and returns the .ipa or .pkg.
-def archive_for_store(platform)
+# "What to Test" in TestFlight: the commit the build is made of, which the version and build number can't hold.
+def what_to_test
+  commit = git("rev-parse", "HEAD")
+  text = "#{git('log', '-1', '--format=%s')}\n\n#{commit[0, 7]}"
+  text += " with changes that aren't committed" unless git("status", "--porcelain", "--untracked-files=no").empty?
+  "#{text}\nhttps://github.com/lukaskaibel/notebook/commit/#{commit}"
+end
+
+# Archives one platform for the App Store and returns the .ipa or .pkg. TestFlight builds take beta_version.
+def archive_for_store(platform, marketing_version: version)
   config = PLATFORMS.fetch(platform)
   folder = File.join(OUTPUT, platform.to_s)
-  UI.header("#{config[:name]}: Notebook #{version} (#{build_number})")
+  UI.header("#{config[:name]}: Notebook #{marketing_version} (#{build_number})")
   export_options = store_signing(platform)
   package = build_app(
     project: PROJECT,
@@ -168,7 +199,7 @@ def archive_for_store(platform)
     export_options: export_options,
     skip_profile_detection: true,
     # gym hands these to the export as well, so they mustn't go into export_xcargs a second time.
-    xcargs: build_arguments
+    xcargs: build_arguments(marketing_version)
   )
   check_sandbox(File.join(folder, "Notebook.xcarchive")) if platform == :mac
   package
@@ -182,14 +213,22 @@ def check_sandbox(archive)
   UI.user_error!("The archived Mac app is not sandboxed; not uploading it.") unless sandboxed == true
 end
 
+# Uploads a build and waits until App Store Connect has processed it, which "What to Test" needs. The internal testers
+# get every build by themselves.
 def upload_beta(platform, package)
   config = PLATFORMS.fetch(platform)
   upload_to_testflight(
     api_key: api_key,
     app_platform: config[:store],
     config[:package] => package,
-    skip_waiting_for_build_processing: true
+    # In the app's primary language, which a new app's builds don't have yet, and in any the builds have.
+    localized_build_info: { "default" => { whats_new: what_to_test }, "en-US" => { whats_new: what_to_test } },
+    distribute_external: false
   )
+end
+
+def upload_to_beta(platform)
+  upload_beta(platform, archive_for_store(platform, marketing_version: beta_version))
 end
 
 desc "Builds the Mac, iPhone and iPad apps for the App Store, signed, without uploading them"
@@ -199,7 +238,7 @@ end
 
 desc "Builds the Mac, iPhone and iPad apps and uploads them to TestFlight"
 lane :beta do
-  PLATFORMS.each_key { |platform| upload_beta(platform, archive_for_store(platform)) }
+  PLATFORMS.each_key { |platform| upload_to_beta(platform) }
 end
 
 platform :ios do
@@ -207,7 +246,7 @@ platform :ios do
   lane(:build) { archive_for_store(:ios) }
 
   desc "Builds the iPhone and iPad app and uploads it to TestFlight"
-  lane(:beta) { upload_beta(:ios, archive_for_store(:ios)) }
+  lane(:beta) { upload_to_beta(:ios) }
 end
 
 platform :mac do
@@ -215,5 +254,5 @@ platform :mac do
   lane(:build) { archive_for_store(:mac) }
 
   desc "Builds the Mac app and uploads it to TestFlight"
-  lane(:beta) { upload_beta(:mac, archive_for_store(:mac)) }
+  lane(:beta) { upload_to_beta(:mac) }
 end
