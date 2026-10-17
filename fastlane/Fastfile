@@ -174,7 +174,9 @@ end
 def what_to_test
   commit = git("rev-parse", "HEAD")
   text = "#{git('log', '-1', '--format=%s')}\n\n#{commit[0, 7]}"
-  text += " with changes that aren't committed" unless git("status", "--porcelain", "--untracked-files=no").empty?
+  # On GitHub the build is the pushed commit, though setting up Ruby rewrites the checkout's .bundle/config.
+  dirty = !ENV["CI"] && !git("status", "--porcelain", "--untracked-files=no").empty?
+  text += " with changes that aren't committed" if dirty
   "#{text}\nhttps://github.com/lukaskaibel/notebook/commit/#{commit}"
 end
 
