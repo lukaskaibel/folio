@@ -53,6 +53,8 @@ versions follow [semantic versioning](https://semver.org).
 - On iPhone, a folder that takes a while to read shows a spinner instead of "No Notes".
 - A PDF or picture that is read at once shows at once, as in Preview, instead of fading in; it fades in only after a
   wait you could see, such as a download from iCloud.
+- On the Mac, the sidebar's icons are the size Notes has: large for a location's own folders and files, smaller inside
+  a folder, with the names and the indent where Notes has them.
 
 ### Fixed
 
