@@ -34,6 +34,12 @@ versions follow [semantic versioning](https://semver.org).
   notes in them keep working.
 - Add Location at the bottom of the sidebar, to show another folder there. A folder dropped from the Finder on the
   sidebar, between or below its sections, is added the same way.
+- New folders from the sidebar, as in Mail and Photos: point at a location's name and click the folder with a plus
+  that comes up next to it for a folder at the top of the location, or right-click a folder and choose New Folder for
+  one inside it. The folder comes up selected and named New Folder, ready to type over, as in the Finder, at once even
+  in a large iCloud Drive; it works in iCloud Drive's Desktop, Documents and app folders too. On the iPhone, New Folder
+  is at the bottom of the first screen, as in Notes, and asks which location when you have several; on the iPad the
+  button comes up under the pointer.
 - Reminders of notes: choose Remind Me… for a note and pick Later Today, This Evening, Tomorrow or a date and time. At
   that time a notification brings the note's name and its first points, what is still to do first, and gets through a
   Focus; tap it to open the note, or choose Remind Me in 1 Hour or Done. A note with a reminder shows a bell and the
@@ -75,6 +81,10 @@ versions follow [semantic versioning](https://semver.org).
 - Opening a note in a location with thousands of folders also waited for Move To to list them all, in the File menu
   and the ⋯ menu, every time. Move To now lists the folders when you open it, indented as in the sidebar's menu.
 - Typing in search with a whole iCloud Drive took most of a second for every letter; it now keeps up with your typing.
+- A new folder lost its name field in the sidebar a moment after it came up, so it kept the name New Folder. Renaming
+  in the sidebar is no longer ended by changes in other folders either; they show once the name is in.
+- After renaming the folder selected in the sidebar, ⌘N made the folder again under its old name for the new note. A
+  renamed folder now also stays selected, as in the Finder.
 
 ## [0.1.0] – not released yet
 

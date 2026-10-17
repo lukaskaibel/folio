@@ -158,6 +158,10 @@ enum DebugRemote {
             if let url = workspace.currentURL { workspace.rename(url, to: argument) }
         case "renamealert":
             workspace.renaming = url(argument) ?? workspace.currentURL
+        case "makefolder":
+            // makefolder <folder> > <name>: what Create in the New Folder alert does (`newfolder` brings the alert up).
+            let parts = argument.components(separatedBy: " > ")
+            workspace.newFolder(in: parts.count == 2 ? url(parts[0]) : workspace.locations.first?.url, named: parts.last)
         case "typebench":
             // Types into the note as fast as it takes it, and says how long each keystroke took.
             let count = Int(numbers.first ?? 50)
