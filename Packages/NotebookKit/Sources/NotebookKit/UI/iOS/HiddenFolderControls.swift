@@ -55,11 +55,13 @@ struct ShowHiddenFoldersMenu: View {
     }
 }
 
-/// A location's name over its files and folders, and, as on the Mac, an eye to show its hidden folders: in the accent
-/// colour while they show, and under the pointer.
+/// A location's name over its files and folders, and, as on the Mac, an eye to show its hidden folders, in the accent
+/// colour while they show, and a folder with a plus for a new folder at its top: both under the pointer.
 struct LocationHeader: View {
     let workspace: Workspace
     let location: Location
+    /// Asks for the name of a new folder in the location.
+    var newFolder: ((URL) -> Void)?
     @State private var isHovered = false
 
     var body: some View {
@@ -76,6 +78,15 @@ struct LocationHeader: View {
                 .buttonStyle(.borderless)
                 .foregroundStyle(shows ? Color.accentColor : Color.secondary)
                 .help(title)
+            }
+            if isHovered, let newFolder {
+                Button { newFolder(location.url) } label: {
+                    Label("New Folder", systemImage: "folder.badge.plus")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .help("New Folder")
             }
         }
         .contentShape(Rectangle())

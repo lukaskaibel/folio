@@ -282,6 +282,20 @@ final class LocationTests: XCTestCase {
         XCTAssertTrue(reader.isIdle)
     }
 
+    /// A folder read on the main thread after something you did in it, such as a rename, drops the readings of it
+    /// still under way: they began before and could bring back the old name.
+    func testReadingOnTheMainThreadDropsOlderReadings() async throws {
+        UserDefaults.standard.set(0.2, forKey: "NotebookSlowFolders")
+        let reader = FolderReader()
+        var results: [FolderReader.Result]?
+        reader.read([.init(url: drive)]) { results = $0 }
+        // File events name it /private/var/…, the sidebar /var/….
+        reader.dropReadings(of: URL(fileURLWithPath: "/private" + drive.path))
+        XCTAssertFalse(reader.isReading(drive))
+        for _ in 0..<100 where results == nil { try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertEqual(results?.count, 0)
+    }
+
     /// A folder you open is read next, before the ones read ahead of time that were waiting already.
     func testAnOpenedFolderIsReadBeforeTheOnesReadAhead() async throws {
         UserDefaults.standard.set(0.3, forKey: "NotebookSlowFolders")

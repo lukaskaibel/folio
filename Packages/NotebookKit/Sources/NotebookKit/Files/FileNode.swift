@@ -130,6 +130,15 @@ public final class FileNode: NSObject {
         return changed
     }
 
+    /// Takes in a folder you just made in this one, so it shows before the folder has been read again. Says whether
+    /// it wasn't there yet.
+    @discardableResult
+    func insertFolder(_ url: URL) -> Bool {
+        guard let children, !children.contains(where: { $0.url.path == url.path }) else { return false }
+        let items = children.map { (listing: Listing(url: $0.url, kind: $0.kind, isInCloud: $0.isInCloud, modified: $0.modified, linkedName: $0.isLinked ? $0.name : nil), sortName: $0.sortName) }
+        return apply(Self.inOrder(items + [(Listing(url: url, kind: .folder), url.lastPathComponent)]))
+    }
+
     private convenience init(_ item: Listing, parent: FileNode) {
         self.init(url: item.url, kind: item.kind, isInCloud: item.isInCloud, modified: item.modified, parent: parent, linkedAs: item.linkedName)
     }
@@ -192,10 +201,14 @@ public final class FileNode: NSObject {
         for folder in linked {
             items.append((Listing(url: folder.url, kind: .folder, linkedName: folder.name), folder.name))
         }
-        items.sort { a, b in
+        return inOrder(items)
+    }
+
+    /// The sidebar's order: folders first, then by name as the Finder sorts.
+    nonisolated private static func inOrder(_ items: [(listing: Listing, sortName: String)]) -> [Listing] {
+        items.sorted { a, b in
             if (a.listing.kind == .folder) != (b.listing.kind == .folder) { return a.listing.kind == .folder }
             return a.sortName.localizedStandardCompare(b.sortName) == .orderedAscending
-        }
-        return items.map(\.listing)
+        }.map(\.listing)
     }
 }
