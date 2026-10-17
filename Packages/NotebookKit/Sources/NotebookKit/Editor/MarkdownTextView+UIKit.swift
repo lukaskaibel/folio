@@ -164,6 +164,11 @@ final class MarkdownTextView: UITextView {
         return controller.caretRect(proposed: rect)
     }
 
+    #if DEBUG
+    /// The caret UIKit proposes, for the debug remote's `caretinfo`.
+    func proposedCaretRect(for position: UITextPosition) -> CGRect { super.caretRect(for: position) }
+    #endif
+
     /// A picture selected whole shows the ring the layout manager draws around it, not the text's selection.
     override func selectionRects(for range: UITextRange) -> [UITextSelectionRect] {
         if let controller {

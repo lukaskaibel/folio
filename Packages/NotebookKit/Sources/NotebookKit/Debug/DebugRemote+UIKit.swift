@@ -226,6 +226,9 @@ enum DebugRemote {
             log("current \(workspace.currentURL?.path ?? "none") editing \(workspace.isEditing) selection \(editor.selection) scroll \(editor.scrollTop) top \(editor.topInset) titleAway \(workspace.isTitleScrolledAway) heading \(String(describing: workspace.currentHeading))")
         case "text":
             log(editor.text)
+        case "caretinfo":
+            // caretinfo: the caret UIKit proposes and the one drawn, next to the baseline and font of the text there.
+            caretInfo(editor)
         case "autocorrect":
             // The keyboard putting a word right: `autocorrect teh the` replaces the last "teh" through UITextInput.
             let words = argument.split(separator: " ").map(String.init)
@@ -270,6 +273,35 @@ enum DebugRemote {
             if DebugReminders.run(command, argument, workspace: workspace, url: url, log: log) { break }
             // Everything else is the screens': going back, searching, showing settings.
             NotificationCenter.default.post(name: .notebookDebug, object: nil, userInfo: ["command": command, "argument": argument])
+        }
+    }
+
+    /// The caret UIKit proposes and the one drawn, next to the baseline and font of the nearest text on its line, in
+    /// window points.
+    private static func caretInfo(_ editor: EditorController) {
+        let view = editor.textView, layout = editor.layoutManager, origin = view.textContainerOrigin
+        let index = editor.selection.location
+        guard let position = view.position(from: view.beginningOfDocument, offset: index) else { return }
+        func inWindow(_ rect: CGRect) -> String {
+            let r = view.convert(rect, to: nil)
+            return String(format: "y %.2f–%.2f (h %.2f) x %.1f", r.minY, r.maxY, r.height, r.minX)
+        }
+        log("caretinfo \(index): proposed \(inWindow(view.proposedCaretRect(for: position))) → caret \(inWindow(view.caretRect(for: position)))")
+        guard editor.storage.length > 0 else { return }
+        var glyphs = NSRange()
+        let glyph = layout.glyphIndexForCharacter(at: min(index, editor.storage.length - 1))
+        let used = layout.lineFragmentUsedRect(forGlyphAt: glyph, effectiveRange: &glyphs)
+        let characters = layout.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
+        let text = editor.nsText
+        log("caretinfo \(index): used \(inWindow(used.offsetBy(dx: origin.x, dy: origin.y)))")
+        if let character = (characters.location..<NSMaxRange(characters)).first(where: { text.character(at: $0) != 10 && !layout.isHidden($0) }) {
+            let g = layout.glyphIndexForCharacter(at: character)
+            let line = layout.lineFragmentRect(forGlyphAt: g, effectiveRange: nil)
+            let baseline = origin.y + line.minY + layout.location(forGlyphAt: g).y
+            let font = editor.storage.attribute(.font, at: character, effectiveRange: nil) as? UIFont ?? EditorStyle.body
+            let offset = editor.storage.attribute(.baselineOffset, at: character, effectiveRange: nil) as? CGFloat ?? 0
+            log(String(format: "caretinfo \(index): text '%@' %@ %.1f pt, ascender %.2f descender %.2f offset %.2f, line \(inWindow(CGRect(x: 0, y: origin.y + line.minY, width: 1, height: line.height))), ascender–descender \(inWindow(CGRect(x: 0, y: baseline - font.ascender, width: 1, height: font.ascender - font.descender)))",
+                       text.substring(with: NSRange(location: character, length: 1)), font.fontName, font.pointSize, font.ascender, font.descender, offset))
         }
     }
 

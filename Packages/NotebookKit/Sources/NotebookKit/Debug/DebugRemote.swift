@@ -276,6 +276,9 @@ enum DebugRemote {
         case "showcaret":
             MarkdownTextView.drawsCaretAlways = argument == "1"
             editor?.textView.needsDisplay = true
+        case "caretinfo":
+            // caretinfo: the caret's line, the caret drawn in it and the baseline of the text there, in text view points.
+            if let editor { caretInfo(editor) }
         case "settings":
             // settings <general|text|sidebar>: opens Settings at that tab.
             UserDefaults.standard.set(argument.isEmpty ? "general" : argument, forKey: "settingsTab")
@@ -575,6 +578,38 @@ enum DebugRemote {
     private static func pdfView(in view: NSView) -> PDFView? {
         if let pdf = view as? PDFView { return pdf }
         return view.subviews.lazy.compactMap(pdfView).first
+    }
+
+    /// The caret as proposed by AppKit (the line's used rect, as when it blinks, and `firstRect`, as `showcaret` draws
+    /// it) and as drawn, next to the baseline and font of the nearest text on its line. Window points from the top left.
+    private static func caretInfo(_ editor: EditorController) {
+        guard let window else { return }
+        let view = editor.textView, layout = editor.layoutManager, origin = view.textContainerOrigin
+        let index = view.selectedRange().location
+        func inWindow(_ rect: NSRect) -> String {
+            let r = view.convert(rect, to: nil)
+            return String(format: "y %.2f–%.2f (h %.2f) x %.1f", window.frame.height - r.maxY, window.frame.height - r.minY, r.height, r.minX)
+        }
+        let glyph = layout.glyphIndexForCharacter(at: min(index, max(0, editor.storage.length - 1)))
+        var glyphs = NSRange()
+        var used = layout.lineFragmentUsedRect(forGlyphAt: glyph, effectiveRange: &glyphs)
+        if index >= editor.storage.length, layout.extraLineFragmentTextContainer != nil { used = layout.extraLineFragmentUsedRect }
+        let x = view.firstRect(forCharacterRange: NSRange(location: index, length: 0), actualRange: nil)
+        let proposed = NSRect(x: view.convert(window.convertFromScreen(x), from: nil).minX, y: used.minY + origin.y, width: 1, height: used.height)
+        let first = view.convert(window.convertFromScreen(x), from: nil)
+        log("caretinfo \(index): used \(inWindow(proposed)) → caret \(inWindow(editor.caretRect(proposed: proposed)))")
+        log("caretinfo \(index): firstRect \(inWindow(first)) → caret \(inWindow(editor.caretRect(proposed: NSRect(x: first.minX, y: first.minY, width: 2, height: first.height))))")
+        let characters = layout.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
+        let text = editor.text as NSString
+        if let character = (characters.location..<NSMaxRange(characters)).first(where: { text.character(at: $0) != 10 && !layout.isHidden($0) }) {
+            let g = layout.glyphIndexForCharacter(at: character)
+            let line = layout.lineFragmentRect(forGlyphAt: g, effectiveRange: nil)
+            let baseline = origin.y + line.minY + layout.location(forGlyphAt: g).y
+            let font = editor.storage.attribute(.font, at: character, effectiveRange: nil) as? NSFont ?? EditorStyle.body
+            let offset = editor.storage.attribute(.baselineOffset, at: character, effectiveRange: nil) as? CGFloat ?? 0
+            log(String(format: "caretinfo \(index): text '%@' %@ %.1f pt, ascender %.2f descender %.2f offset %.2f, line \(inWindow(NSRect(x: 0, y: origin.y + line.minY, width: 1, height: line.height))), ascender–descender \(inWindow(NSRect(x: 0, y: baseline - font.ascender, width: 1, height: font.ascender - font.descender)))",
+                       text.substring(with: NSRange(location: character, length: 1)), font.fontName, font.pointSize, font.ascender, font.descender, offset))
+        }
     }
 
     private static func dump() {
