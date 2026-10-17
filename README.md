@@ -206,10 +206,11 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
 - **Folders as they are.** Add iCloud Drive or any folder as a location with Add Location at the bottom of the
   sidebar, or drop the folder from the Finder below the sidebar's sections. iCloud Drive shows what the Finder shows
   in it: Desktop and Documents when they are kept in iCloud, and the folders of apps such as Pages or Obsidian.
-  Folders are read in the background, so even a large iCloud Drive shows at once and nothing waits for it. Create,
-  rename, duplicate and move notes and folders, by drag and drop or with Move To; Option-drag copies. The New Folder
-  button next to a location's name makes a folder at its top, New Folder in a folder's menu one inside it, named in
-  place as in the Finder. Deleting moves to the Trash, never further. Favourites sit at the top of the sidebar.
+  Folders are read and changes to files written in the background, so even a large iCloud Drive shows at once and
+  nothing waits for it. Create, rename, duplicate and move notes and folders, by drag and drop or with Move To;
+  Option-drag copies. The New Folder button next to a location's name makes a folder at its top, New Folder in a
+  folder's menu one inside it, named in place as in the Finder. Deleting moves to the Trash, never further.
+  Favourites sit at the top of the sidebar.
 - **iPhone and iPad.** The same editor, search and file handling, with screens made for each: one folder per screen
   on the iPhone, the sidebar on the iPad. Pick iCloud Drive or any folder in the Files app's picker, or keep notes on
   the device, in On My iPhone › Notebook. A bar above the keyboard, whose tools you choose, formats, links and adds
@@ -471,7 +472,9 @@ such as `remind 2 Personal/Questions for Dr. Weber.md` (in two minutes) and `not
 `Debug/DebugReminders.swift`. In the Simulator the file is in the app's own folder (`-debugCommandFile
 ~/Documents/cmd`), where `xcrun simctl get_app_container` finds it, and `xcrun simctl io <device> screenshot` takes the
 pictures. `-NotebookSlowFolders 2` makes every folder take two seconds to read, as a slow iCloud might, to see that
-nothing waits for it, and `-NotebookSlowFiles 2` does the same for every note, PDF, picture and video you open.
+nothing waits for it, `-NotebookSlowFiles 2` does the same for every note, PDF, picture and video you open, and
+`-NotebookSlowWrites 2` for every change to files: a new note or folder, a rename, a move, a copy, the Trash. On the
+Mac, `mainthread` logs how many folders were read and files changed on the main thread, which should be none.
 `timeopen <note>` logs how long opening a note keeps the window busy, and `search <text>` how long search takes. macOS
 shows notifications only from an app in a lasting place, not from one in `/tmp`.
 

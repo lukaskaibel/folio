@@ -33,9 +33,11 @@ Every pull request is reviewed and merged by the maintainer; nothing lands on `m
   editor's styling or layout, type in a long note and scroll it before and after; `EditorSmoothnessTests` has to pass.
 - **Nothing waits.** The window never stops for the disk or for iCloud: folders, bookmarks and the search index are
   read off the main thread (`Files/FolderReader.swift`, `Files/LocationSurvey.swift`, `Index/SearchIndex.swift`), and
-  what the main thread does with the result is only the part that changed. A note or other file still in iCloud opens
-  at once and fills in when it has come down (`Files/NoteDocument.swift`, `UI/FileLoadingView.swift`). Try a change
-  with `-NotebookSlowFolders 2` and `-NotebookSlowFiles 2`. Nothing that happens as a note opens or as you type goes
+  what the main thread does with the result is only the part that changed. Changes to files (a new note, a rename, a
+  move, the Trash) are written off the main thread too, one after another (`Workspace.changeFiles`), and show in the
+  sidebar as soon as they are done, before their folder has been read again. A note or other file still in iCloud
+  opens at once and fills in when it has come down (`Files/NoteDocument.swift`, `UI/FileLoadingView.swift`). Try a
+  change with `-NotebookSlowFolders 2`, `-NotebookSlowFiles 2` and `-NotebookSlowWrites 2`. Nothing that happens as a note opens or as you type goes
   through every file or folder either: a whole iCloud Drive has a hundred thousand. Look things up by name
   (`SearchIndex.resolve`), keep sorted lists ready, and make long menus when they open (`UI/MoveToSubmenu.swift`).
 - **Markdown is a file format, not the interface.** Pictures, links and embeds are objects; marks show only next to

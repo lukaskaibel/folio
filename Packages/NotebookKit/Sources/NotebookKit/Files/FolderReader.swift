@@ -70,8 +70,8 @@ final class FolderReader {
         (ahead ? aheadQueue : queue).addOperation(operation)
     }
 
-    /// A folder was just read on the main thread, after something you did in it: the readings of it still under way
-    /// began before that and could bring back what was there, so they are dropped.
+    /// A folder is read again after something you did in it (`Workspace.readAgain`): the readings of it still under
+    /// way began before that and could bring back what was there, so they are dropped.
     func dropReadings(of url: URL) {
         let path = HiddenFolders.withoutPrivate(url.path)
         for key in newest.keys where HiddenFolders.withoutPrivate(key) == path {

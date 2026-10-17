@@ -89,6 +89,17 @@ versions follow [semantic versioning](https://semver.org).
 - Opening a note was slow in a large location such as a whole iCloud Drive: up to a second, and many seconds for a note
   with dozens of links, because every link was looked for among all the files. Links are now found by their names at
   once.
+- Renaming, making, duplicating, moving or deleting a note or folder could stop Notebook for a moment in iCloud Drive,
+  while iCloud took the change. Now these are written in the background, on the Mac, iPhone and iPad: what you did
+  shows in the sidebar as soon as it is done, a new name stays on the row from the moment you type it, and what you
+  type into a note while it is renamed is saved under its new name.
+- Moving a note that was still in iCloud stopped Notebook until it had come down. It now moves at once, and its
+  pictures follow when it has.
+- A renamed folder closed in the sidebar, and a note open in it showed its pictures as not found and its links as
+  missing until you opened it again. The folder stays open now, with the folders that were open in it, as in the
+  Finder, and the note keeps its pictures and links.
+- On iPhone and iPad, choosing the folder a file is already in from Move renamed it with a 2. Now nothing happens.
+- Renaming a package, such as a Pages document, dropped its extension.
 - Opening a note in a location with thousands of folders also waited for Move To to list them all, in the File menu
   and the ⋯ menu, every time. Move To now lists the folders when you open it, indented as in the sidebar's menu.
 - Typing in search with a whole iCloud Drive took most of a second for every letter; it now keeps up with your typing.

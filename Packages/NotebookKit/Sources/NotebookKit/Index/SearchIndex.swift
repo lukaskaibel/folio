@@ -60,6 +60,8 @@ public final class SearchIndex {
     public private(set) var isBuilding = false
     /// Called when the index has been built: links in a note opened before resolve now.
     @ObservationIgnored var onBuilt: (() -> Void)?
+    /// Called when folders have been read again: links to what changed in them resolve now.
+    @ObservationIgnored var onRefreshed: (() -> Void)?
     /// Folders hidden from the sidebar: what is in them stays out of search, `[[` and Move To, but links still find it.
     @ObservationIgnored var hiddenPaths: [String] = []
     @ObservationIgnored private var generation = 0
@@ -202,8 +204,9 @@ public final class SearchIndex {
     }
 
     /// Reads the files in some folders again, after changes there: in the background, then merged in by the files that
-    /// changed.
-    func refresh(folders: [URL], locations: [Location]) {
+    /// changed. Folders among them that are `deep` (renamed or moved, under their new address) are read with every
+    /// folder in them.
+    func refresh(folders: [URL], deep: [URL] = [], locations: [Location]) {
         self.locations = locations
         if isBuilding { changedWhileBuilding.formUnion(folders) }
         let paths = Set(folders.map { $0.standardizedFileURL.path })
@@ -218,8 +221,13 @@ public final class SearchIndex {
         let id = refreshes
         for job in jobs { newestRefresh[job.folder.path] = id }
         let generation = generation
+        let deep = Set(deep.map { $0.standardizedFileURL.path })
         Task.detached(priority: .utility) {
             var updates: [(folder: String, entries: [Entry])] = []
+            var jobs = jobs
+            for job in jobs where deep.contains(job.folder.path) {
+                jobs += Self.subfolders(of: job.folder).map { ($0, job.root, job.place, job.locationID) }
+            }
             for (folder, root, place, locationID) in jobs {
                 // A folder that is gone is taken out by reading the one it was in.
                 var isDirectory: ObjCBool = false
@@ -243,7 +251,8 @@ public final class SearchIndex {
                 guard generation == self.generation else { return }
                 var pdfs: [PDFJob] = []
                 let folders = self.folderPaths.count
-                for (folder, found) in scanned where self.newestRefresh[folder] == id {
+                // Folders found in a deep one were asked for by nobody else, unless since.
+                for (folder, found) in scanned where self.newestRefresh[folder] ?? id == id {
                     self.newestRefresh[folder] = nil
                     pdfs += self.merge(found, into: folder)
                 }
@@ -254,8 +263,26 @@ public final class SearchIndex {
                     self.onFoldersChanged?()
                 }
                 self.readPDFs(pdfs)
+                self.onRefreshed?()
             }
         }
+    }
+
+    /// Every folder in a folder, as `scan` goes through them.
+    nonisolated private static func subfolders(of folder: URL) -> [URL] {
+        let keys: [URLResourceKey] = [.isDirectoryKey, .isPackageKey, .isHiddenKey]
+        guard let enumerator = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: keys, options: [.skipsPackageDescendants]) else { return [] }
+        var folders: [URL] = []
+        while let url = enumerator.nextObject() as? URL {
+            let values = try? url.resourceValues(forKeys: Set(keys))
+            guard values?.isDirectory == true, values?.isPackage != true else { continue }
+            if url.lastPathComponent.hasPrefix(".") || values?.isHidden == true || ["node_modules", "DerivedData", ".build", "Pods"].contains(url.lastPathComponent) {
+                enumerator.skipDescendants()
+                continue
+            }
+            folders.append(url.standardizedFileURL)
+        }
+        return folders
     }
 
     /// Puts what is in a folder now in place of what was, and says which PDFs need their text read.

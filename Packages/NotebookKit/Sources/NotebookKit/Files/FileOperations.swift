@@ -3,12 +3,33 @@ import AppKit
 #else
 import UIKit
 #endif
+import Synchronization
 
-/// Creating, renaming, moving and deleting files, coordinated so iCloud and other apps see each change whole.
-@MainActor
+/// Creating, renaming, moving and deleting files, coordinated so iCloud and other apps see each change whole. All of it
+/// runs off the main thread (`Workspace.changeFiles`): in iCloud Drive a coordinated write can wait for iCloud.
 enum FileOperations {
+    #if DEBUG
+    /// How many changes to files were made on the main thread, for tests to see that nothing they do makes any there.
+    static let mainThreadWrites = Mutex(0)
+    #endif
+
+    /// A slow iCloud, for trying out that nothing waits for a change to files: in Debug builds, with
+    /// `-NotebookSlowWrites <seconds>`, each one waits that long first. One on the main thread isn't slowed down but
+    /// logged, to find any that shouldn't be there.
+    private static func debugWait(_ what: String, _ url: URL) {
+        #if DEBUG
+        if Thread.isMainThread {
+            mainThreadWrites.withLock { $0 += 1 }
+            NSLog("Notebook: %@ %@ on the main thread", what, url.path)
+        } else {
+            let delay = UserDefaults.standard.double(forKey: "NotebookSlowWrites")
+            if delay > 0 { Thread.sleep(forTimeInterval: delay) }
+        }
+        #endif
+    }
+
     /// A name that isn't taken in the folder: "Untitled", "Untitled 2", …
-    nonisolated static func uniqueURL(in folder: URL, name: String, extension ext: String?) -> URL {
+    static func uniqueURL(in folder: URL, name: String, extension ext: String?) -> URL {
         func make(_ base: String) -> URL {
             ext.map { folder.appendingPathComponent(base).appendingPathExtension($0) } ?? folder.appendingPathComponent(base, isDirectory: true)
         }
@@ -22,27 +43,29 @@ enum FileOperations {
     }
 
     /// A file name from a title: the characters files can't have become dashes.
-    nonisolated static func fileName(from title: String) -> String {
+    static func fileName(from title: String) -> String {
         var name = title.trimmingCharacters(in: .whitespacesAndNewlines)
         for character in ["/", ":", "\\"] { name = name.replacingOccurrences(of: character, with: "-") }
         while name.hasPrefix(".") { name.removeFirst() }
         return String(name.prefix(200))
     }
 
-    @discardableResult
-    static func createNote(in folder: URL, title: String = "Untitled", text: String = "") -> URL? {
-        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    /// A new note, and whether its folder had to be made for it (the Inbox, the first time).
+    static func createNote(in folder: URL, title: String = "Untitled", text: String = "") -> (url: URL, madeFolder: Bool)? {
+        debugWait("made a note in", folder)
+        let madeFolder = !FileManager.default.fileExists(atPath: folder.path)
+        if madeFolder { try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) }
         let url = uniqueURL(in: folder, name: fileName(from: title).isEmpty ? "Untitled" : fileName(from: title), extension: "md")
         var written = false
         NSFileCoordinator().coordinate(writingItemAt: url, options: .forReplacing, error: nil) { url in
             written = (try? Data(text.utf8).write(to: url, options: .atomic)) != nil
         }
-        return written ? url : nil
+        return written ? (url, madeFolder) : nil
     }
 
-    /// Off the main thread too: in iCloud Drive the write can wait for iCloud.
     @discardableResult
-    nonisolated static func createFolder(in parent: URL, name: String = "New Folder") -> URL? {
+    static func createFolder(in parent: URL, name: String = "New Folder") -> URL? {
+        debugWait("made a folder in", parent)
         let url = uniqueURL(in: parent, name: name, extension: nil)
         var created = false
         NSFileCoordinator().coordinate(writingItemAt: url, options: [], error: nil) { url in
@@ -51,15 +74,20 @@ enum FileOperations {
         return created ? url : nil
     }
 
-    /// Moves a file or folder, coordinated. Returns where it ended up.
+    /// Moves a file or folder, coordinated. Returns where it ended up. The open note (`presenter`), when it is the file
+    /// or in the folder, isn't told: Notebook follows it itself, while it waits to save.
     @discardableResult
-    static func move(_ url: URL, to destination: URL) -> URL? {
+    static func move(_ url: URL, to destination: URL, presenter: NoteDocument? = nil) -> URL? {
         guard url.standardizedFileURL != destination.standardizedFileURL else { return url }
+        debugWait("moved", url)
         var moved = false
         var error: NSError?
-        NSFileCoordinator().coordinate(writingItemAt: url, options: .forMoving, writingItemAt: destination, options: .forReplacing, error: &error) { from, to in
+        let coordinator = NSFileCoordinator(filePresenter: presenter)
+        coordinator.coordinate(writingItemAt: url, options: .forMoving, writingItemAt: destination, options: .forReplacing, error: &error) { from, to in
+            coordinator.item(at: from, willMoveTo: to)
             do {
                 try FileManager.default.moveItem(at: from, to: to)
+                coordinator.item(at: from, didMoveTo: to)
                 moved = true
             } catch {
                 moved = false
@@ -68,20 +96,29 @@ enum FileOperations {
         return moved ? destination : nil
     }
 
-    /// Renames, keeping the extension of a file. Returns the new address, or nil when the name is taken or invalid.
-    static func rename(_ url: URL, to name: String) -> URL? {
+    /// Where renaming a file or folder takes it: the new name with the file's extension. Nil when the name is empty.
+    static func destination(renaming url: URL, to name: String, isDirectory: Bool) -> URL? {
         let clean = fileName(from: name)
         guard !clean.isEmpty else { return nil }
-        let isDirectory = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
         var destination = url.deletingLastPathComponent().appendingPathComponent(clean, isDirectory: isDirectory)
         if !isDirectory, !url.pathExtension.isEmpty { destination = destination.appendingPathExtension(url.pathExtension) }
+        return destination
+    }
+
+    /// Renames, keeping the extension of a file. Returns the new address, or nil when the name is taken or invalid.
+    static func rename(_ url: URL, to name: String, presenter: NoteDocument? = nil) -> URL? {
+        let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])
+        // A package (a Pages document) is a folder that keeps its extension like a file.
+        let isDirectory = values?.isDirectory == true && values?.isPackage != true
+        guard let destination = destination(renaming: url, to: name, isDirectory: isDirectory) else { return nil }
         guard destination.path != url.path else { return url }
         // Only the case changed: the file system calls that the same name.
         if destination.path.lowercased() != url.path.lowercased(), FileManager.default.fileExists(atPath: destination.path) { return nil }
-        return move(url, to: destination)
+        return move(url, to: destination, presenter: presenter)
     }
 
     static func trash(_ url: URL) -> Bool {
+        debugWait("trashed", url)
         var trashed = false
         NSFileCoordinator().coordinate(writingItemAt: url, options: .forDeleting, error: nil) { url in
             trashed = (try? FileManager.default.trashItem(at: url, resultingItemURL: nil)) != nil
@@ -92,6 +129,7 @@ enum FileOperations {
     #if os(iOS)
     /// Deletes for good: for places without a Recently Deleted, after asking.
     static func delete(_ url: URL) -> Bool {
+        debugWait("deleted", url)
         var deleted = false
         NSFileCoordinator().coordinate(writingItemAt: url, options: .forDeleting, error: nil) { url in
             deleted = (try? FileManager.default.removeItem(at: url)) != nil
@@ -101,6 +139,7 @@ enum FileOperations {
     #endif
 
     static func duplicate(_ url: URL) -> URL? {
+        debugWait("duplicated", url)
         let base = url.deletingPathExtension().lastPathComponent
         let ext = url.pathExtension.isEmpty ? nil : url.pathExtension
         let destination = uniqueURL(in: url.deletingLastPathComponent(), name: "\(base) copy", extension: ext)
@@ -116,7 +155,7 @@ enum FileOperations {
     /// After a note was renamed, points every `[[Old]]` (and `[[Old|…]]`, `[[Old#…]]`, `![[Old]]`) in the notes
     /// under `root` at the new name. Returns how many notes changed.
     @discardableResult
-    nonisolated static func updateLinks(from oldName: String, to newName: String, under root: URL, skipping: URL? = nil) -> Int {
+    static func updateLinks(from oldName: String, to newName: String, under root: URL, skipping: URL? = nil) -> Int {
         guard oldName != newName, let expression = try? NSRegularExpression(
             pattern: "(!?\\[\\[)" + NSRegularExpression.escapedPattern(for: oldName) + "(\\.md)?(?=(\\]\\]|\\||#))",
             options: [.caseInsensitive]
@@ -136,6 +175,28 @@ enum FileOperations {
             changed += 1
         }
         return changed
+    }
+
+    /// A note moved to another folder takes the pictures and files it uses along into that folder's `.assets`, from
+    /// the one of the folder it was in. Returns their names, for those no note left there uses to go to the Trash
+    /// (`cleanUpAssets`). Reading the note waits for it to come down when it is still in iCloud.
+    static func copyAssets(of note: URL, from folder: URL) -> Set<String> {
+        #if DEBUG
+        // With `-NotebookSlowFiles`, every note is still in iCloud, and comes down first.
+        if let delay = FileLoading.debugDelay, !Thread.isMainThread { Thread.sleep(forTimeInterval: delay) }
+        #endif
+        guard let text = NoteDocument.read(note) else { return [] }
+        let assets = assetNames(in: text)
+        let source = folder.appendingPathComponent(".assets")
+        let target = note.deletingLastPathComponent().appendingPathComponent(".assets")
+        for name in withDrawingStrokes(assets) {
+            let from = source.appendingPathComponent(name)
+            let to = target.appendingPathComponent(name)
+            guard FileManager.default.fileExists(atPath: from.path), !FileManager.default.fileExists(atPath: to.path) else { continue }
+            try? FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
+            try? FileManager.default.copyItem(at: from, to: to)
+        }
+        return assets
     }
 
     /// Pictures and files in a folder's `.assets` that no note in the folder uses any more, among `candidates`,

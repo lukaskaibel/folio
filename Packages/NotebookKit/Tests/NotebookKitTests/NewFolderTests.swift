@@ -115,7 +115,7 @@ final class NewFolderTests: XCTestCase {
         field.insertText("Ideas", replacementRange: field.selectedRange())
         field.doCommand(by: #selector(NSResponder.insertNewline(_:)))
         let ideas = drive.appendingPathComponent("Ideas")
-        XCTAssertTrue(FileManager.default.fileExists(atPath: ideas.path))
+        try await until("renamed on disk") { FileManager.default.fileExists(atPath: ideas.path) }
         XCTAssertFalse(FileManager.default.fileExists(atPath: made.path))
         try await until("Ideas selected under its new name") { sidebar.outline.selectedRow == self.row("Ideas", under: self.drive, in: sidebar) }
         XCTAssertEqual(workspace.selectedFolder?.path, ideas.path, "follows the rename")
@@ -149,8 +149,10 @@ final class NewFolderTests: XCTestCase {
             window.makeFirstResponder(sidebar.outline)
         }
         // Linked folders can't be renamed, but what is made in them can.
-        XCTAssertNil(workspace.rename(desktop, to: "Elsewhere"))
-        XCTAssertNotNil(workspace.rename(desktop.appendingPathComponent("New Folder"), to: "Drafts"))
+        let elsewhere = await workspace.rename(desktop, to: "Elsewhere").value
+        XCTAssertNil(elsewhere)
+        let drafts = await workspace.rename(desktop.appendingPathComponent("New Folder"), to: "Drafts").value
+        XCTAssertNotNil(drafts)
     }
 
     /// In iCloud Drive reading a folder can take seconds: the new one shows before that, and the readings that come
@@ -177,7 +179,7 @@ final class NewFolderTests: XCTestCase {
         let row = try XCTUnwrap(row("Papers", under: drive, in: sidebar))
         XCTAssertNotNil(nameField(at: row, in: sidebar))
         try make(drive.appendingPathComponent("Arrived"))
-        workspace.refreshNow(drive)
+        await workspace.readAgain(drive)
         workspace.sidebarReloadAll()
         sidebar.refreshRows()
         XCTAssertNotNil(nameField(at: row, in: sidebar), "a reload ended it")
@@ -197,7 +199,7 @@ final class NewFolderTests: XCTestCase {
         XCTAssertEqual(root.loadedChildren().map(\.name), ["Desktop", "Ideas", "Obsidian", "Papers"])
         XCTAssertTrue(root.loadedChildren().first { $0.name == "Desktop" } === desktopNode, "the others stay as they were")
         XCTAssertFalse(root.insertFolder(drive.appendingPathComponent("Ideas")), "there already")
-        root.reload()
+        root.apply(FileNode.list(drive, linked: root.linked))
         XCTAssertEqual(root.loadedChildren().map(\.name), ["Desktop", "Ideas", "Obsidian", "Papers"], "reading the folder again finds the same")
     }
 }

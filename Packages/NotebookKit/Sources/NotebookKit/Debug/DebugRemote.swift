@@ -305,7 +305,9 @@ enum DebugRemote {
                     // The name being typed, in its field.
                     let field = (outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarFileCell)?.label
                     let renaming = field?.currentEditor().map { " (renaming “\($0.string)”, \(NSStringFromRange($0.selectedRange)) selected)" } ?? ""
-                    return String(repeating: "  ", count: outline.level(forRow: row)) + name + (hidden ? " (hidden)" : "") + header + renaming + (outline.selectedRow == row ? " *" : "")
+                    // What the row says while its file is being renamed.
+                    let says = field.flatMap { $0.currentEditor() == nil && $0.stringValue != name ? " (says “\($0.stringValue)”)" : nil } ?? ""
+                    return String(repeating: "  ", count: outline.level(forRow: row)) + name + (hidden ? " (hidden)" : "") + header + renaming + says + (outline.selectedRow == row ? " *" : "")
                 }
                 let visible = outline.rows(in: outline.visibleRect)
                 log("rows (visible \(visible.location)..<\(visible.location + visible.length)):\n" + lines.joined(separator: "\n"))
@@ -556,6 +558,13 @@ enum DebugRemote {
             }
         case "newnote":
             workspace?.newNote()
+        case "drop":
+            // drop <file> > <folder>: what dragging a file onto a folder in the sidebar does (Option: dropcopy).
+            let paths = argument.components(separatedBy: " > ")
+            if paths.count == 2 { workspace?.drop([URL(fileURLWithPath: paths[0])], into: URL(fileURLWithPath: paths[1], isDirectory: true)) }
+        case "mainthread":
+            // mainthread: how many folders were read and files changed on the main thread so far (none should be).
+            log("mainthread: \(FileNode.mainThreadReads.withLock { $0 }) folder reads, \(FileOperations.mainThreadWrites.withLock { $0 }) file changes")
         case "swipe":
             // swipe back|forward <0…1>: holds a swipe still part of the way; swipe back|forward play: the whole
             // thing by itself; swipe end 1|0: goes to the page, or back to where it started.

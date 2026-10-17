@@ -180,7 +180,7 @@ enum DebugRemote {
             let text = parts.compactMap { try? String(contentsOf: root.appendingPathComponent($0), encoding: .utf8) }.joined(separator: "\n\n")
             let long = Array(repeating: text, count: Int(numbers.first ?? 20)).joined(separator: "\n\n## Again\n\n")
             try? long.write(to: root.appendingPathComponent("Long note.md"), atomically: true, encoding: .utf8)
-            workspace.refreshNow(root)
+            workspace.readAgain([root])
         case "dismiss":
             log("dismissing renaming \(workspace.renaming?.lastPathComponent ?? "-") deleting \(workspace.deleting?.lastPathComponent ?? "-") problem \(workspace.problem?.title ?? "-")")
             workspace.renaming = nil

@@ -108,7 +108,7 @@ extension FileNode {
     /// A row for this file in a list.
     @MainActor
     func row(in workspace: Workspace, showsDetail: Bool = false) -> FileRow {
-        FileRow(workspace: workspace, url: url, name: isLinked ? name : (kind == .folder ? workspace.folderName(url) : name), kind: kind,
+        FileRow(workspace: workspace, url: url, name: isLinked ? name : workspace.newName(for: url) ?? (kind == .folder ? workspace.folderName(url) : name), kind: kind,
                 isInCloud: isInCloud, showsDetail: showsDetail, isHidden: isFolder && workspace.isHidden(url))
     }
 }
@@ -262,9 +262,11 @@ extension Workspace {
     /// Deletes a file the way the Files app does: to Recently Deleted, or, where a place has none, for good after
     /// asking.
     func moveToTrash(_ url: URL) {
-        guard !trash(url) else { return }
-        guard FileManager.default.fileExists(atPath: url.path) else { return }
-        deleting = url
+        let trashing = trash(url)
+        Task {
+            guard await !trashing.value, !isLinkedFolder(url), FileManager.default.fileExists(atPath: url.path) else { return }
+            deleting = url
+        }
     }
 }
 

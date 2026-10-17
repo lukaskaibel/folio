@@ -41,6 +41,9 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     @ObservationIgnored private var reads = 0
     @ObservationIgnored private var changedWhileReading = false
     @ObservationIgnored private var isClosed = false
+    /// Notebook is renaming or moving the file (or its folder) off the main thread: saving waits until it is done, as a
+    /// save meanwhile would write the note again where it was.
+    @ObservationIgnored private var moves = 0
     /// Where notes are read in the background. The coordinated read waits for iCloud without holding a thread.
     private nonisolated static let readQueue: OperationQueue = {
         let queue = OperationQueue()
@@ -178,7 +181,7 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     func saveNow() {
         saveTimer?.invalidate()
         saveTimer = nil
-        guard isLoaded, text != savedText, conflict == nil else { return }
+        guard isLoaded, moves == 0, text != savedText, conflict == nil else { return }
         // Never write over a change made elsewhere since the last save: merge it in, or ask.
         if let disk = Self.read(url), disk != savedText {
             if disk == text {
@@ -213,6 +216,21 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     func moved(to newURL: URL) {
         url = newURL.standardizedFileURL
         modified = Self.modificationDate(newURL)
+    }
+
+    /// Notebook is about to rename or move the file, or the folder it is in, off the main thread: what was typed is
+    /// saved first, and what is typed meanwhile once it is done (`endMove`).
+    func beginMove() {
+        saveNow()
+        moves += 1
+    }
+
+    /// The rename or move is done: the note follows the file to `newURL` (nil when it stayed where it was) and saves
+    /// what was typed meanwhile there, even when it was closed in between.
+    func endMove(to newURL: URL?) {
+        moves = max(moves - 1, 0)
+        if let newURL { moved(to: newURL) }
+        if moves == 0, hasUnsavedChanges { saveNow() }
     }
 
     // MARK: - Conflicts

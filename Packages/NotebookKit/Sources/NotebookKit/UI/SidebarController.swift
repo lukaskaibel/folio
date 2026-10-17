@@ -55,6 +55,9 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     private var collapsedSections = Set(UserDefaults.standard.stringArray(forKey: "collapsedSections") ?? [])
     /// The folders open last time, opened again as their rows appear: the locations are read after the window is up.
     private var wantedExpansion = Set(UserDefaults.standard.stringArray(forKey: "expandedFolders") ?? [])
+    /// Open folders renamed or moved, and the open folders in them, under their new paths (without "/private"): opened
+    /// again when the sidebar shows them there, as the Finder keeps a renamed folder open.
+    private var movedExpansion = Set<String>()
     private var isExpandingSections = false
 
     init(workspace: Workspace) {
@@ -186,6 +189,22 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         selectCurrent()
     }
 
+    /// A file or folder is about to show under a new address: the folders open in it stay open there.
+    func follow(from old: URL, to new: URL) {
+        for path in expandedPaths() {
+            let moved = Workspace.relocated(path, from: old.path, to: new.path)
+            if moved != path { movedExpansion.insert(HiddenFolders.withoutPrivate(moved)) }
+        }
+    }
+
+    /// The rows of a file being renamed say its new name until it has it (`Workspace.newNames`), and the old one again
+    /// if it couldn't be renamed.
+    func showName(of url: URL) {
+        guard renaming == nil else { return }
+        let rows = (0..<outline.numberOfRows).filter { row in self.url(at: row).map { FileNode.samePath($0, url) } ?? false }
+        if !rows.isEmpty { outline.reloadData(forRowIndexes: IndexSet(rows), columnIndexes: [0]) }
+    }
+
     /// Folders whose contents changed, or were read for the first time: then their files fade in below them, and
     /// nothing else in the sidebar moves.
     func reload(_ nodes: [FileNode]) {
@@ -225,7 +244,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             expandSections()
         }
         // A folder read ahead of time, still closed, changes nothing on screen.
-        guard topChanged || shown || !wantedExpansion.isEmpty else { return }
+        guard topChanged || shown || !wantedExpansion.isEmpty || !movedExpansion.isEmpty else { return }
         restoreExpansion(expanded)
         selectCurrent()
     }
@@ -247,12 +266,14 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         let paths = paths.union(wantedExpansion)
         var row = 0
         while row < outline.numberOfRows {
-            if let node = outline.item(atRow: row) as? FileNode, paths.contains(node.url.path), !outline.isItemExpanded(node) {
+            if let node = outline.item(atRow: row) as? FileNode, !outline.isItemExpanded(node),
+               paths.contains(node.url.path) || movedExpansion.contains(HiddenFolders.withoutPrivate(node.url.path)) {
                 outline.expandItem(node)
                 wantedExpansion.remove(node.url.path)
             }
             row += 1
         }
+        movedExpansion = []
         // Once every location has been read, folders from last time that aren't there any more are forgotten.
         if workspace.hasReadLocations { wantedExpansion = [] }
     }
@@ -354,11 +375,11 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             workspace.prefetch(node)
             // Hidden folders show dimmed while their location shows them, as hidden files in the Finder.
             let dimmed = NotebookSettings.shared.dimsOtherFiles && !node.isFolder && node.kind != .note || node.isFolder && workspace.isHidden(node.url)
-            cell.configure(name: node.name, kind: node.kind, inCloud: node.isInCloud, url: node.url, nested: nested, dimmed: dimmed,
+            cell.configure(name: workspace.newName(for: node.url) ?? node.name, kind: node.kind, inCloud: node.isInCloud, url: node.url, nested: nested, dimmed: dimmed,
                            reminder: node.kind == .note ? workspace.reminder(for: node.url) : nil)
         } else if let entry = item as? SidebarEntry, let url = entry.url {
             let kind = FileKind(url: url, isDirectory: (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false)
-            let name = kind == .note ? url.deletingPathExtension().lastPathComponent : kind == .folder ? workspace.folderName(url) : url.lastPathComponent
+            let name = workspace.newName(for: url) ?? (kind == .note ? url.deletingPathExtension().lastPathComponent : kind == .folder ? workspace.folderName(url) : url.lastPathComponent)
             cell.configure(name: name, kind: kind, inCloud: false, url: url, symbol: { if case .favorite = entry.kind, kind == .folder { return "star" } else { return nil } }(),
                            nested: nested, reminder: kind == .note ? workspace.reminder(for: url) : nil)
         }
@@ -473,7 +494,10 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             if !url.pathExtension.isEmpty, (name as NSString).pathExtension.lowercased() == url.pathExtension.lowercased() {
                 target = (name as NSString).deletingPathExtension
             }
-            if workspace.rename(url, to: target) == nil { field.stringValue = current }
+            // The name typed stays on the row while the file is renamed off the main thread; it goes back only when
+            // the name is taken.
+            let renaming = workspace.rename(url, to: target)
+            Task { if await renaming.value == nil { field.stringValue = current } }
         }
         outline.window?.makeFirstResponder(outline)
         let held = (nodes: heldNodes, all: heldAll)

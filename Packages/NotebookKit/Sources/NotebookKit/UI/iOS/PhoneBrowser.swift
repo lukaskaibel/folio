@@ -318,7 +318,7 @@ struct FolderScreen: View {
         .onSubmit(of: .search) {
             if let first = SearchSection.sections(for: query, in: workspace).first?.items.first { open(first.result) }
         }
-        .refreshable { workspace.refreshNow(page.url) }
+        .refreshable { await workspace.readAgain(page.url) }
         .sheet(item: $moving) { file in MoveSheet(workspace: workspace, url: file.url) }
         #if DEBUG
         .onReceive(NotificationCenter.default.publisher(for: .notebookDebug)) { notification in

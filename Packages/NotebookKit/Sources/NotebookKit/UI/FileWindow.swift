@@ -176,14 +176,20 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
     func editor(_ editor: EditorController, commitTitle title: String) {
         let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, name != url.deletingPathExtension().lastPathComponent else { return }
-        note.saveNow()
-        guard let renamed = FileOperations.rename(url, to: name) else {
-            NSSound.beep()
-            editor.setTitle(url.deletingPathExtension().lastPathComponent)
-            return
+        // Off the main thread, as in the main window: in iCloud Drive the write can wait for iCloud. The note saves
+        // what is typed meanwhile once it is done, under the new name.
+        let (url, note) = (url, note)
+        note.beginMove()
+        Task {
+            let renamed = await Task.detached(priority: .userInitiated) { FileOperations.rename(url, to: name, presenter: note) }.value
+            note.endMove(to: renamed)
+            guard let renamed else {
+                NSSound.beep()
+                editor.setTitle(url.deletingPathExtension().lastPathComponent)
+                return
+            }
+            moved(to: renamed)
         }
-        note.moved(to: renamed)
-        moved(to: renamed)
     }
 
     /// Notes next to this one, for `[[`.
