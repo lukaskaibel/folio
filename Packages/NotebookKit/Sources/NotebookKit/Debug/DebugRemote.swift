@@ -295,10 +295,14 @@ enum DebugRemote {
                     let name = (item as? FileNode)?.name ?? (outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView)?.textField?.stringValue ?? "?"
                     let hidden = (item as? FileNode).map { $0.isFolder && workspace?.isHidden($0.url) == true } ?? false
                     var header = ""
-                    if let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarHeaderCell, !cell.hiddenButton.isHidden {
-                        header = " [eye\(cell.hiddenButton.contentTintColor == .controlAccentColor ? " on" : "")]"
+                    if let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarHeaderCell {
+                        if !cell.hiddenButton.isHidden { header += " [eye\(cell.hiddenButton.contentTintColor == .controlAccentColor ? " on" : "")]" }
+                        if !cell.addButton.isHidden { header += " [+]" }
                     }
-                    return String(repeating: "  ", count: outline.level(forRow: row)) + name + (hidden ? " (hidden)" : "") + header + (outline.selectedRow == row ? " *" : "")
+                    // The name being typed, in its field.
+                    let field = (outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarFileCell)?.label
+                    let renaming = field?.currentEditor().map { " (renaming “\($0.string)”, \(NSStringFromRange($0.selectedRange)) selected)" } ?? ""
+                    return String(repeating: "  ", count: outline.level(forRow: row)) + name + (hidden ? " (hidden)" : "") + header + renaming + (outline.selectedRow == row ? " *" : "")
                 }
                 let visible = outline.rows(in: outline.visibleRect)
                 log("rows (visible \(visible.location)..<\(visible.location + visible.length)):\n" + lines.joined(separator: "\n"))
@@ -327,9 +331,12 @@ enum DebugRemote {
             for row in 0..<outline.numberOfRows {
                 guard let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarHeaderCell, cell.label.stringValue == argument[..<space] else { continue }
                 cell.isHovered = argument[argument.index(after: space)...] == "1"
-                let frame = cell.hiddenButton.convert(cell.hiddenButton.bounds, to: nil)
                 let height = window?.contentView?.bounds.height ?? 0
-                log("hoverheader \(argument): eye \(cell.hiddenButton.isHidden ? "hidden" : "at \(Int(frame.midX)) \(Int(height - frame.midY))")")
+                func place(_ button: NSButton) -> String {
+                    let frame = button.convert(button.bounds, to: nil)
+                    return button.isHidden ? "hidden" : "at \(Int(frame.midX)) \(Int(height - frame.midY))"
+                }
+                log("hoverheader \(argument): eye \(place(cell.hiddenButton)), plus \(place(cell.addButton))")
             }
         case "rowmenu":
             // rowmenu <name>: the titles of the context menu of the sidebar row showing that name.
@@ -354,13 +361,14 @@ enum DebugRemote {
                 log("menuitem \(argument)")
                 break
             }
-        case "clickeye":
-            // clickeye <title>: presses the eye button on a section's header.
+        case "clickeye", "clickplus":
+            // clickeye <title>, clickplus <title>: presses the eye or the plus (New Folder) on a section's header.
             guard let outline = workspace?.sidebar?.outline else { break }
             for row in 0..<outline.numberOfRows {
                 guard let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarHeaderCell, cell.label.stringValue == argument else { continue }
-                cell.hiddenButton.performClick(nil)
-                log("clickeye \(argument)")
+                let button = command == "clickeye" ? cell.hiddenButton : cell.addButton
+                log("\(command) \(argument)" + (button.isHidden ? ": hidden" : ""))
+                if !button.isHidden { button.performClick(nil) }
                 break
             }
         case "exportto":

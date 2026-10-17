@@ -148,7 +148,7 @@ struct PadSidebar: View {
                         Section(isExpanded: sectionBinding(location.id.uuidString)) {
                             FolderTree(workspace: workspace, folder: location.url, expanded: $expanded, newFolderIn: $newFolderIn)
                         } header: {
-                            LocationHeader(workspace: workspace, location: location)
+                            LocationHeader(workspace: workspace, location: location) { newFolderIn = $0 }
                                 .fileDragAndDrop(location.url, isFolder: true, workspace: workspace, canDrag: false)
                                 .contextMenu { FileActions(workspace: workspace, url: location.url) { newFolderIn = $0 } }
                         }

@@ -158,7 +158,7 @@ struct HomeScreen: View {
                             Text("Empty").foregroundStyle(.secondary)
                         }
                     } header: {
-                        LocationHeader(workspace: workspace, location: location)
+                        LocationHeader(workspace: workspace, location: location) { newFolderIn = $0 }
                             .contextMenu { FileActions(workspace: workspace, url: location.url) { newFolderIn = $0 } }
                     }
                 }
@@ -176,12 +176,17 @@ struct HomeScreen: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    Button { addsLocation = true } label: { Label("Add Location", systemImage: "folder.badge.plus") }
+                    Button { addsLocation = true } label: { Label("Add Location", systemImage: "plus.rectangle.on.folder") }
                     ShowHiddenFoldersMenu(workspace: workspace)
                     Button { showsSettings = true } label: { Label("Settings", systemImage: "gearshape") }
                 } label: {
                     Label("More", systemImage: "ellipsis")
                 }
+            }
+            // As in Notes: New Folder on the left, asking which location when there are several, New Note on the right.
+            if !workspace.locations.isEmpty {
+                ToolbarItem(placement: .bottomBar) { newFolderButton }
+                ToolbarSpacer(.fixed, placement: .bottomBar)
             }
             DefaultToolbarItem(kind: .search, placement: .bottomBar)
             ToolbarSpacer(.fixed, placement: .bottomBar)
@@ -202,10 +207,26 @@ struct HomeScreen: View {
                 query = ""
                 isSearching = false
             case "settings": showsSettings = argument != "hide"
+            case "newfolder": newFolderIn = workspace.locations.first?.url
             default: break
             }
         }
         #endif
+    }
+
+    @ViewBuilder private var newFolderButton: some View {
+        let label = Label("New Folder", systemImage: "folder.badge.plus")
+        if workspace.locations.count == 1, let location = workspace.locations.first {
+            Button { newFolderIn = location.url } label: { label }
+        } else {
+            Menu {
+                Section("New Folder In") {
+                    ForEach(workspace.locations) { location in
+                        Button(location.name) { newFolderIn = location.url }
+                    }
+                }
+            } label: { label }
+        }
     }
 
     private func link(_ url: URL, row: FileRow) -> some View {

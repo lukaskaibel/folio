@@ -812,6 +812,8 @@ public final class Workspace: NSObject {
         history = history.map { URL(fileURLWithPath: fix($0.path)) }
         relocation = (old.standardizedFileURL, new.standardizedFileURL, UUID())
         if let current = currentURL { currentURL = URL(fileURLWithPath: fix(current.path)) }
+        // Else ⌘N would make the folder again under its old name, for the note.
+        if let folder = selectedFolder { selectedFolder = URL(fileURLWithPath: fix(folder.path), isDirectory: true) }
         #if os(iOS)
         pageSnapshots = Dictionary(pageSnapshots.map { (URL(fileURLWithPath: fix($0.key.path)), $0.value) }, uniquingKeysWith: { a, _ in a })
         #endif
@@ -844,23 +846,47 @@ public final class Workspace: NSObject {
         note?.isNew = title == nil
     }
 
-    /// A new folder, named "New Folder" to be renamed at once, or with the name already chosen.
-    @discardableResult
-    public func newFolder(in parent: URL? = nil, named name: String? = nil) -> URL? {
-        guard let parent = parent ?? selectedFolder ?? currentURL?.deletingLastPathComponent() ?? locations.first?.url,
-              let url = FileOperations.createFolder(in: parent, name: name.map(FileOperations.fileName(from:)) ?? "New Folder") else { return nil }
-        refreshNow(parent)
-        reveal(url, select: true) { [weak self] in
+    /// A new folder, named "New Folder" to be renamed at once in the sidebar, as in the Finder, or with the name
+    /// already chosen (iPhone and iPad ask for it first, as Notes does). It is made off the main thread: in iCloud
+    /// Drive the write can wait for iCloud.
+    public func newFolder(in parent: URL? = nil, named name: String? = nil) {
+        #if os(macOS)
+        // A name still being typed is taken first, as in the Finder: the selected folder may be the one renamed.
+        sidebar?.endRenaming()
+        #endif
+        guard let parent = (parent ?? selectedFolder ?? currentURL?.deletingLastPathComponent() ?? locations.first?.url)?.standardizedFileURL else { return }
+        let chosen = name.map(FileOperations.fileName(from:)) ?? ""
+        let name = chosen.isEmpty ? "New Folder" : chosen
+        Task {
+            guard let url = await Task.detached(priority: .userInitiated, operation: { FileOperations.createFolder(in: parent, name: name) }).value else {
+                return report("The folder couldn’t be made.", "Notebook can’t write in “\(folderName(parent))”.")
+            }
+            // In the sidebar at once, however long reading its folder takes in iCloud. The reading after it brings
+            // anything else that changed, and drops any older one still under way, which might not have it.
+            if let node = existingNode(for: parent), node.hasLoadedChildren {
+                if node.insertFolder(url) { sidebarReload([node]) }
+                read([FolderReader.Request(url: node.url, linked: node.linked)], then: nil)
+            }
+            index.refresh(folders: [parent], locations: locations)
+            // Selected, on the Mac with its name ready to type over. Revealing it reads its folder if it hasn't been.
             #if os(macOS)
-            self?.sidebar?.beginRenaming(url)
+            selectedFolder = url
             #endif
+            reveal(url, select: true) { [weak self] in
+                #if os(macOS)
+                self?.sidebar?.beginRenaming(url)
+                #endif
+            }
         }
-        return url
     }
 
     /// Reads a folder again right away, without waiting for the file system to report the change.
     func refreshNow(_ folder: URL) {
-        if let node = existingNode(for: folder), node.hasLoadedChildren, node.reload() { sidebarReload([node]) }
+        if let node = existingNode(for: folder), node.hasLoadedChildren {
+            // Readings of it still under way began before what you just did, and would bring back what was there.
+            reader.dropReadings(of: folder)
+            if node.reload() { sidebarReload([node]) }
+        }
         index.refresh(folders: [folder], locations: locations)
     }
 
@@ -893,7 +919,8 @@ public final class Workspace: NSObject {
                 }
             }
         }
-        reveal(renamed, select: renamed == currentURL)
+        // A folder selected in the sidebar stays selected under its new name, as in the Finder.
+        reveal(renamed, select: renamed == currentURL || renamed.standardizedFileURL.path == selectedFolder?.standardizedFileURL.path)
         return renamed
     }
 

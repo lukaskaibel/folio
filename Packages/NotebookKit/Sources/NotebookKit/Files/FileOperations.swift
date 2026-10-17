@@ -8,7 +8,7 @@ import UIKit
 @MainActor
 enum FileOperations {
     /// A name that isn't taken in the folder: "Untitled", "Untitled 2", …
-    static func uniqueURL(in folder: URL, name: String, extension ext: String?) -> URL {
+    nonisolated static func uniqueURL(in folder: URL, name: String, extension ext: String?) -> URL {
         func make(_ base: String) -> URL {
             ext.map { folder.appendingPathComponent(base).appendingPathExtension($0) } ?? folder.appendingPathComponent(base, isDirectory: true)
         }
@@ -22,7 +22,7 @@ enum FileOperations {
     }
 
     /// A file name from a title: the characters files can't have become dashes.
-    static func fileName(from title: String) -> String {
+    nonisolated static func fileName(from title: String) -> String {
         var name = title.trimmingCharacters(in: .whitespacesAndNewlines)
         for character in ["/", ":", "\\"] { name = name.replacingOccurrences(of: character, with: "-") }
         while name.hasPrefix(".") { name.removeFirst() }
@@ -40,8 +40,9 @@ enum FileOperations {
         return written ? url : nil
     }
 
+    /// Off the main thread too: in iCloud Drive the write can wait for iCloud.
     @discardableResult
-    static func createFolder(in parent: URL, name: String = "New Folder") -> URL? {
+    nonisolated static func createFolder(in parent: URL, name: String = "New Folder") -> URL? {
         let url = uniqueURL(in: parent, name: name, extension: nil)
         var created = false
         NSFileCoordinator().coordinate(writingItemAt: url, options: [], error: nil) { url in

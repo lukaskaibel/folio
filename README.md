@@ -177,15 +177,15 @@ open. Links, the caret and folders are in ink blue to go with it, or in the acce
 
 The same notes in the same editor, laid out the way each device works. On the iPhone you go into one folder per screen,
 as in the Files app, and a note opens on a screen of its own; swipe from the edge to go back. The first screen has your
-favourites, what you opened last and the folders of each location. Search and a new note sit at the bottom, as in Notes,
-and search finds names, notes and PDFs as on the Mac. While you write, a bar floats above the keyboard with Aa, a
-checklist, attachments, a link, undo and the formatting, a page of tools at a time; Settings › Writing Bar chooses which
-and in what order. Aa brings up the Format panel in the keyboard's place, as in Notes: the text styles, bold, italic and
-the rest, lists, indenting and quotes. Pictures come from the camera, the document scanner, your photos or the Files
-app. The pencil, at the bottom of the screen or in the bar, draws in the note with Apple's tool picker. Tap a checkbox
-to tick it, a link to follow it, a picture to look at it, a drawing to draw in it; touch and hold a picture and drag it
-to move it in the note, or let go to copy, share or delete it. Swipe a file to move or delete it, or to make it a
-favourite; touch and hold it for everything else.
+favourites, what you opened last and the folders of each location. New Folder, search and a new note sit at the bottom,
+as in Notes, and search finds names, notes and PDFs as on the Mac. While you write, a bar floats above the keyboard with
+Aa, a checklist, attachments, a link, undo and the formatting, a page of tools at a time; Settings › Writing Bar chooses
+which and in what order. Aa brings up the Format panel in the keyboard's place, as in Notes: the text styles, bold,
+italic and the rest, lists, indenting and quotes. Pictures come from the camera, the document scanner, your photos or
+the Files app. The pencil, at the bottom of the screen or in the bar, draws in the note with Apple's tool picker. Tap a
+checkbox to tick it, a link to follow it, a picture to look at it, a drawing to draw in it; touch and hold a picture and
+drag it to move it in the note, or let go to copy, share or delete it. Swipe a file to move or delete it, or to make it
+a favourite; touch and hold it for everything else.
 
 The iPad has the Mac's layout: the sidebar with its folders opening in place, the note next to it, and the outline in
 an inspector. In portrait the sidebar steps aside once you have picked a note. With a keyboard, the Mac's shortcuts
@@ -205,8 +205,9 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
   sidebar, or drop the folder from the Finder below the sidebar's sections. iCloud Drive shows what the Finder shows
   in it: Desktop and Documents when they are kept in iCloud, and the folders of apps such as Pages or Obsidian.
   Folders are read in the background, so even a large iCloud Drive shows at once and nothing waits for it. Create,
-  rename, duplicate and move notes and folders, by drag and drop or with Move To; Option-drag copies. Deleting moves
-  to the Trash, never further. Favourites sit at the top of the sidebar.
+  rename, duplicate and move notes and folders, by drag and drop or with Move To; Option-drag copies. The New Folder
+  button next to a location's name makes a folder at its top, New Folder in a folder's menu one inside it, named in
+  place as in the Finder. Deleting moves to the Trash, never further. Favourites sit at the top of the sidebar.
 - **iPhone and iPad.** The same editor, search and file handling, with screens made for each: one folder per screen
   on the iPhone, the sidebar on the iPad. Pick iCloud Drive or any folder in the Files app's picker, or keep notes on
   the device, in On My iPhone › Notebook. A bar above the keyboard, whose tools you choose, formats, links and adds
@@ -319,7 +320,7 @@ app's own folder there.
 | Shortcut | Action |
 | --- | --- |
 | ⌘N | New note in the current folder |
-| ⇧⌘N | New folder |
+| ⇧⌘N | New folder in the current folder, named in place |
 | ⌘F | Search |
 | ⌘[ and ⌘], or swipe between pages | Back and forward; the swipe follows System Settings, as in Safari |
 | ⌘O | Open a Markdown file in a window of its own, or a folder in the sidebar |
@@ -355,8 +356,9 @@ While writing:
 | ↑ on the first line | Into the title; Return, Tab or ↓ back into the text |
 
 In the sidebar: Return renames, ⌘⌫ moves to the Trash, and Space opens a file in Quick Look. Right-click a file or
-folder for everything else, including Copy Link, which copies a `[[link]]` to it, Remind Me… and Hide Folder. When a
-location has hidden folders, an eye comes up next to its name as you point at it.
+folder for everything else, including New Folder, Copy Link, which copies a `[[link]]` to it, Remind Me… and Hide
+Folder. As you point at a location's name, a folder with a plus comes up next to it for a new folder at its top, and,
+when the location has hidden folders, an eye that shows them.
 
 On an iPad with a keyboard, ⌘N, ⌘F, ⌘[ and ⌘], ⌃⌘I, ⇧⌘. and the shortcuts for writing work as on the Mac. On iPhone
 and iPad:
