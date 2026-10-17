@@ -86,21 +86,23 @@ final class ReminderTests: XCTestCase {
         XCTAssertEqual(workspace.reminders.all.first?.note, HiddenFolders.withoutPrivate(questions.path), "named by its path outside iCloud")
         XCTAssertNil(workspace.reminder(for: library.appendingPathComponent("Personal/Other.md")))
 
-        let renamed = try XCTUnwrap(workspace.rename(questions, to: "Doctor"))
+        let renaming = await workspace.rename(questions, to: "Doctor").value
+        let renamed = try XCTUnwrap(renaming)
         XCTAssertNil(workspace.reminder(for: questions))
         XCTAssertEqual(workspace.reminder(for: renamed)?.id, id)
 
-        workspace.move(renamed, into: library.appendingPathComponent("Health"))
+        _ = await workspace.move(renamed, into: library.appendingPathComponent("Health")).value
         let moved = library.appendingPathComponent("Health/Doctor.md")
         XCTAssertEqual(workspace.reminder(for: moved)?.id, id)
         XCTAssertEqual(workspace.reminder(for: moved)?.date, date)
 
-        let folder = try XCTUnwrap(workspace.rename(library.appendingPathComponent("Health"), to: "Appointments"))
+        let renamingFolder = await workspace.rename(library.appendingPathComponent("Health"), to: "Appointments").value
+        let folder = try XCTUnwrap(renamingFolder)
         let inFolder = folder.appendingPathComponent("Doctor.md")
         XCTAssertEqual(workspace.reminder(for: inFolder)?.id, id)
         XCTAssertEqual(workspace.url(for: try XCTUnwrap(workspace.reminders.reminder(id))), inFolder)
 
-        workspace.trash(inFolder)
+        _ = await workspace.trash(inFolder).value
         XCTAssertTrue(workspace.reminders.all.isEmpty)
     }
 
@@ -110,8 +112,7 @@ final class ReminderTests: XCTestCase {
         let reminder = try XCTUnwrap(workspace.reminder(for: questions))
         let moved = library.appendingPathComponent("Health/Questions for Dr. Weber.md")
         try FileManager.default.moveItem(at: questions, to: moved)
-        workspace.refreshNow(library.appendingPathComponent("Personal"))
-        workspace.refreshNow(library.appendingPathComponent("Health"))
+        workspace.readAgain([library.appendingPathComponent("Personal"), library.appendingPathComponent("Health")])
         for _ in 0..<100 where workspace.index.entry(for: moved) == nil {
             try await Task.sleep(for: .milliseconds(50))
         }
@@ -121,7 +122,7 @@ final class ReminderTests: XCTestCase {
 
         // Gone from every location here: nothing to open, and the reminder stays for the devices that have it.
         try FileManager.default.removeItem(at: moved)
-        workspace.refreshNow(library.appendingPathComponent("Health"))
+        await workspace.readAgain(library.appendingPathComponent("Health"))
         XCTAssertNil(workspace.url(for: try XCTUnwrap(workspace.reminders.reminder(reminder.id))))
         XCTAssertEqual(workspace.reminders.all.count, 1)
         let elsewhere = Reminder(id: UUID(), note: "com~apple~CloudDocs/Elsewhere/Questions for Dr. Weber.md", date: .now)

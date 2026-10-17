@@ -152,7 +152,7 @@ final class HiddenFolderTests: XCTestCase {
         let (workspace, sidebar, location) = try await makeWorkspace()
         let library = try XCTUnwrap(workspace.locations.first { $0.id != location.id })
         try make(library.url.appendingPathComponent("Clutter"))
-        workspace.refreshNow(library.url)
+        await workspace.readAgain(library.url)
         workspace.setHidden(library.url.appendingPathComponent("Clutter"), true)
         workspace.setHidden(archive, true)
         XCTAssertEqual(try shown(sidebar, workspace, library), [])
@@ -167,14 +167,15 @@ final class HiddenFolderTests: XCTestCase {
     func testRenamedFoldersStayHiddenAndTrashedOnesAreForgotten() async throws {
         let (workspace, sidebar, location) = try await makeWorkspace()
         workspace.setHidden(archive, true)
-        let renamed = try XCTUnwrap(workspace.rename(archive, to: "Old"))
+        let renaming = await workspace.rename(archive, to: "Old").value
+        let renamed = try XCTUnwrap(renaming)
         XCTAssertTrue(workspace.isHidden(renamed))
         XCTAssertEqual(try shown(sidebar, workspace, location), ["Desktop", "Obsidian", "Papers"])
 
-        workspace.trash(renamed)
+        _ = await workspace.trash(renamed).value
         XCTAssertTrue(workspace.hidden.keys.isEmpty)
         try make(renamed)
-        workspace.refreshNow(drive)
+        await workspace.readAgain(drive)
         XCTAssertEqual(try shown(sidebar, workspace, location), ["Desktop", "Obsidian", "Old", "Papers"])
     }
 }

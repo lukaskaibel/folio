@@ -102,8 +102,10 @@ final class LocationTests: XCTestCase {
 
     func testLinkedFoldersStayPut() async throws {
         let workspace = try await makeWorkspace()
-        XCTAssertNil(workspace.rename(desktop, to: "Renamed"))
-        workspace.trash(desktop)
+        let renamed = await workspace.rename(desktop, to: "Renamed").value
+        XCTAssertNil(renamed)
+        let trashed = await workspace.trash(desktop).value
+        XCTAssertFalse(trashed)
         XCTAssertTrue(FileManager.default.fileExists(atPath: plan.path))
     }
 
@@ -282,9 +284,9 @@ final class LocationTests: XCTestCase {
         XCTAssertTrue(reader.isIdle)
     }
 
-    /// A folder read on the main thread after something you did in it, such as a rename, drops the readings of it
+    /// A folder read again after something you did in it, such as a rename, drops the readings of it
     /// still under way: they began before and could bring back the old name.
-    func testReadingOnTheMainThreadDropsOlderReadings() async throws {
+    func testReadingAgainDropsOlderReadings() async throws {
         UserDefaults.standard.set(0.2, forKey: "NotebookSlowFolders")
         let reader = FolderReader()
         var results: [FolderReader.Result]?

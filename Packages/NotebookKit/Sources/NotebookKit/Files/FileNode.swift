@@ -3,6 +3,7 @@ import AppKit
 #else
 import UIKit
 #endif
+import Synchronization
 import UniformTypeIdentifiers
 
 /// What a file is, for its icon and for what opening it does.
@@ -96,13 +97,6 @@ public final class FileNode: NSObject {
         return children
     }
 
-    /// Reads the folder again, keeping the nodes of files that are still there (so open folders stay open).
-    @discardableResult
-    func reload() -> Bool {
-        guard isFolder, children != nil else { return false }
-        return apply(Self.list(url, linked: linked))
-    }
-
     /// Takes in what reading the folder found, keeping the nodes of files that are still there. Says whether anything
     /// changed, which a folder read for the first time always has.
     @discardableResult
@@ -134,9 +128,49 @@ public final class FileNode: NSObject {
     /// it wasn't there yet.
     @discardableResult
     func insertFolder(_ url: URL) -> Bool {
-        guard let children, !children.contains(where: { $0.url.path == url.path }) else { return false }
-        let items = children.map { (listing: Listing(url: $0.url, kind: $0.kind, isInCloud: $0.isInCloud, modified: $0.modified, linkedName: $0.isLinked ? $0.name : nil), sortName: $0.sortName) }
-        return apply(Self.inOrder(items + [(Listing(url: url, kind: .folder), url.lastPathComponent)]))
+        guard let children, !children.contains(where: { Self.samePath($0.url, url) }) else { return false }
+        return update(adding: [Listing(url: url, kind: .folder)])
+    }
+
+    /// Takes in what you just did in this folder, so it shows before the folder has been read again: the files that
+    /// went from it (renamed, moved, thrown away) and those that came (made, renamed, moved in). The others keep their
+    /// nodes. Says whether anything changed; nothing does in a folder not read yet.
+    @discardableResult
+    func update(removing: [URL] = [], adding: [Listing] = []) -> Bool {
+        guard let children else { return false }
+        let replaced = Set((removing + adding.map(\.url)).map { HiddenFolders.withoutPrivate($0.path) })
+        let kept = children.filter { !replaced.contains(HiddenFolders.withoutPrivate($0.url.path)) }
+        let items = kept.map { ($0.listing, $0.sortName) } + adding.map { ($0, $0.linkedName ?? $0.url.lastPathComponent) }
+        return apply(Self.inOrder(items))
+    }
+
+    /// A folder renamed or moved keeps what it held, as read before, under its new address: it can show open at once,
+    /// with the folders open in it.
+    func takeContents(of old: FileNode) {
+        guard isFolder, children == nil, let contents = old.children else { return }
+        children = contents.map { child in
+            let node = FileNode(url: url.appendingPathComponent(child.url.lastPathComponent, isDirectory: child.isFolder), kind: child.kind,
+                                isInCloud: child.isInCloud, modified: child.modified, parent: self, linkedAs: child.isLinked ? child.name : nil)
+            node.takeContents(of: child)
+            return node
+        }
+    }
+
+    /// The node as reading its folder found it.
+    var listing: Listing {
+        Listing(url: url, kind: kind, isInCloud: isInCloud, modified: modified, linkedName: isLinked ? name : nil)
+    }
+
+    /// "/private/var/…" (what reading a temporary folder names what is in it) and "/var/…" are one place.
+    nonisolated static func samePath(_ a: URL, _ b: URL) -> Bool {
+        HiddenFolders.withoutPrivate(a.path) == HiddenFolders.withoutPrivate(b.path)
+    }
+
+    /// Whether a file is `folder` itself or somewhere in it.
+    nonisolated static func isSameOrInside(_ url: URL, _ folder: URL) -> Bool {
+        let path = HiddenFolders.withoutPrivate(url.path)
+        let folder = HiddenFolders.withoutPrivate(folder.path)
+        return path == folder || path.hasPrefix(folder + "/")
     }
 
     private convenience init(_ item: Listing, parent: FileNode) {
@@ -163,6 +197,11 @@ public final class FileNode: NSObject {
         var linkedName: String?
     }
 
+    #if DEBUG
+    /// How many folders were read on the main thread, for tests to see that nothing they do reads any there.
+    nonisolated static let mainThreadReads = Mutex(0)
+    #endif
+
     nonisolated static let keys: [URLResourceKey] = [.isDirectoryKey, .isPackageKey, .isHiddenKey, .ubiquitousItemDownloadingStatusKey, .contentModificationDateKey]
 
     /// Reads a folder: its files and folders in the sidebar's order, with `linked` among them. This can take a while
@@ -173,6 +212,7 @@ public final class FileNode: NSObject {
         // A slow disk or a slow iCloud, for trying out that nothing waits for it. Reads on the main thread (what you
         // just did yourself) aren't slowed down but logged, to find any that shouldn't be there.
         let delay = UserDefaults.standard.double(forKey: "NotebookSlowFolders")
+        if Thread.isMainThread { mainThreadReads.withLock { $0 += 1 } }
         if delay > 0 {
             if Thread.isMainThread { NSLog("Notebook: read %@ on the main thread", folder.path) } else { Thread.sleep(forTimeInterval: delay) }
         }
@@ -180,28 +220,35 @@ public final class FileNode: NSObject {
         let contents = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: keys, options: [])) ?? []
         var items: [(listing: Listing, sortName: String)] = []
         for item in contents {
-            var url = item
-            var name = item.lastPathComponent
-            var inCloud = false
-            // Older iCloud Drive placeholders: ".Name.pdf.icloud".
-            if name.hasPrefix("."), name.hasSuffix(".icloud") {
-                name = String(name.dropFirst().dropLast(7))
-                url = folder.appendingPathComponent(name)
-                inCloud = true
-            } else if name.hasPrefix(".") {
-                continue
-            }
-            let values = try? item.resourceValues(forKeys: Set(keys))
-            if values?.isHidden == true, !inCloud { continue }
-            let isDirectory = (values?.isDirectory ?? false) && !(values?.isPackage ?? false)
-            if let status = values?.ubiquitousItemDownloadingStatus, status == .notDownloaded { inCloud = true }
-            items.append((Listing(url: url, kind: FileKind(url: url, isDirectory: isDirectory), isInCloud: inCloud, modified: values?.contentModificationDate),
-                          url.lastPathComponent))
+            guard let listing = listing(of: item, in: folder) else { continue }
+            items.append((listing, listing.url.lastPathComponent))
         }
         for folder in linked {
             items.append((Listing(url: folder.url, kind: .folder, linkedName: folder.name), folder.name))
         }
         return inOrder(items)
+    }
+
+    /// One file as reading its folder finds it; nil for one the sidebar doesn't show. Also for a file you just made,
+    /// renamed or moved, to show it before its folder has been read again.
+    nonisolated static func listing(of item: URL, in folder: URL? = nil) -> Listing? {
+        let folder = folder ?? item.deletingLastPathComponent()
+        var url = item
+        var name = item.lastPathComponent
+        var inCloud = false
+        // Older iCloud Drive placeholders: ".Name.pdf.icloud".
+        if name.hasPrefix("."), name.hasSuffix(".icloud") {
+            name = String(name.dropFirst().dropLast(7))
+            url = folder.appendingPathComponent(name)
+            inCloud = true
+        } else if name.hasPrefix(".") {
+            return nil
+        }
+        let values = try? item.resourceValues(forKeys: Set(keys))
+        if values?.isHidden == true, !inCloud { return nil }
+        let isDirectory = (values?.isDirectory ?? false) && !(values?.isPackage ?? false)
+        if let status = values?.ubiquitousItemDownloadingStatus, status == .notDownloaded { inCloud = true }
+        return Listing(url: url, kind: FileKind(url: url, isDirectory: isDirectory), isInCloud: inCloud, modified: values?.contentModificationDate)
     }
 
     /// The sidebar's order: folders first, then by name as the Finder sorts.

@@ -272,6 +272,14 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     }
 
     /// Links and pictures may point somewhere else now (files were added, renamed, deleted): style them again.
+    /// The note's folder was renamed or moved, or the note into another: pictures and relative links start from where
+    /// it is now. The text stays as it is, with the caret and where it is scrolled to.
+    public func folderMoved(to folder: URL) {
+        guard folder.standardizedFileURL != self.folder?.standardizedFileURL else { return }
+        self.folder = folder
+        refreshLinks()
+    }
+
     public func refreshLinks() {
         let lines = document.lines.indices.filter { index in
             document.lines[index].spans.contains { span in

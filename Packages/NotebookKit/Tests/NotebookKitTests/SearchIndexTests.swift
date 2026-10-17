@@ -129,7 +129,7 @@ final class SearchIndexTests: XCTestCase {
         func folders() -> [String] { workspace.moveTargets(for: note).flatMap { $0.folders.dropFirst().map(\.name) } }
         try await waitUntil { folders() == ["Inbox"] }
         try FileManager.default.createDirectory(at: library.appendingPathComponent("Inbox/Later"), withIntermediateDirectories: false)
-        workspace.refreshNow(library.appendingPathComponent("Inbox"))
+        workspace.readAgain([library.appendingPathComponent("Inbox")])
         try await waitUntil { folders() == ["Inbox", "Later"] }
         XCTAssertEqual(workspace.moveTargets(for: note).first?.folders.map(\.depth), [-1, 0, 1])
     }

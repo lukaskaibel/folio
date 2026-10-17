@@ -128,6 +128,14 @@ public final class Workspace: NSObject {
     @ObservationIgnored private var preparingMoveFolders: MoveFolders.Key?
     /// Counts the times Move To's folders were sorted again in the background, for the menus that show them.
     private var moveFoldersVersion = 0
+    /// The last change to files asked for, which the next one waits for (`changeFiles`), and how many are under way.
+    @ObservationIgnored private var lastChange: Task<Void, Never>?
+    @ObservationIgnored private var changesUnderWay = 0
+    /// Files renamed or moved while changes were under way, for those asked for meanwhile to find them.
+    @ObservationIgnored private var relocations: [(from: URL, to: URL)] = []
+    /// The names files get while they are renamed, by path: shown until the rename is done, so a row never shows the
+    /// old name again in between.
+    private(set) var newNames: [String: String] = [:]
 
     public override init() {
         super.init()
@@ -138,6 +146,7 @@ public final class Workspace: NSObject {
             self?.scheduleReminders()
         }
         index.onFoldersChanged = { [weak self] in self?.prepareMoveFolders() }
+        index.onRefreshed = { [weak self] in self?.editor.refreshLinks() }
         #if os(macOS)
         pages.workspace = self
         #endif
@@ -704,15 +713,22 @@ public final class Workspace: NSObject {
         note.close()
         let folder = note.url.deletingLastPathComponent()
         let dropped = assetsInUse.subtracting(FileOperations.assetNames(in: note.text))
-        if !dropped.isEmpty { FileOperations.cleanUpAssets(in: folder, candidates: dropped) }
+        // It reads every note in the folder, which takes a while in a large one.
+        if !dropped.isEmpty { Task.detached(priority: .utility) { FileOperations.cleanUpAssets(in: folder, candidates: dropped) } }
         if note.isNew, note.isEmpty, note.url.deletingPathExtension().lastPathComponent.hasPrefix("Untitled") {
-            #if os(iOS)
-            // Where there is no Recently Deleted, an empty note made a moment ago goes for good: nothing is lost.
-            if !FileOperations.trash(note.url) { _ = FileOperations.delete(note.url) }
-            #else
-            _ = FileOperations.trash(note.url)
-            #endif
-            refreshNow(folder)
+            let url = note.url
+            changeFiles { [self] follow in
+                let url = follow(url)
+                let thrownAway = await Task.detached(priority: .userInitiated) { () -> Bool in
+                    #if os(iOS)
+                    // Where there is no Recently Deleted, an empty note made a moment ago goes for good: nothing is lost.
+                    return FileOperations.trash(url) || FileOperations.delete(url)
+                    #else
+                    return FileOperations.trash(url)
+                    #endif
+                }.value
+                if thrownAway { showChanges(in: [url.deletingLastPathComponent()], removing: [url]) }
+            }
         }
         self.note = nil
     }
@@ -800,22 +816,19 @@ public final class Workspace: NSObject {
     }
 
     private func replacePath(_ old: URL, with new: URL) {
-        let oldPath = old.standardizedFileURL.path
-        let newPath = new.standardizedFileURL.path
-        func fix(_ path: String) -> String {
-            path == oldPath ? newPath : path.hasPrefix(oldPath + "/") ? newPath + path.dropFirst(oldPath.count) : path
-        }
+        func fix(_ path: String) -> String { Self.relocated(path, from: old.path, to: new.path) }
+        func fix(_ url: URL) -> URL { Self.relocated(url, from: old, to: new) }
         hiddenFolderMoved(from: old, to: new)
         reminderMoved(from: old, to: new)
         favorites = favorites.map(fix)
         recents = recents.map(fix)
-        history = history.map { URL(fileURLWithPath: fix($0.path)) }
+        history = history.map(fix)
         relocation = (old.standardizedFileURL, new.standardizedFileURL, UUID())
-        if let current = currentURL { currentURL = URL(fileURLWithPath: fix(current.path)) }
+        if let current = currentURL { currentURL = fix(current) }
         // Else ⌘N would make the folder again under its old name, for the note.
-        if let folder = selectedFolder { selectedFolder = URL(fileURLWithPath: fix(folder.path), isDirectory: true) }
+        if let folder = selectedFolder { selectedFolder = fix(folder) }
         #if os(iOS)
-        pageSnapshots = Dictionary(pageSnapshots.map { (URL(fileURLWithPath: fix($0.key.path)), $0.value) }, uniquingKeysWith: { a, _ in a })
+        pageSnapshots = Dictionary(pageSnapshots.map { (fix($0.key), $0.value) }, uniquingKeysWith: { a, _ in a })
         #endif
         if !temporaryLocations {
             UserDefaults.standard.set(favorites, forKey: "favorites")
@@ -832,23 +845,115 @@ public final class Workspace: NSObject {
         return inboxFolder
     }
 
+    /// The Inbox at the top of the first location, made with the first note put in it.
     var inboxFolder: URL? {
         guard let location = locations.first else { return nil }
-        let inbox = location.url.appendingPathComponent("Inbox", isDirectory: true)
-        try? FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
-        return inbox
+        return location.url.appendingPathComponent("Inbox", isDirectory: true)
     }
 
-    public func newNote(in folder: URL? = nil, title: String? = nil) {
-        guard let folder = folder ?? folderForNewNote, let url = FileOperations.createNote(in: folder, title: title ?? "Untitled") else { return }
-        refreshNow(folder)
-        open(url, focusTitle: title == nil)
-        note?.isNew = title == nil
+    /// Does a change to files once the changes asked for before it are done, one after another in the order they were
+    /// asked for. The writing itself goes off the main thread: in iCloud Drive a coordinated write can wait for iCloud,
+    /// and the window never waits with it. `follow` gives where a file the change was asked for is now, when one before
+    /// it renamed or moved it (or the folder it is in) meanwhile.
+    @discardableResult
+    private func changeFiles<T: Sendable>(_ change: @escaping @MainActor (_ follow: (URL) -> URL) async -> T) -> Task<T, Never> {
+        let previous = lastChange
+        let mark = relocations.count
+        changesUnderWay += 1
+        let task = Task { @MainActor in
+            await previous?.value
+            let result = await change { url in
+                self.relocations[mark...].reduce(url) { Self.relocated($0, from: $1.from, to: $1.to) }
+            }
+            self.changesUnderWay -= 1
+            if self.changesUnderWay == 0 { self.relocations = [] }
+            return result
+        }
+        lastChange = Task { _ = await task.value }
+        return task
+    }
+
+    /// Where a file is once `from` went to `to`: there too if it is `from` or in it.
+    nonisolated static func relocated(_ url: URL, from: URL, to: URL) -> URL {
+        guard FileNode.isSameOrInside(url, from) else { return url }
+        return URL(fileURLWithPath: relocated(url.path, from: from.path, to: to.path), isDirectory: url.hasDirectoryPath)
+    }
+
+    /// The same by path, in the form it was given: "/private/var/…" and "/var/…" are one folder, and the app has
+    /// addresses of both kinds.
+    nonisolated static func relocated(_ path: String, from: String, to: String) -> String {
+        let plain = HiddenFolders.withoutPrivate(path)
+        let old = HiddenFolders.withoutPrivate(from)
+        guard plain == old || plain.hasPrefix(old + "/") else { return path }
+        let target = HiddenFolders.withoutPrivate(to)
+        return (path.hasPrefix("/private/") && !target.hasPrefix("/private/") ? "/private" + target : target) + plain.dropFirst(old.count)
+    }
+
+    /// Shows what was just done in folders before they have been read again: the files that went from them and those
+    /// that came. Then reads them again in the background, for anything else that changed.
+    private func showChanges(in folders: [URL], removing: [URL] = [], adding: [FileNode.Listing] = [], carrying moved: FileNode? = nil) {
+        let folders = folders.reduce(into: [URL]()) { list, folder in
+            if !list.contains(where: { FileNode.samePath($0, folder) }) { list.append(folder) }
+        }
+        var changed: [FileNode] = []
+        for folder in folders {
+            guard let node = existingNode(for: folder) else { continue }
+            let gone = removing.filter { FileNode.samePath($0.deletingLastPathComponent(), folder) }
+            let came = adding.filter { FileNode.samePath($0.url.deletingLastPathComponent(), folder) }
+            if node.update(removing: gone, adding: came), !changed.contains(node) { changed.append(node) }
+        }
+        if let moved, let listing = adding.first, let node = loadedNode(listing.url) { node.takeContents(of: moved) }
+        if !changed.isEmpty { sidebarReload(changed) }
+        readAgain(folders)
+    }
+
+    /// Reads folders again in the background, after something was done in them, then does `done`. Readings of them
+    /// still under way began before that and could bring back what was there, so they are dropped. Search follows.
+    func readAgain(_ folders: [URL], then done: (() -> Void)? = nil) {
+        var requests: [FolderReader.Request] = []
+        for folder in folders {
+            guard let node = existingNode(for: folder), node.isFolder, node.hasLoadedChildren,
+                  !requests.contains(where: { FileNode.samePath($0.url, node.url) }) else { continue }
+            reader.dropReadings(of: node.url)
+            requests.append(FolderReader.Request(url: node.url, linked: node.linked))
+        }
+        index.refresh(folders: folders, locations: locations)
+        guard !requests.isEmpty else { done?(); return }
+        read(requests, then: done)
+    }
+
+    /// Pulling a list down: its folder is read again, and the list waits until it has been.
+    func readAgain(_ folder: URL) async {
+        await withCheckedContinuation { continuation in readAgain([folder]) { continuation.resume() } }
+    }
+
+    /// A new note, opened with its title ready to type over, or with a title already chosen (search's New Note, a link
+    /// to a note that isn't there yet). The task gives where it was made.
+    @discardableResult
+    public func newNote(in folder: URL? = nil, title: String? = nil) -> Task<URL?, Never> {
+        let folder = folder ?? folderForNewNote
+        return changeFiles { [self] follow in
+            guard let folder = folder.map(follow) else { return nil }
+            let made = await Task.detached(priority: .userInitiated) { () -> (url: URL, listing: FileNode.Listing?, madeFolder: Bool)? in
+                guard let made = FileOperations.createNote(in: folder, title: title ?? "Untitled") else { return nil }
+                return (made.url, FileNode.listing(of: made.url), made.madeFolder)
+            }.value
+            guard let made else {
+                report("The note couldn’t be made.", "Notebook can’t write in “\(folderName(folder))”.")
+                return nil
+            }
+            // The Inbox, made for the first note in it, shows too.
+            let parent = folder.deletingLastPathComponent()
+            showChanges(in: made.madeFolder ? [parent, folder] : [folder],
+                        adding: (made.listing.map { [$0] } ?? []) + (made.madeFolder ? [FileNode.Listing(url: folder, kind: .folder)] : []))
+            open(made.url, focusTitle: title == nil)
+            note?.isNew = title == nil
+            return made.url
+        }
     }
 
     /// A new folder, named "New Folder" to be renamed at once in the sidebar, as in the Finder, or with the name
-    /// already chosen (iPhone and iPad ask for it first, as Notes does). It is made off the main thread: in iCloud
-    /// Drive the write can wait for iCloud.
+    /// already chosen (iPhone and iPad ask for it first, as Notes does).
     public func newFolder(in parent: URL? = nil, named name: String? = nil) {
         #if os(macOS)
         // A name still being typed is taken first, as in the Finder: the selected folder may be the one renamed.
@@ -857,17 +962,13 @@ public final class Workspace: NSObject {
         guard let parent = (parent ?? selectedFolder ?? currentURL?.deletingLastPathComponent() ?? locations.first?.url)?.standardizedFileURL else { return }
         let chosen = name.map(FileOperations.fileName(from:)) ?? ""
         let name = chosen.isEmpty ? "New Folder" : chosen
-        Task {
+        changeFiles { [self] follow in
+            let parent = follow(parent)
             guard let url = await Task.detached(priority: .userInitiated, operation: { FileOperations.createFolder(in: parent, name: name) }).value else {
                 return report("The folder couldn’t be made.", "Notebook can’t write in “\(folderName(parent))”.")
             }
-            // In the sidebar at once, however long reading its folder takes in iCloud. The reading after it brings
-            // anything else that changed, and drops any older one still under way, which might not have it.
-            if let node = existingNode(for: parent), node.hasLoadedChildren {
-                if node.insertFolder(url) { sidebarReload([node]) }
-                read([FolderReader.Request(url: node.url, linked: node.linked)], then: nil)
-            }
-            index.refresh(folders: [parent], locations: locations)
+            // In the sidebar at once, however long reading its folder takes in iCloud.
+            showChanges(in: [parent], adding: [FileNode.Listing(url: url, kind: .folder)])
             // Selected, on the Mac with its name ready to type over. Revealing it reads its folder if it hasn't been.
             #if os(macOS)
             selectedFolder = url
@@ -880,94 +981,178 @@ public final class Workspace: NSObject {
         }
     }
 
-    /// Reads a folder again right away, without waiting for the file system to report the change.
-    func refreshNow(_ folder: URL) {
-        if let node = existingNode(for: folder), node.hasLoadedChildren {
-            // Readings of it still under way began before what you just did, and would bring back what was there.
-            reader.dropReadings(of: folder)
-            if node.reload() { sidebarReload([node]) }
-        }
-        index.refresh(folders: [folder], locations: locations)
+    /// The name a file is being renamed to, for its row.
+    func newName(for url: URL) -> String? {
+        newNames.isEmpty ? nil : newNames[HiddenFolders.withoutPrivate(url.path)]
     }
 
     /// Renames a file or folder. Links to a renamed note in other notes follow it, unless it is a new note getting its
-    /// first name, which nothing links to yet.
+    /// first name, which nothing links to yet. The task gives the new address, or nil when the name is taken.
     @discardableResult
-    func rename(_ url: URL, to name: String, updatingLinks: Bool = true) -> URL? {
-        guard !isLinkedFolder(url) else { beep(); return nil }
-        let isNote = FileKind(url: url, isDirectory: false) == .note
-        let oldName = url.deletingPathExtension().lastPathComponent
-        if url == currentURL { note?.saveNow() }
-        guard let renamed = FileOperations.rename(url, to: name) else {
-            report("The name “\(name)” is already taken.", "Please choose a different name.")
-            return nil
+    func rename(_ url: URL, to name: String, updatingLinks: Bool = true) -> Task<URL?, Never> {
+        guard !isLinkedFolder(url) else { beep(); return Task { nil } }
+        let key = HiddenFolders.withoutPrivate(url.path)
+        let shown = existingNode(for: url).flatMap { node in
+            FileOperations.destination(renaming: url, to: name, isDirectory: node.isFolder).map {
+                node.kind == .note ? $0.deletingPathExtension().lastPathComponent : $0.lastPathComponent
+            }
         }
-        if note?.url.standardizedFileURL == url.standardizedFileURL { note?.moved(to: renamed) }
-        replacePath(url, with: renamed)
-        refreshNow(url.deletingLastPathComponent())
-        if url.standardizedFileURL == note?.url.standardizedFileURL || renamed.standardizedFileURL == currentURL {
-            editor.setTitle(renamed.deletingPathExtension().lastPathComponent)
+        if let shown, shown != existingNode(for: url)?.name {
+            newNames[key] = shown
+            sidebarShowName(of: url)
         }
-        if isNote, updatingLinks, let location = location(containing: renamed) {
-            let newName = renamed.deletingPathExtension().lastPathComponent
-            let roots = location.folders.map(\.url)
-            // In the background: it reads every note of the location, which in a large folder in iCloud Drive takes
-            // long (and waits for notes still to download). The notes it changes come back as changes on disk.
-            Task.detached(priority: .utility) {
-                for root in roots {
-                    _ = FileOperations.updateLinks(from: oldName, to: newName, under: root, skipping: nil)
+        return changeFiles { [self] follow in
+            let url = follow(url)
+            // Its row has the new name by now, or says the old one again.
+            defer {
+                if newNames[key] == shown {
+                    newNames[key] = nil
+                    sidebarShowName(of: url)
                 }
             }
+            let isNote = FileKind(url: url, isDirectory: false) == .note
+            let oldName = url.deletingPathExtension().lastPathComponent
+            let document = noteMoving(with: url)
+            document?.beginMove()
+            let result = await Task.detached(priority: .userInitiated) { () -> (url: URL, listing: FileNode.Listing?)? in
+                guard let renamed = FileOperations.rename(url, to: name, presenter: document) else { return nil }
+                return (renamed, FileNode.listing(of: renamed))
+            }.value
+            guard let renamed = result?.url else {
+                document?.endMove(to: nil)
+                report("The name “\(name)” is already taken.", "Please choose a different name.")
+                return nil
+            }
+            moved(url, to: renamed, listing: result?.listing, document: document)
+            if isNote, updatingLinks, let location = location(containing: renamed) {
+                let newName = renamed.deletingPathExtension().lastPathComponent
+                let roots = location.folders.map(\.url)
+                // At a low priority: it reads every note of the location, which in a large folder in iCloud Drive takes
+                // long (and waits for notes still to download). The notes it changes come back as changes on disk.
+                Task.detached(priority: .utility) {
+                    for root in roots {
+                        _ = FileOperations.updateLinks(from: oldName, to: newName, under: root, skipping: nil)
+                    }
+                }
+            }
+            // A folder selected in the sidebar stays selected under its new name, as in the Finder.
+            reveal(renamed, select: isCurrent(renamed) || selectedFolder.map { FileNode.samePath($0, renamed) } == true)
+            return renamed
         }
-        // A folder selected in the sidebar stays selected under its new name, as in the Finder.
-        reveal(renamed, select: renamed == currentURL || renamed.standardizedFileURL.path == selectedFolder?.standardizedFileURL.path)
-        return renamed
     }
 
-    func move(_ url: URL, into folder: URL) {
-        guard !isLinkedFolder(url) else { beep(); return }
-        let destination = FileOperations.uniqueURL(in: folder, name: url.deletingPathExtension().lastPathComponent, extension: url.pathExtension.isEmpty ? nil : url.pathExtension)
-        if url == currentURL { note?.saveNow() }
-        // A note takes the pictures it uses along into the new folder's .assets.
-        var text: String?
-        if FileKind(url: url, isDirectory: false) == .note { text = NoteDocument.read(url) }
-        guard let moved = FileOperations.move(url, to: destination) else { beep(); return }
-        if note?.url.standardizedFileURL == url.standardizedFileURL { note?.moved(to: moved) }
-        if let text, url.deletingLastPathComponent() != folder {
-            let assets = FileOperations.assetNames(in: text)
-            for name in FileOperations.withDrawingStrokes(assets) {
-                let source = url.deletingLastPathComponent().appendingPathComponent(".assets").appendingPathComponent(name)
-                let target = folder.appendingPathComponent(".assets").appendingPathComponent(name)
-                guard FileManager.default.fileExists(atPath: source.path), !FileManager.default.fileExists(atPath: target.path) else { continue }
-                try? FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
-                try? FileManager.default.copyItem(at: source, to: target)
+    /// Moves a file or folder into another folder. A note takes the pictures it uses along; for one still in iCloud
+    /// that waits until it has come down, and nothing else waits for it.
+    @discardableResult
+    func move(_ url: URL, into folder: URL) -> Task<URL?, Never> {
+        guard !isLinkedFolder(url) else { beep(); return Task { nil } }
+        return changeFiles { [self] follow in
+            let url = follow(url)
+            let folder = follow(folder)
+            let source = url.deletingLastPathComponent()
+            // Already there: nothing to do (rather than a copy of its name with a number).
+            guard !FileNode.samePath(source, folder) else { return url }
+            let isNote = FileKind(url: url, isDirectory: false) == .note
+            let document = noteMoving(with: url)
+            document?.beginMove()
+            let result = await Task.detached(priority: .userInitiated) { () -> (url: URL, listing: FileNode.Listing?, assets: Set<String>?)? in
+                // Read before it moves only when that is quick: a note still in iCloud would have to come down first.
+                let isHere = isNote && NoteDocument.wait(for: url) == nil
+                let destination = FileOperations.uniqueURL(in: folder, name: url.deletingPathExtension().lastPathComponent, extension: url.pathExtension.isEmpty ? nil : url.pathExtension)
+                guard let moved = FileOperations.move(url, to: destination, presenter: document) else { return nil }
+                // Its pictures come along before it shows there, when they can.
+                let assets = isHere ? FileOperations.copyAssets(of: moved, from: source) : nil
+                return (moved, FileNode.listing(of: moved), assets)
+            }.value
+            guard let result else {
+                document?.endMove(to: nil)
+                beep()
+                return nil
             }
-            FileOperations.cleanUpAssets(in: url.deletingLastPathComponent(), candidates: assets)
+            let moved = result.url
+            if isNote {
+                Task.detached(priority: .utility) {
+                    let assets = result.assets ?? FileOperations.copyAssets(of: moved, from: source)
+                    // Open meanwhile, it shows the pictures that came after it.
+                    if result.assets == nil, !assets.isEmpty { await self.picturesArrived(for: moved) }
+                    FileOperations.cleanUpAssets(in: source, candidates: assets)
+                }
+            }
+            self.moved(url, to: moved, listing: result.listing, document: document)
+            reveal(moved, select: isCurrent(moved))
+            return moved
         }
-        replacePath(url, with: moved)
-        refreshNow(url.deletingLastPathComponent())
-        refreshNow(folder)
-        if moved == currentURL, let note {
-            editor.load(text: note.isLoaded ? editor.text : nil, folder: folder, title: moved.deletingPathExtension().lastPathComponent, meta: meta(for: note))
+    }
+
+    private func picturesArrived(for note: URL) {
+        if isCurrent(note) { editor.refreshLinks() }
+    }
+
+    private func isCurrent(_ url: URL) -> Bool {
+        currentURL.map { FileNode.samePath($0, url) } ?? false
+    }
+
+    /// The open note, when it is the file or in the folder about to be renamed or moved.
+    private func noteMoving(with url: URL) -> NoteDocument? {
+        guard let note, FileNode.isSameOrInside(note.url, url) else { return nil }
+        return note
+    }
+
+    /// A file Notebook renamed or moved, followed everywhere: by the note that was open in it, by what remembers files
+    /// by their address, and in the sidebar, at once.
+    private func moved(_ old: URL, to new: URL, listing: FileNode.Listing?, document: NoteDocument?) {
+        document?.endMove(to: document.map { Self.relocated($0.url, from: old, to: new) })
+        #if os(macOS)
+        sidebar?.follow(from: old, to: new)
+        #endif
+        replacePath(old, with: new)
+        relocations.append((old, new))
+        // The open note in it, or it: its name, and the folder its pictures are in. Nothing else in the editor changes.
+        if let note, document === note, let current = currentURL, FileNode.samePath(note.url, current) {
+            editor.setTitle(note.url.deletingPathExtension().lastPathComponent)
+            editor.folderMoved(to: note.url.deletingLastPathComponent())
             updateReminderLine()
         }
-        reveal(moved, select: moved == currentURL)
+        let node = loadedNode(old)
+        let kind = listing?.kind ?? node?.kind ?? .other
+        showChanges(in: [old.deletingLastPathComponent(), new.deletingLastPathComponent()], removing: [old],
+                    adding: [listing ?? FileNode.Listing(url: new, kind: kind)], carrying: node)
+        // Search reads what is in a folder again only one folder at a time, as files change in it.
+        if kind == .folder { index.refresh(folders: [new], deep: [new], locations: locations) }
+    }
+
+    /// A file's node, when its folder has been read: also for one that isn't there any more.
+    private func loadedNode(_ url: URL) -> FileNode? {
+        existingNode(for: url.deletingLastPathComponent())?.children?.first { FileNode.samePath($0.url, url) }
     }
 
     /// Files dropped on a folder: moved there from elsewhere in Notebook's locations, copied from anywhere else (or
     /// when `copying`, Option on the Mac).
     func drop(_ urls: [URL], into folder: URL, copying: Bool = false) {
+        var copies: [URL] = []
         for url in urls {
             if location(containing: url) != nil, !copying {
-                if url.deletingLastPathComponent().standardizedFileURL != folder.standardizedFileURL { move(url, into: folder) }
+                if !FileNode.samePath(url.deletingLastPathComponent(), folder) { move(url, into: folder) }
             } else {
-                let destination = FileOperations.uniqueURL(in: folder, name: url.deletingPathExtension().lastPathComponent, extension: url.pathExtension.isEmpty ? nil : url.pathExtension)
-                let accessing = url.startAccessingSecurityScopedResource()
-                try? FileManager.default.copyItem(at: url, to: destination)
-                if accessing { url.stopAccessingSecurityScopedResource() }
+                copies.append(url)
             }
         }
-        refreshNow(folder)
+        guard !copies.isEmpty else { return }
+        changeFiles { [self] follow in
+            let folder = follow(folder)
+            let sources = copies.map(follow)
+            let made = await Task.detached(priority: .userInitiated) {
+                sources.compactMap { url -> FileNode.Listing? in
+                    let destination = FileOperations.uniqueURL(in: folder, name: url.deletingPathExtension().lastPathComponent, extension: url.pathExtension.isEmpty ? nil : url.pathExtension)
+                    let accessing = url.startAccessingSecurityScopedResource()
+                    defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+                    guard (try? FileManager.default.copyItem(at: url, to: destination)) != nil else { return nil }
+                    return FileNode.listing(of: destination)
+                }
+            }.value
+            if made.count < sources.count { beep() }
+            showChanges(in: [folder], adding: made)
+        }
     }
 
     /// Where a file can be moved: every folder of every location, in order, with how deep it is.
@@ -1021,45 +1206,71 @@ public final class Workspace: NSObject {
         }
     }
 
-    /// Moves a file or folder to the Trash. Returns false when that can't be done (the place has no Trash).
+    /// Moves a file or folder to the Trash. The task says whether it could (on iPhone and iPad a place may have no
+    /// Recently Deleted).
     @discardableResult
-    func trash(_ url: URL) -> Bool {
-        guard !isLinkedFolder(url) else { beep(); return false }
-        let wasCurrent = url == currentURL || (currentURL?.path.hasPrefix(url.path + "/") ?? false)
-        if wasCurrent {
-            note?.close()
-            note = nil
-            currentURL = nil
+    func trash(_ url: URL) -> Task<Bool, Never> {
+        guard !isLinkedFolder(url) else { beep(); return Task { false } }
+        return changeFiles { [self] follow in
+            let url = follow(url)
+            let wasCurrent = currentURL.map { FileNode.isSameOrInside($0, url) } ?? false
+            if wasCurrent {
+                note?.close()
+                note = nil
+                currentURL = nil
+            }
+            guard await Task.detached(priority: .userInitiated, operation: { FileOperations.trash(url) }).value else {
+                beep()
+                return false
+            }
+            thrownAway(url)
+            #if os(macOS)
+            if wasCurrent, currentURL == nil, let previous = history.last(where: { !FileNode.samePath($0, url) && FileManager.default.fileExists(atPath: $0.path) }) {
+                open(previous, recordHistory: false)
+            }
+            #endif
+            return true
         }
-        guard FileOperations.trash(url) else { beep(); return false }
-        hiddenFolderMoved(from: url, to: nil)
-        reminderMoved(from: url, to: nil)
-        refreshNow(url.deletingLastPathComponent())
-        favorites.removeAll { $0 == url.path }
-        #if os(macOS)
-        if wasCurrent, let previous = history.last(where: { $0 != url && FileManager.default.fileExists(atPath: $0.path) }) {
-            open(previous, recordHistory: false)
-        }
-        #endif
-        return true
     }
 
     #if os(iOS)
     /// Deletes for good, after you agreed to it: only where there is no Recently Deleted.
     func deleteImmediately(_ url: URL) {
-        if url == currentURL || (currentURL?.path.hasPrefix(url.path + "/") ?? false) { closeFile() }
-        guard FileOperations.delete(url) else { beep(); return }
-        hiddenFolderMoved(from: url, to: nil)
-        reminderMoved(from: url, to: nil)
-        refreshNow(url.deletingLastPathComponent())
-        favorites.removeAll { $0 == url.path }
+        changeFiles { [self] follow in
+            let url = follow(url)
+            if let current = currentURL, FileNode.isSameOrInside(current, url) { closeFile() }
+            guard await Task.detached(priority: .userInitiated, operation: { FileOperations.delete(url) }).value else { return beep() }
+            thrownAway(url)
+        }
     }
     #endif
 
-    func duplicate(_ url: URL) {
-        guard !isLinkedFolder(url), let copy = FileOperations.duplicate(url) else { return }
-        refreshNow(url.deletingLastPathComponent())
-        reveal(copy, select: false)
+    /// A file thrown away: forgotten everywhere, and gone from the sidebar at once.
+    private func thrownAway(_ url: URL) {
+        hiddenFolderMoved(from: url, to: nil)
+        reminderMoved(from: url, to: nil)
+        favorites.removeAll { HiddenFolders.withoutPrivate($0) == HiddenFolders.withoutPrivate(url.path) }
+        if !temporaryLocations { UserDefaults.standard.set(favorites, forKey: "favorites") }
+        showChanges(in: [url.deletingLastPathComponent()], removing: [url])
+    }
+
+    @discardableResult
+    func duplicate(_ url: URL) -> Task<URL?, Never> {
+        guard !isLinkedFolder(url) else { beep(); return Task { nil } }
+        return changeFiles { [self] follow in
+            let url = follow(url)
+            let result = await Task.detached(priority: .userInitiated) { () -> (url: URL, listing: FileNode.Listing?)? in
+                guard let copy = FileOperations.duplicate(url) else { return nil }
+                return (copy, FileNode.listing(of: copy))
+            }.value
+            guard let copy = result?.url else {
+                beep()
+                return nil
+            }
+            showChanges(in: [url.deletingLastPathComponent()], adding: result?.listing.map { [$0] } ?? [])
+            reveal(copy, select: false)
+            return copy
+        }
     }
 
     func copyLink(_ url: URL) {
@@ -1095,6 +1306,7 @@ public final class Workspace: NSObject {
     /// The open file's name as you read it: notes without their extension.
     var currentTitle: String {
         guard let currentURL else { return "Notebook" }
+        if let name = newName(for: currentURL) { return name }
         return FileKind(url: currentURL, isDirectory: false) == .note ? currentURL.deletingPathExtension().lastPathComponent : currentURL.lastPathComponent
     }
 
@@ -1159,6 +1371,14 @@ public final class Workspace: NSObject {
         #endif
     }
 
+    /// A file's row while it is renamed: its new name, and its old one again if it couldn't be renamed. The lists on
+    /// iPhone and iPad follow `newNames` by themselves.
+    private func sidebarShowName(of url: URL) {
+        #if os(macOS)
+        sidebar?.showName(of: url)
+        #endif
+    }
+
     private func sidebarReload(_ nodes: [FileNode]) {
         #if os(macOS)
         sidebar?.reload(nodes)
@@ -1220,10 +1440,8 @@ extension Workspace: EditorControllerDelegate {
             } else if let folder = currentURL?.deletingLastPathComponent() ?? folderForNewNote {
                 // A link to a note that doesn't exist yet makes it.
                 let name = target.components(separatedBy: "#").first ?? target
-                if let url = FileOperations.createNote(in: folder, title: name) {
-                    refreshNow(folder)
-                    open(url)
-                    editor.focusText()
+                Task {
+                    if await newNote(in: folder, title: name).value != nil { editor.focusText() }
                 }
             }
         }
@@ -1243,8 +1461,12 @@ extension Workspace: EditorControllerDelegate {
             editor.setTitle(current)
             return
         }
-        if rename(note.url, to: wanted, updatingLinks: !note.isNew) == nil { editor.setTitle(current) }
+        let renaming = rename(note.url, to: wanted, updatingLinks: !note.isNew)
         note.isNew = false
+        Task {
+            // The name typed stays while the file is renamed; it goes back only when the name was taken.
+            if await renaming.value == nil, self.note === note { editor.setTitle(note.url.deletingPathExtension().lastPathComponent) }
+        }
     }
 
     public func editor(_ editor: EditorController, suggestionsFor query: String) -> [LinkSuggestion] {
