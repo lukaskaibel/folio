@@ -498,6 +498,45 @@ enum DebugRemote {
                 // SwiftUI opens the menu a moment later.
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { NotificationCenter.default.removeObserver(observer) }
             }
+        case "toolbarmenu", "headingmenu":
+            // toolbarmenu <label> [seconds]: opens a toolbar item's menu for real; headingmenu [seconds]: the menu of the
+            // heading level in the margin. Logs each item's font and symbol and closes the menu after a second, or
+            // after the seconds given, to take a picture of it in the meantime.
+            let bits = argument.split(separator: " ").map(String.init)
+            let label = command == "toolbarmenu" ? bits.dropLast(bits.count > 1 && Double(bits.last!) != nil ? 1 : 0).joined(separator: " ") : ""
+            let seconds = bits.last.flatMap(Double.init) ?? 1
+            let observer = NotificationCenter.default.addObserver(forName: NSMenu.didBeginTrackingNotification, object: nil, queue: nil) { notification in
+                MainActor.assumeIsolated {
+                    guard let menu = notification.object as? NSMenu, menu !== NSApp.mainMenu else { return }
+                    trackedMenu = menu
+                    for item in menu.items {
+                        let font = item.attributedTitle?.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
+                        log("  \(item.isSeparatorItem ? "—" : item.title) font=\(font.map { "\($0.fontName) \($0.pointSize)" } ?? "-") image=\(item.image != nil)\(item.state == .on ? " on" : "")\(item.submenu != nil ? " ›" : "")")
+                    }
+                }
+                let timer = Timer(timeInterval: seconds, repeats: false) { _ in
+                    MainActor.assumeIsolated { trackedMenu?.cancelTracking() }
+                }
+                RunLoop.main.add(timer, forMode: .common)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + seconds + 1) { NotificationCenter.default.removeObserver(observer) }
+            if command == "headingmenu" {
+                guard let editor, let (_, marker) = editor.headingMarkLevel,
+                      let rect = editor.layoutManager.headingMarkRect(at: marker.location, origin: editor.textView.textContainerOrigin) else {
+                    log("headingmenu: the caret isn't on a heading"); break
+                }
+                log("headingmenu:")
+                editor.showHeadingMenu(at: NSPoint(x: rect.minX, y: rect.maxY))
+            } else {
+                guard let item = window?.toolbar?.items.first(where: { $0.label == label }), let view = item.view, let content = window?.contentView else {
+                    log("toolbarmenu: no \(label) in \(window?.toolbar?.items.map(\.label) ?? [])"); break
+                }
+                log("toolbarmenu \(label):")
+                // A click reaches the toolbar of a key window only; the app stays in the background.
+                window?.makeKey()
+                let frame = view.convert(view.bounds, to: nil)
+                click(at: CGPoint(x: frame.midX, y: content.bounds.height - frame.midY))
+            }
         case "searchpick":
             // searchpick <n>: chooses the nth suggestion, counted over all sections.
             if let search = workspace?.search, let n = numbers.first.map(Int.init) {

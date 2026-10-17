@@ -28,6 +28,17 @@ public struct Typography: Hashable, Codable {
             case .mono: .monospaced
             }
         }
+
+        /// This typeface at a size and weight: San Francisco, New York, SF Rounded or SF Mono.
+        func font(_ size: CGFloat, weight: NSFont.Weight = .regular) -> NSFont {
+            let font = NSFont.systemFont(ofSize: size, weight: weight)
+            guard let design, let descriptor = font.fontDescriptor.withDesign(design) else { return font }
+            #if os(macOS)
+            return NSFont(descriptor: descriptor, size: size) ?? font
+            #else
+            return UIFont(descriptor: descriptor, size: size)
+            #endif
+        }
     }
 
     public enum Spacing: String, CaseIterable, Codable, Identifiable {

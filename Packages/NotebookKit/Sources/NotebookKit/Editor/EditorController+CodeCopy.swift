@@ -55,6 +55,7 @@ extension EditorController {
     func addCopyCode(to menu: NSMenu, at point: NSPoint) {
         guard let (block, _) = codeBlock(at: point) else { return }
         let item = NSMenuItem(title: "Copy Code", action: #selector(MarkdownTextView.copyCodeBlock(_:)), keyEquivalent: "")
+        item.image = NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: nil)
         item.representedObject = block.range.location
         menu.insertItem(item, at: 0)
         menu.insertItem(.separator(), at: 1)

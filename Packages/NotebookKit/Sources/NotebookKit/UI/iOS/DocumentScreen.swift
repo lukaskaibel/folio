@@ -163,7 +163,7 @@ struct DocumentScreen: View {
             }
             ToolbarSpacer(.flexible, placement: .bottomBar)
             ToolbarItem(placement: .bottomBar) {
-                Button { workspace.newNote(in: url.deletingLastPathComponent()) } label: { Label("New Note", systemImage: "square.and.pencil") }
+                NewNoteButton { workspace.newNote(in: url.deletingLastPathComponent()) }
             }
         }
     }

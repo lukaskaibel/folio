@@ -186,7 +186,7 @@ struct HomeScreen: View {
             DefaultToolbarItem(kind: .search, placement: .bottomBar)
             ToolbarSpacer(.fixed, placement: .bottomBar)
             ToolbarItem(placement: .bottomBar) {
-                Button { workspace.newNote(in: workspace.inboxFolder) } label: { Label("New Note", systemImage: "square.and.pencil") }
+                NewNoteButton { workspace.newNote(in: workspace.inboxFolder) }
             }
         }
         .sheet(isPresented: $showsSettings) { TouchSettings(workspace: workspace) }
@@ -331,7 +331,7 @@ struct FolderScreen: View {
             DefaultToolbarItem(kind: .search, placement: .bottomBar)
             ToolbarSpacer(.fixed, placement: .bottomBar)
             ToolbarItem(placement: .bottomBar) {
-                Button { workspace.newNote(in: page.url) } label: { Label("New Note", systemImage: "square.and.pencil") }
+                NewNoteButton { workspace.newNote(in: page.url) }
             }
         }
     }

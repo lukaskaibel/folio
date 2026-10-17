@@ -80,7 +80,7 @@ struct PadBrowser: View {
                         }
                     }
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button { workspace.newNote() } label: { Label("New Note", systemImage: "square.and.pencil") }
+                        NewNoteButton { workspace.newNote() }
                     }
                 }
                 .navigationSplitViewColumnWidth(min: 260, ideal: 320, max: 420)
@@ -93,7 +93,7 @@ struct PadBrowser: View {
                         EmptyState()
                             .toolbar {
                                 ToolbarItem(placement: .primaryAction) {
-                                    Button { workspace.newNote() } label: { Label("New Note", systemImage: "square.and.pencil") }
+                                    NewNoteButton { workspace.newNote() }
                                 }
                             }
                     }

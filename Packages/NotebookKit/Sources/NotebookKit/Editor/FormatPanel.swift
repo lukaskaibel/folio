@@ -57,15 +57,16 @@ struct FormatPanelView: View {
         .onAppear { state.update(from: editor) }
     }
 
-    /// Title, Heading, Subheading and Body, each in its own size.
+    /// Title, Heading, Subheading and Body, each set as it is in the note.
     private var styles: some View {
-        ScrollView(.horizontal) {
+        let face = NotebookSettings.shared.typography.face
+        return ScrollView(.horizontal) {
             HStack(spacing: 2) {
                 ForEach(FormatCommand.styles) { style in
                     let isOn = state.line == style
                     Button { apply(style) } label: {
                         Text(style.name)
-                            .font(Self.font(of: style))
+                            .font(Font(EditorStyle.styleSample(style, size: 15, face: face)))
                             .lineLimit(1)
                             .padding(.horizontal, 12)
                             .frame(height: 46)
@@ -79,15 +80,6 @@ struct FormatPanelView: View {
             }
         }
         .scrollIndicators(.hidden)
-    }
-
-    private static func font(of style: FormatCommand) -> Font {
-        switch style {
-        case .title: .system(size: 26, weight: .bold)
-        case .heading: .system(size: 20, weight: .bold)
-        case .subheading: .system(size: 16, weight: .semibold)
-        default: .system(size: 16)
-        }
     }
 
     /// Groups of buttons, each group a capsule; every button as wide as the others in the row.
@@ -176,6 +168,71 @@ extension EditorController {
         textView.inputView = nil
         textView.inputAccessoryView = writingBar
         if textView.isFirstResponder { textView.reloadInputViews() }
+    }
+
+    /// The heading level in the margin, tapped: Title, Heading, Subheading and Body in a popover next to it, since a
+    /// menu can't set each as it is in the note.
+    func showTextStyles() {
+        guard headingMarkLevel != nil, let current = currentLineFormat,
+              let presenter = textView.window?.rootViewController?.topmostPresented else { return }
+        let host = UIHostingController(rootView: TextStyleList(current: current) { [weak self, weak presenter] style in
+            self?.perform(style)
+            presenter?.dismiss(animated: true)
+        })
+        host.sizingOptions = .preferredContentSize
+        host.modalPresentationStyle = .popover
+        if let popover = host.popoverPresentationController {
+            popover.sourceView = textView.headingButton
+            popover.sourceRect = textView.headingButton.bounds
+            popover.permittedArrowDirections = [.left, .up, .down]
+            popover.delegate = PopoverOnPhone.shared
+        }
+        presenter.present(host, animated: true)
+    }
+}
+
+/// The text styles as a menu lists them, the one the line has ticked, but each set as it is in the note.
+struct TextStyleList: View {
+    let current: FormatCommand
+    let pick: (FormatCommand) -> Void
+
+    var body: some View {
+        let face = NotebookSettings.shared.typography.face
+        VStack(spacing: 0) {
+            ForEach(FormatCommand.styles) { style in
+                let isOn = style == current
+                Button { pick(style) } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark")
+                            .font(.body.weight(.semibold))
+                            .frame(width: 20)
+                            .opacity(isOn ? 1 : 0)
+                        Text(style.name)
+                            .font(Font(EditorStyle.styleSample(style, size: 17, face: face)))
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 46)
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .accessibilityAddTraits(isOn ? .isSelected : [])
+            }
+        }
+        .padding(.vertical, 8)
+        .frame(width: 230)
+    }
+}
+
+/// Keeps a popover a popover where the screen is narrow, rather than a sheet.
+@MainActor
+final class PopoverOnPhone: NSObject, UIPopoverPresentationControllerDelegate {
+    static let shared = PopoverOnPhone()
+
+    func adaptivePresentationStyle(for controller: UIPresentationController, traitCollection: UITraitCollection) -> UIModalPresentationStyle {
+        .none
     }
 }
 #endif

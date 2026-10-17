@@ -24,7 +24,7 @@ struct MoveToMenu: View {
                         Button {
                             workspace.move(url, into: folder.url)
                         } label: {
-                            Text(String(repeating: "    ", count: max(0, folder.depth)) + (folder.depth < 0 ? "Top Level" : folder.name))
+                            Label(String(repeating: "    ", count: max(0, folder.depth)) + (folder.depth < 0 ? "Top Level" : folder.name), systemImage: "folder")
                         }
                         .disabled(folder.url.standardizedFileURL == url.deletingLastPathComponent().standardizedFileURL)
                     }
@@ -34,6 +34,16 @@ struct MoveToMenu: View {
         } label: {
             Label("Move To", systemImage: "folder")
         }
+    }
+}
+
+/// New Note in a toolbar, in glass of the accent colour as Done is, so that it stands out from the other buttons.
+struct NewNoteButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) { Label("New Note", systemImage: "square.and.pencil") }
+            .buttonStyle(.glassProminent)
     }
 }
 

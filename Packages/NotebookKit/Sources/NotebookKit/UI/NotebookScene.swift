@@ -29,104 +29,121 @@ public struct NotebookScene: Scene {
         .defaultSize(width: 1280, height: 820)
         .commands {
             CommandGroup(replacing: .importExport) {
-                Menu("Export As") {
-                    Button("PDF…") { workspace.export(as: .pdf) }
+                Menu {
+                    Button { workspace.export(as: .pdf) } label: { Label("PDF…", systemImage: "doc.richtext") }
                         .keyboardShortcut("e", modifiers: [.command, .option])
-                    Button("PNG Image…") { workspace.export(as: .png) }
+                    Button { workspace.export(as: .png) } label: { Label("PNG Image…", systemImage: "photo") }
+                } label: {
+                    Label("Export As", systemImage: "square.and.arrow.up.on.square")
                 }
             }
             CommandGroup(replacing: .printItem) {
-                Button("Print…") { workspace.printNote() }
+                Button { workspace.printNote() } label: { Label("Print…", systemImage: "printer") }
                     .keyboardShortcut("p", modifiers: .command)
             }
             CommandGroup(replacing: .newItem) {
-                Button("New Note") { workspace.newNote() }
+                Button { workspace.newNote() } label: { Label("New Note", systemImage: "square.and.pencil") }
                     .keyboardShortcut("n", modifiers: .command)
                     .disabled(workspace.locations.isEmpty)
-                Button("New Folder") { workspace.newFolder() }
+                Button { workspace.newFolder() } label: { Label("New Folder", systemImage: "folder.badge.plus") }
                     .keyboardShortcut("n", modifiers: [.command, .shift])
                     .disabled(workspace.locations.isEmpty)
-                Button("Open…") { FileWindows.shared.choose() }
+                Button { FileWindows.shared.choose() } label: { Label("Open…", systemImage: "arrow.up.forward.square") }
                     .keyboardShortcut("o", modifiers: .command)
-                Menu("Open Recent") {
+                Menu {
                     ForEach(workspace.recentURLs.prefix(10), id: \.self) { url in
-                        Button(FileKind(url: url, isDirectory: false) == .note ? url.deletingPathExtension().lastPathComponent : url.lastPathComponent) {
-                            workspace.open(url)
+                        let kind = FileKind(url: url, isDirectory: false)
+                        Button { workspace.open(url) } label: {
+                            Label(kind == .note ? url.deletingPathExtension().lastPathComponent : url.lastPathComponent, systemImage: kind.symbol)
                         }
                     }
                     Divider()
                     Button("Clear Menu") { workspace.clearRecents() }
                         .disabled(workspace.recentURLs.isEmpty)
+                } label: {
+                    Label("Open Recent", systemImage: "clock")
                 }
                 Divider()
                 if let url = workspace.currentURL {
                     MoveToMenu(workspace: workspace, url: url)
                 }
                 Divider()
-                Button("Add Location…") { workspace.chooseLocation(iCloud: false) }
+                Button { workspace.chooseLocation(iCloud: false) } label: { Label("Add Location…", systemImage: "plus.rectangle.on.folder") }
             }
             // The window's own sidebar item, bound to the same state as the toolbar button.
             CommandGroup(replacing: .sidebar) {
-                Button(workspace.isSidebarVisible ? "Hide Sidebar" : "Show Sidebar") {
+                Button {
                     withAnimation(Theme.spring) { workspace.isSidebarVisible.toggle() }
+                } label: {
+                    Label(workspace.isSidebarVisible ? "Hide Sidebar" : "Show Sidebar", systemImage: "sidebar.left")
                 }
                 .keyboardShortcut("s", modifiers: [.command, .control])
                 .disabled(workspace.locations.isEmpty)
-                Button(workspace.isOutlineVisible ? "Hide Outline" : "Show Outline") {
+                Button {
                     withAnimation(Theme.spring) { workspace.isOutlineVisible.toggle() }
+                } label: {
+                    Label(workspace.isOutlineVisible ? "Hide Outline" : "Show Outline", systemImage: "sidebar.right")
                 }
                 .keyboardShortcut("i", modifiers: [.command, .control])
                 .disabled(workspace.locations.isEmpty)
                 Divider()
-                Toggle("Show Only Notes", isOn: $settings.showsOnlyNotes)
-                Toggle("Dim Files That Aren’t Notes", isOn: $settings.dimsOtherFiles)
-                Toggle("Keep Folders on Top", isOn: $settings.foldersFirst)
+                Toggle(isOn: $settings.showsOnlyNotes) { Label("Show Only Notes", systemImage: "doc.text") }
+                Toggle(isOn: $settings.dimsOtherFiles) { Label("Dim Files That Aren’t Notes", systemImage: "sun.min") }
+                Toggle(isOn: $settings.foldersFirst) { Label("Keep Folders on Top", systemImage: "folder") }
                 // The Finder's shortcut for its hidden files.
-                Button(workspace.showsAllHiddenFolders ? "Hide Hidden Folders" : "Show Hidden Folders") { workspace.toggleAllHiddenFolders() }
-                    .keyboardShortcut(".", modifiers: [.command, .shift])
-                    .disabled(!workspace.hasHiddenFolders)
+                Button { workspace.toggleAllHiddenFolders() } label: {
+                    Label(workspace.showsAllHiddenFolders ? "Hide Hidden Folders" : "Show Hidden Folders",
+                          systemImage: workspace.showsAllHiddenFolders ? "eye.slash" : "eye")
+                }
+                .keyboardShortcut(".", modifiers: [.command, .shift])
+                .disabled(!workspace.hasHiddenFolders)
                 Divider()
-                Button("Bigger") { settings.changeTextSize(by: 1) }
+                Button { settings.changeTextSize(by: 1) } label: { Label("Bigger", systemImage: "textformat.size.larger") }
                     .keyboardShortcut("+", modifiers: .command)
-                Button("Smaller") { settings.changeTextSize(by: -1) }
+                Button { settings.changeTextSize(by: -1) } label: { Label("Smaller", systemImage: "textformat.size.smaller") }
                     .keyboardShortcut("-", modifiers: .command)
-                Button("Actual Size") { settings.typography.size = 15 }
+                Button { settings.typography.size = 15 } label: { Label("Actual Size", systemImage: "textformat.size") }
                     .keyboardShortcut("0", modifiers: .command)
             }
             CommandMenu("Go") {
-                Button("Search…") { workspace.search.focus() }
+                Button { workspace.search.focus() } label: { Label("Search…", systemImage: "magnifyingglass") }
                     .keyboardShortcut("f", modifiers: .command)
-                Button("Back") { workspace.goBack() }
+                Button { workspace.goBack() } label: { Label("Back", systemImage: "chevron.backward") }
                     .keyboardShortcut("[", modifiers: .command)
                     .disabled(!workspace.canGoBack)
-                Button("Forward") { workspace.goForward() }
+                Button { workspace.goForward() } label: { Label("Forward", systemImage: "chevron.forward") }
                     .keyboardShortcut("]", modifiers: .command)
                     .disabled(!workspace.canGoForward)
             }
             CommandMenu("Format") {
-                formatButton("Bold", #selector(MarkdownTextView.toggleBoldface(_:)), "b", .command)
-                formatButton("Italic", #selector(MarkdownTextView.toggleItalics(_:)), "i", .command)
-                formatButton("Strikethrough", #selector(MarkdownTextView.toggleStrikethrough(_:)), "x", [.command, .shift])
-                formatButton("Highlight", #selector(MarkdownTextView.toggleHighlight(_:)), "h", [.command, .control])
-                formatButton("Code", #selector(MarkdownTextView.toggleInlineCode(_:)), "e", .command)
-                formatButton("Link", #selector(MarkdownTextView.addLink(_:)), "l", .command)
+                formatButton(.bold, #selector(MarkdownTextView.toggleBoldface(_:)), "b", .command)
+                formatButton(.italic, #selector(MarkdownTextView.toggleItalics(_:)), "i", .command)
+                formatButton(.strikethrough, #selector(MarkdownTextView.toggleStrikethrough(_:)), "x", [.command, .shift])
+                formatButton(.highlight, #selector(MarkdownTextView.toggleHighlight(_:)), "h", [.command, .control])
+                formatButton(.code, #selector(MarkdownTextView.toggleInlineCode(_:)), "e", .command)
+                formatButton(.link, #selector(MarkdownTextView.addLink(_:)), "l", .command)
                 Divider()
-                formatButton("Title", #selector(MarkdownTextView.makeTitle(_:)), "t", [.command, .shift])
-                formatButton("Heading", #selector(MarkdownTextView.makeHeading(_:)), "h", [.command, .shift])
-                formatButton("Subheading", #selector(MarkdownTextView.makeSubheading(_:)), "j", [.command, .shift])
-                formatButton("Body", #selector(MarkdownTextView.makeBody(_:)), "b", [.command, .shift])
+                formatButton(.title, #selector(MarkdownTextView.makeTitle(_:)), "t", [.command, .shift])
+                formatButton(.heading, #selector(MarkdownTextView.makeHeading(_:)), "h", [.command, .shift])
+                formatButton(.subheading, #selector(MarkdownTextView.makeSubheading(_:)), "j", [.command, .shift])
+                formatButton(.body, #selector(MarkdownTextView.makeBody(_:)), "b", [.command, .shift])
                 Divider()
-                formatButton("Checklist", #selector(MarkdownTextView.makeChecklist(_:)), "l", [.command, .shift])
-                formatButton("Mark as Checked", #selector(MarkdownTextView.markChecked(_:)), "u", [.command, .shift])
-                formatButton("Bulleted List", #selector(MarkdownTextView.makeBulletedList(_:)), "7", [.command, .shift])
-                formatButton("Numbered List", #selector(MarkdownTextView.makeNumberedList(_:)), "9", [.command, .shift])
-                formatButton("Block Quote", #selector(MarkdownTextView.makeQuote(_:)), "'", .command)
+                formatButton(.checklist, #selector(MarkdownTextView.makeChecklist(_:)), "l", [.command, .shift])
+                Button { NSApp.sendAction(#selector(MarkdownTextView.markChecked(_:)), to: nil, from: nil) } label: {
+                    Label("Mark as Checked", systemImage: "checkmark.circle")
+                }
+                .keyboardShortcut("u", modifiers: [.command, .shift])
+                formatButton(.bulletedList, #selector(MarkdownTextView.makeBulletedList(_:)), "7", [.command, .shift])
+                formatButton(.numberedList, #selector(MarkdownTextView.makeNumberedList(_:)), "9", [.command, .shift])
+                formatButton(.quote, #selector(MarkdownTextView.makeQuote(_:)), "'", .command)
                 Divider()
-                Button(workspace.isDrawing ? "Stop Drawing" : "Drawing") { workspace.editor.toggleDrawing() }
-                    .disabled(workspace.note == nil)
+                Button { workspace.editor.toggleDrawing() } label: {
+                    Label(workspace.isDrawing ? "Stop Drawing" : "Drawing", systemImage: "pencil.tip.crop.circle")
+                }
+                .disabled(workspace.note == nil)
                 Divider()
-                formatButton("Increase Indent", #selector(MarkdownTextView.indentLines(_:)), "]", [.command, .option])
-                formatButton("Decrease Indent", #selector(MarkdownTextView.outdentLines(_:)), "[", [.command, .option])
+                formatButton(.indent, #selector(MarkdownTextView.indentLines(_:)), "]", [.command, .option], name: "Increase Indent")
+                formatButton(.outdent, #selector(MarkdownTextView.outdentLines(_:)), "[", [.command, .option], name: "Decrease Indent")
             }
         }
 
@@ -135,8 +152,8 @@ public struct NotebookScene: Scene {
         }
     }
 
-    private func formatButton(_ title: String, _ action: Selector, _ key: Character, _ modifiers: EventModifiers) -> some View {
-        Button(title) { NSApp.sendAction(action, to: nil, from: nil) }
+    private func formatButton(_ command: FormatCommand, _ action: Selector, _ key: Character, _ modifiers: EventModifiers, name: String? = nil) -> some View {
+        Button { NSApp.sendAction(action, to: nil, from: nil) } label: { Label(name ?? command.name, systemImage: command.symbol) }
             .keyboardShortcut(KeyEquivalent(key), modifiers: modifiers)
     }
 }

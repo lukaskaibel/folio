@@ -81,23 +81,26 @@ struct TouchCommands: Commands {
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
-            Button("New Note") { workspace.newNote() }
+            Button { workspace.newNote() } label: { Label("New Note", systemImage: "square.and.pencil") }
                 .keyboardShortcut("n", modifiers: .command)
                 .disabled(workspace.locations.isEmpty)
         }
         // The Finder's shortcut for its hidden files, as on the Mac.
         CommandGroup(after: .sidebar) {
-            Button(workspace.showsAllHiddenFolders ? "Hide Hidden Folders" : "Show Hidden Folders") { withAnimation { workspace.toggleAllHiddenFolders() } }
-                .keyboardShortcut(".", modifiers: [.command, .shift])
-                .disabled(!workspace.hasHiddenFolders)
+            Button { withAnimation { workspace.toggleAllHiddenFolders() } } label: {
+                Label(workspace.showsAllHiddenFolders ? "Hide Hidden Folders" : "Show Hidden Folders",
+                      systemImage: workspace.showsAllHiddenFolders ? "eye.slash" : "eye")
+            }
+            .keyboardShortcut(".", modifiers: [.command, .shift])
+            .disabled(!workspace.hasHiddenFolders)
         }
         CommandMenu("Go") {
-            Button("Search") { workspace.searchRequest += 1 }
+            Button { workspace.searchRequest += 1 } label: { Label("Search", systemImage: "magnifyingglass") }
                 .keyboardShortcut("f", modifiers: .command)
-            Button("Back") { workspace.goBack() }
+            Button { workspace.goBack() } label: { Label("Back", systemImage: "chevron.backward") }
                 .keyboardShortcut("[", modifiers: .command)
                 .disabled(!workspace.canGoBack)
-            Button("Forward") { workspace.goForward() }
+            Button { workspace.goForward() } label: { Label("Forward", systemImage: "chevron.forward") }
                 .keyboardShortcut("]", modifiers: .command)
                 .disabled(!workspace.canGoForward)
         }
@@ -114,7 +117,7 @@ struct TouchCommands: Commands {
             format(.body, "b", [.command, .shift])
             Divider()
             format(.checklist, "l", [.command, .shift])
-            Button("Mark as Checked") { workspace.editor.toggleChecked() }
+            Button { workspace.editor.toggleChecked() } label: { Label("Mark as Checked", systemImage: "checkmark.circle") }
                 .keyboardShortcut("u", modifiers: [.command, .shift])
                 .disabled(workspace.note == nil)
             format(.bulletedList, "7", [.command, .shift])
@@ -127,7 +130,7 @@ struct TouchCommands: Commands {
     }
 
     private func format(_ command: FormatCommand, _ key: Character, _ modifiers: EventModifiers) -> some View {
-        Button(command.name) { workspace.editor.perform(command) }
+        Button { workspace.editor.perform(command) } label: { Label(command.name, systemImage: command.symbol) }
             .keyboardShortcut(KeyEquivalent(key), modifiers: modifiers)
             .disabled(workspace.note == nil)
     }
@@ -278,6 +281,8 @@ struct TouchSettings: View {
 /// Which tools the bar above the keyboard has, and in what order.
 struct WritingBarSettings: View {
     @Bindable private var settings = NotebookSettings.shared
+    /// Closes the list where it is a sheet of its own, opened from the bar.
+    var done: (() -> Void)?
 
     private var others: [WritingTool] {
         WritingTool.allCases.filter { $0.isAvailable && !settings.writingBarTools.contains($0) }
@@ -324,6 +329,14 @@ struct WritingBarSettings: View {
         }
         .environment(\.editMode, .constant(.active))
         .navigationTitle("Writing Bar")
+        .navigationBarTitleDisplayMode(done == nil ? .automatic : .inline)
+        .toolbar {
+            if let done {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done", action: done)
+                }
+            }
+        }
     }
 }
 #endif

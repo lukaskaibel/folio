@@ -53,7 +53,8 @@ iA Writer read just the same, and with iCloud Drive the same notes are on your M
 
 You write Markdown, and Notebook shows the result as you type. The marks show faintly next to the caret, only for the
 bit you're on, and fold away when you move on. Headings hide their `#` once you type the space after them; while the caret is on
-one, its level sits in the margin, and a click there turns it into a title, heading, subheading or body text. Lists continue on Return,
+one, its level sits in the margin, and a click there turns it into a title, heading, subheading or body text, each shown as it
+looks in the note, as in the toolbar's Aa menu. Lists continue on Return,
 Tab nests them, and checkboxes tick with a click.
 
 <picture>
@@ -168,8 +169,8 @@ details, and "Open in" hands it to its own app.
 The window is built from the system's own pieces: a source-list sidebar, a toolbar with the system's search field and
 share menu, an inspector, Settings, alerts, PDFKit, AVKit and Quick Look. It follows the system's light or dark
 appearance. The inspector shows a note's outline, with the section you're reading marked and a word count; a click on
-a heading scrolls there. In Settings › Text you pick the typeface (San Francisco, New York, Rounded or Monospaced),
-the size, the line spacing and the line width. The icon is a leather notebook, and Settings › App Icon makes it yours:
+a heading scrolls there. In Settings › Text you pick the typeface (San Francisco, New York, Rounded or Monospaced,
+each shown in itself), the size, the line spacing and the line width. The icon is a leather notebook, and Settings › App Icon makes it yours:
 pick the leather, the elastic band, the ribbon and the background, and the Dock shows your notebook while the app is
 open. Links, the caret and folders are in ink blue to go with it, or in the accent colour you chose in System Settings.
 
@@ -179,8 +180,9 @@ The same notes in the same editor, laid out the way each device works. On the iP
 as in the Files app, and a note opens on a screen of its own; swipe from the edge to go back. The first screen has your
 favourites, what you opened last and the folders of each location. Search and a new note sit at the bottom, as in Notes,
 and search finds names, notes and PDFs as on the Mac. While you write, a bar floats above the keyboard with Aa, a
-checklist, attachments, a link, undo and the formatting, a page of tools at a time; Settings › Writing Bar chooses which
-and in what order. Aa brings up the Format panel in the keyboard's place, as in Notes: the text styles, bold, italic and
+checklist, attachments, a link, undo and the formatting, a page of tools at a time. Which tools and in what order is
+yours to choose: touch and hold the bar, or tap the sliders after its last tool, or go to Settings › Writing Bar. Aa
+brings up the Format panel in the keyboard's place, as in Notes: the text styles, bold, italic and
 the rest, lists, indenting and quotes. Pictures come from the camera, the document scanner, your photos or the Files
 app. The pencil, at the bottom of the screen or in the bar, draws in the note with Apple's tool picker. Tap a checkbox
 to tick it, a link to follow it, a picture to look at it, a drawing to draw in it; touch and hold a picture and drag it
@@ -373,7 +375,8 @@ and iPad:
 | While drawing on the iPhone: Undo at the top, or touch and hold it | Take back the last stroke, or Redo |
 | Touch and hold a picture or file in a note, then drag | Move it to another place in the note, or into another app |
 | Touch and hold a picture or file, then let go | Select it: Quick Look, copy, cut, share or delete |
-| Tap the heading level in the margin | Title, heading, subheading or body (iPad) |
+| Tap the heading level in the margin | Title, heading, subheading or body, each as it looks (iPad) |
+| Touch and hold the bar above the keyboard | Choose its tools and their order |
 | Drag down over a note | Put the keyboard away |
 
 ## Not there yet

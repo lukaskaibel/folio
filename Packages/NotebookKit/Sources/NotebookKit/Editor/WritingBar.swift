@@ -99,8 +99,10 @@ final class WritingBar: UIView {
     }
 
     private let host: UIHostingController<WritingBarView>
+    private weak var editor: EditorController?
 
     init(editor: EditorController) {
+        self.editor = editor
         host = UIHostingController(rootView: WritingBarView(editor: editor))
         super.init(frame: CGRect(x: 0, y: 0, width: 400, height: Self.height))
         autoresizingMask = [.flexibleWidth]
@@ -110,6 +112,8 @@ final class WritingBar: UIView {
         host.view.frame = bounds
         host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         addSubview(host.view)
+        // Touch and hold the bar to change it. SwiftUI's context menu doesn't come up in the keyboard's window.
+        addInteraction(UIContextMenuInteraction(delegate: self))
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -124,6 +128,39 @@ final class WritingBar: UIView {
     }
 }
 
+extension WritingBar: UIContextMenuInteractionDelegate {
+    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configurationForMenuAtLocation location: CGPoint) -> UIContextMenuConfiguration? {
+        UIContextMenuConfiguration(actionProvider: { [weak self] _ in
+            UIMenu(children: [
+                UIAction(title: "Edit Writing Bar…", image: UIImage(systemName: "slider.horizontal.3")) { _ in self?.editor?.editWritingBar() },
+            ])
+        })
+    }
+
+    /// The capsule lifts, not the strip around it.
+    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configuration: UIContextMenuConfiguration, highlightPreviewForItemWithIdentifier identifier: any NSCopying) -> UITargetedPreview? {
+        let width = Self.barWidth(for: bounds.width)
+        let capsule = CGRect(x: (bounds.width - width) / 2, y: Self.topGap, width: width, height: Self.barHeight)
+        let parameters = UIPreviewParameters()
+        parameters.visiblePath = UIBezierPath(roundedRect: capsule, cornerRadius: Self.barHeight / 2)
+        parameters.backgroundColor = .clear
+        return UITargetedPreview(view: self, parameters: parameters)
+    }
+}
+
+extension EditorController {
+    /// Settings › Writing Bar in a sheet over the note, from the bar's Edit button or touching and holding the bar.
+    func editWritingBar() {
+        guard let presenter = textView.window?.rootViewController?.topmostPresented else { return }
+        let host = UIHostingController(rootView: NavigationStack {
+            WritingBarSettings { [weak presenter] in presenter?.dismiss(animated: true) }
+        })
+        host.sheetPresentationController?.detents = [.medium(), .large()]
+        host.sheetPresentationController?.prefersGrabberVisible = true
+        presenter.present(host, animated: true)
+    }
+}
+
 struct WritingBarView: View {
     let editor: EditorController
     @State private var page: Int? = 0
@@ -131,14 +168,15 @@ struct WritingBarView: View {
     var body: some View {
         GeometryReader { proxy in
             let width = WritingBar.barWidth(for: proxy.size.width)
-            let pages = Self.pages(of: NotebookSettings.shared.writingBarTools.filter(\.isAvailable), width: width)
+            // The tools, and Edit after the last of them.
+            let pages = Self.pages(of: NotebookSettings.shared.writingBarTools.filter(\.isAvailable).map(Optional.some) + [nil], width: width)
             let perPage = pages.first?.count ?? 1
             ScrollView(.horizontal) {
                 HStack(spacing: 0) {
                     ForEach(pages.indices, id: \.self) { index in
                         HStack(spacing: 0) {
-                            ForEach(pages[index]) { tool in
-                                button(tool)
+                            ForEach(pages[index], id: \.self) { tool in
+                                if let tool { button(tool) } else { editButton }
                             }
                             // The last page keeps the others' spacing.
                             ForEach(0..<max(0, perPage - pages[index].count), id: \.self) { _ in
@@ -166,7 +204,7 @@ struct WritingBarView: View {
         }
     }
 
-    static func pages(of tools: [WritingTool], width: CGFloat) -> [[WritingTool]] {
+    static func pages<Tool>(of tools: [Tool], width: CGFloat) -> [[Tool]] {
         let perPage = max(1, Int(width / WritingBar.toolWidth))
         return stride(from: 0, to: tools.count, by: perPage).map { Array(tools[$0..<min($0 + perPage, tools.count)]) }
     }
@@ -201,6 +239,19 @@ struct WritingBarView: View {
             Button { perform(tool) } label: { icon(tool) }
                 .buttonStyle(.plain)
         }
+    }
+
+    /// Which tools the bar has and in what order, as in Settings › Writing Bar.
+    private var editButton: some View {
+        Button { editor.editWritingBar() } label: {
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 18))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(.rect)
+                .accessibilityLabel("Edit Writing Bar")
+        }
+        .buttonStyle(.plain)
     }
 
     private func icon(_ tool: WritingTool) -> some View {

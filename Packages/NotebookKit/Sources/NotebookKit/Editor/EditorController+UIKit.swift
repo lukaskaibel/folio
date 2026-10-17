@@ -207,16 +207,7 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         configuration.background.backgroundInsets = NSDirectionalEdgeInsets(top: 8, leading: 6, bottom: 8, trailing: 6)
         configuration.contentInsets = .zero
         button.configuration = configuration
-        button.menu = headingMenu(current: level)
         button.isHidden = false
-    }
-
-    /// Title, Heading, Subheading or Body, for the heading the caret is on.
-    private func headingMenu(current: Int) -> UIMenu {
-        let styles: [(String, LineFormat, Int)] = [("Title", .heading(1), 1), ("Heading", .heading(2), 2), ("Subheading", .heading(3), 3), ("Body", .body, 0)]
-        return UIMenu(children: styles.map { title, format, level in
-            UIAction(title: title, state: level == current ? .on : .off) { [weak self] _ in self?.setLineFormat(format) }
-        })
     }
 
     /// Changes the text as one step to undo (see `EditorUndo+UIKit`).

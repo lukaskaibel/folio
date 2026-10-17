@@ -10,9 +10,15 @@ struct TextSettings: View {
     var body: some View {
         Form {
             Section {
+                // Each typeface in itself. A menu on iOS can't show them, so there they are a list of their own.
                 Picker("Font", selection: $settings.typography.face) {
-                    ForEach(Typography.Face.allCases) { face in Text(face.name).tag(face) }
+                    ForEach(Typography.Face.allCases) { face in
+                        Text(face.name).font(Font(face.font(Self.fontSize))).tag(face)
+                    }
                 }
+                #if os(iOS)
+                .pickerStyle(.navigationLink)
+                #endif
                 LabeledContent("Size") {
                     HStack {
                         Slider(value: $settings.typography.size, in: Typography.sizes, step: 1)
@@ -46,6 +52,15 @@ struct TextSettings: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    /// The size of a menu's items on the Mac, of a list's rows on iOS.
+    private static var fontSize: CGFloat {
+        #if os(iOS)
+        UIFont.preferredFont(forTextStyle: .body).pointSize
+        #else
+        NSFont.systemFontSize
+        #endif
     }
 
     /// On the iPhone the text is as wide as the screen, whatever the setting.

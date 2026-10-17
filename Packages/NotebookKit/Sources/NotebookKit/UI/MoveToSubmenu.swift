@@ -34,12 +34,14 @@ final class MoveToSubmenu: NSMenu, NSMenuDelegate {
         filled = (url, folders)
         let parent = url.deletingLastPathComponent().standardizedFileURL
         var items: [NSMenuItem] = []
+        let symbol = NSImage(systemSymbolName: "folder", accessibilityDescription: nil)
         for target in targets {
             items.append(.sectionHeader(title: target.location.name))
             for folder in target.folders {
                 let item = NSMenuItem(title: folder.depth < 0 ? "Top Level" : folder.name, action: #selector(move(_:)), keyEquivalent: "")
                 item.target = self
                 item.representedObject = folder.url
+                item.image = symbol
                 item.indentationLevel = min(max(0, folder.depth), 15)
                 item.isEnabled = folder.url.standardizedFileURL != parent
                 items.append(item)
